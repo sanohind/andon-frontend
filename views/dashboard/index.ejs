@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <!-- Add SweetAlert2 CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/image/Logo sanoh 2 2.png" alt="Sanoh Logo" class="logo-img">
+                    <h1 class="dashboard-title">Andon Dashboard</h1>
+                </div>
+                <div class="status-info">
+                    <div class="connection-status" id="connectionStatus">
+                        <i class="fas fa-wifi"></i>
+                        <span>Connected</span>
+                    </div>
+                    <div class="last-update">
+                        Last Update: <span id="lastUpdate">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard-main">
+        <div class="container">
+            <!-- Dashboard Stats -->
+            <div class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-industry"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="totalMachines">5</div>
+                        <div class="stat-label">Total Mesin</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon critical">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="activeProblems">0</div>
+                        <div class="stat-label">Problem Aktif</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="resolvedToday">0</div>
+                        <div class="stat-label">Resolved Hari Ini</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon warning">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="criticalProblems">0</div>
+                        <div class="stat-label">Critical Problems</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Machine Status Grid -->
+            <div class="machines-section">
+                <h2>Status Mesin</h2>
+                <div class="machines-grid" id="machinesGrid">
+                    <% machines.forEach((machine, index) => { %>
+                    <div class="machine-card" data-machine="<%= machine %>" onclick="showProblemDetail('<%= machine %>')">
+                        <div class="machine-header">
+                            <h3><%= machine %></h3>
+                            <div class="machine-indicator">
+                                <div class="indicator-light normal" id="light-<%= machine.replace(' ', '') %>">
+                                    <div class="pulse-ring"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="machine-info">
+                            <div class="status-text" id="status-<%= machine.replace(' ', '') %>">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Normal Operation</span>
+                            </div>
+                            
+                            <div class="machine-details">
+                                <div class="detail-item">
+                                    <span class="label">Last Check:</span>
+                                    <span class="value" id="lastcheck-<%= machine.replace(' ', '') %>">--:--:--</span>
+                                </div>
+                                <div class="detail-item problem-info" id="problem-<%= machine.replace(' ', '') %>" style="display: none;">
+                                    <span class="label">Problem:</span>
+                                    <span class="value problem-type"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <% }) %>
+                </div>
+            </div>
+
+            <!-- Active Problems List -->
+            <div class="problems-section">
+                <h2>Daftar Problem Aktif</h2>
+                <div class="problems-list" id="problemsList">
+                    <div class="no-problems" id="noProblems">
+                        <i class="fas fa-check-circle"></i>
+                        <p>Tidak ada problem aktif saat ini</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Problem Detail Modal -->
+    <div class="modal" id="problemModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Detail Problem</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+                <button class="btn btn-primary" id="resolveBtn" onclick="resolveProblem()">Tandai Resolved</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio for notifications -->
+    <audio id="alertSound" preload="auto">
+        <source src="/audio/alert.mp3" type="audio/mpeg">
+    </audio>
+
+    <audio id="succesSound" preload="auto">
+        <source src="/audio/success.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <!-- Add SweetAlert2 JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
