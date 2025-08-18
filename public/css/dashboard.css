@@ -74,12 +74,32 @@ body {
     object-fit: contain;
 }
 
-.status-info {
+.user-info {
     display: flex;
-    gap: 20px;
     align-items: center;
+    gap: 8px;
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
+.logout-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-btn:hover {
+    background: #c0392b;
+    transform: translateY(-1px);
+}
 .connection-status {
     display: flex;
     align-items: center;

@@ -8,8 +8,18 @@ class DashboardManager {
         this.lastNotificationTime = 0;
         this.machines = ['Mesin 1', 'Mesin 2', 'Mesin 3', 'Mesin 4', 'Mesin 5'];
         this.processedNotifications = new Set();
+        this.lastKnownProblems = new Set(); // Track problems for fallback detection
+        this.socketConnected = false;
+        this.fallbackActive = false;
         
         this.init();
+    }
+
+    getCookieValue(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
     }
 
     init() {
@@ -18,43 +28,76 @@ class DashboardManager {
         this.loadDashboardData();
         this.loadStats();
         
-        // Auto refresh every 30 seconds as fallback
-        setInterval(() => this.loadDashboardData(), 30000);
+        // Auto refresh every 30 seconds sebagai fallback HANYA jika socket tidak terhubung
+        setInterval(() => {
+            if (!this.socketConnected) {
+                console.log('🔄 Fallback refresh activated (socket disconnected)');
+                this.fallbackActive = true;
+                this.loadDashboardDataWithFallbackDetection();
+            } else {
+                this.fallbackActive = false;
+            }
+        }, 30000); // 30 detik untuk fallback
         
         console.log('🚀 Dashboard Manager initialized');
     }
 
     initSocket() {
-        this.socket = io();
+        // Kirim token untuk socket authentication
+        const token = this.getCookieValue('auth_token');
+        
+        this.socket = io({
+            auth: {
+                token: token
+            }
+        }); 
         
         this.socket.on('connect', () => {
             console.log('✅ Connected to server');
+            this.socketConnected = true;
+            this.fallbackActive = false;
             this.updateConnectionStatus(true);
         });
 
         this.socket.on('disconnect', () => {
             console.log('❌ Disconnected from server');
+            this.socketConnected = false;
             this.updateConnectionStatus(false);
         });
 
+        this.socket.on('authError', (error) => {
+            console.error('Authentication error:', error);
+            this.showSweetAlert('error', 'Session Expired', 'Your session has expired. Please login again.', {
+                willClose: () => {
+                    window.location.href = '/login';
+                }
+            });
+        });
+
         this.socket.on('dashboardUpdate', (data) => {
+            console.log('📡 Received dashboardUpdate via socket');
             this.handleDashboardUpdate(data);
         });
 
         this.socket.on('newProblem', (problem) => {
+            console.log('🚨 Received newProblem via socket:', problem);
             this.showProblemNotification(problem);
-            this.loadDashboardData(); // Refresh data
-            this.loadStats();
+            // Tidak perlu load dashboard data lagi karena dashboardUpdate akan handle ini
         });
 
         this.socket.on('problemResolved', (data) => {
+            console.log('✅ Received problemResolved via socket:', data);
             this.loadDashboardData();
             this.loadStats();
         })
 
         this.socket.on('error', (error) => {
             console.error('Socket error:', error);
-            this.showSweetAlert('error', 'Connection Error', error.message);
+            if (error.message && error.message.includes('Authentication')) {
+                window.location.href = '/login';
+            } else {
+                this.showSweetAlert('error', 'Connection Error', error.message);
+            }
         });
     }
 
@@ -103,6 +146,52 @@ class DashboardManager {
         }
     }
 
+    // Special method for fallback with problem detection
+    async loadDashboardDataWithFallbackDetection() {
+        try {
+            const response = await fetch('/api/dashboard/status');
+            const data = await response.json();
+            
+            if (data.success) {
+                // Detect new problems in fallback mode
+                const currentProblems = data.data.active_problems || [];
+                const newProblems = [];
+
+                // Create problem keys for current problems
+                const currentProblemKeys = new Set();
+                currentProblems.forEach(problem => {
+                    const problemKey = `${problem.machine}-${problem.problem_type}-${problem.id}`;
+                    currentProblemKeys.add(problemKey);
+                    
+                    // If this problem wasn't known before, it's new
+                    if (!this.lastKnownProblems.has(problemKey)) {
+                        newProblems.push(problem);
+                        console.log('🚨 New problem detected via fallback:', problem);
+                    }
+                });
+
+                // Update tracking
+                this.lastKnownProblems = currentProblemKeys;
+
+                // Show notifications for new problems
+                newProblems.forEach(problem => {
+                    this.showProblemNotification(problem);
+                });
+
+                // Update UI
+                this.updateMachineStatuses(data.data.machine_statuses);
+                this.updateActiveProblems(data.data.active_problems);
+                this.updateStatsFromDashboardData(data.data);
+                this.updateLastUpdateTime();
+                this.loadStats(); // Refresh stats too
+            } else {
+                throw new Error(data.message || 'Failed to load dashboard data');
+            }
+        } catch (error) {
+            console.error('Error loading dashboard data (fallback):', error);
+        }
+    }
+
     updateStatsFromDashboardData(dashboardData) {
         const activeProblemsCount = dashboardData.active_problems ? dashboardData.active_problems.length : 0;
         const criticalProblemsCount = dashboardData.active_problems ? 
@@ -133,16 +222,29 @@ class DashboardManager {
             this.updateStatsFromDashboardData(data.data);
             this.updateLastUpdateTime();
             
-            // Handle new problems for notifications
+            // Handle new problems for notifications (this comes from server-side detection)
             if (data.data.new_problems && data.data.new_problems.length > 0) {
                 data.data.new_problems.forEach(problem => {
                     const notificationKey = `${problem.machine}-${problem.problem_type}-${problem.timestamp}`;
                     if (!this.processedNotifications.has(notificationKey)) {
                         this.processedNotifications.add(notificationKey);
+                        console.log('🚨 Showing notification for new problem from dashboardUpdate:', problem);
                         this.showProblemNotification(problem);
                     }
                 });
             }
+
+            // Update fallback tracking when receiving socket updates
+            if (data.data.active_problems) {
+                this.lastKnownProblems.clear();
+                data.data.active_problems.forEach(problem => {
+                    const problemKey = `${problem.machine}-${problem.problem_type}-${problem.id}`;
+                    this.lastKnownProblems.add(problemKey);
+                });
+            }
+
+            // Also refresh stats
+            this.loadStats();
         }
     }
 
@@ -430,6 +532,7 @@ class DashboardManager {
             </div>
         `;
     }
+    
     async resolveProblem() {
         if (!this.currentProblemId) return;
 
@@ -452,6 +555,7 @@ class DashboardManager {
                 this.succesSound.play().catch;
                 this.closeModal();
                 this.loadDashboardData(); // Refresh data
+                this.loadStats(); // Refresh stats untuk update counter
             } else {
                 throw new Error(data.message);
             }
@@ -488,6 +592,8 @@ class DashboardManager {
         else if (severity === 'high') icon = 'error';
         else icon = 'warning';
 
+        console.log(`🔔 Showing notification for: ${machineName} - ${problemType} (Source: ${this.fallbackActive ? 'Fallback' : 'Socket'})`);
+
         Swal.fire({
             title: `⚠️ Problem Detected!`,
             html: `
@@ -499,7 +605,7 @@ class DashboardManager {
                 </div>
             `,
             icon: icon,
-            iconColor: severity === '#dc3545',
+            iconColor: '#dc3545',
             confirmButtonText: 'View Detail',
             cancelButtonText: 'OK',
             showCancelButton: true,
