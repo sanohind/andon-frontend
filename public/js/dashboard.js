@@ -12,6 +12,9 @@ class DashboardManager {
         this.socketConnected = false;
         this.fallbackActive = false;
         
+        const userDataElement = document.getElementById('userData');
+        this.userRole = userDataElement ? userDataElement.dataset.role : null;
+
         this.init();
     }
 
@@ -46,6 +49,8 @@ class DashboardManager {
         // Kirim token untuk socket authentication
         const token = this.getCookieValue('auth_token');
         
+        console.log('Mengirim token:', token);
+
         this.socket = io({
             auth: {
                 token: token
@@ -244,7 +249,7 @@ class DashboardManager {
             }
 
             // Also refresh stats
-            this.loadStats();
+            //this.loadStats();
         }
     }
 
@@ -572,7 +577,56 @@ class DashboardManager {
     }
 
     showProblemNotification(problem) {
-        const notificationKey = `${problem.machine || problem.machine_name}-${problem.problem_type}-${Date.now()}`;
+        const machineName = problem.machine || problem.machine_name;
+        const problemType = problem.problem_type || problem.problemType;
+
+        // ==========================================================
+        // AWAL DARI LOGIKA FILTER BERBASIS ROLE
+        // ==========================================================
+        switch (this.userRole) {
+            case 'admin':
+                // Admin tidak pernah melihat pop-up notifikasi.
+                console.log(`🔔 Notifikasi untuk Admin disembunyikan. Masalah: ${machineName} - ${problemType}`);
+                return; // Langsung hentikan fungsi di sini.
+
+            case 'maintenance':
+                // Maintenance hanya melihat notifikasi tipe 'Machine'.
+                if (problemType.toLowerCase() !== 'machine') {
+                    console.log(`🔔 Notifikasi untuk Maintenance disembunyikan. Tipe masalah: ${problemType}`);
+                    return;
+                }
+                break; // Lanjutkan untuk menampilkan notifikasi
+
+            case 'quality':
+                // Quality hanya melihat notifikasi tipe 'Quality'.
+                if (problemType.toLowerCase() !== 'quality') {
+                    console.log(`🔔 Notifikasi untuk Quality disembunyikan. Tipe masalah: ${problemType}`);
+                    return;
+                }
+                break; // Lanjutkan untuk menampilkan notifikasi
+
+            case 'warehouse':
+                // Warehouse hanya melihat notifikasi tipe 'Material'.
+                if (problemType.toLowerCase() !== 'material') {
+                    console.log(`🔔 Notifikasi untuk Warehouse disembunyikan. Tipe masalah: ${problemType}`);
+                    return;
+                }
+                break; // Lanjutkan untuk menampilkan notifikasi
+            
+            case 'leader':
+                // Leader melihat semua notifikasi, jadi tidak ada filter.
+                break;
+
+            default:
+                // Perilaku default jika role tidak dikenali (jika ada).
+                break;
+        }
+        // ==========================================================
+        // AKHIR DARI LOGIKA FILTER
+        // ==========================================================
+
+
+        // Kode di bawah ini hanya akan dieksekusi jika notifikasi lolos filter.
         const now = Date.now();
         if (now - this.lastNotificationTime < 3000) return; // 3 second cooldown
         this.lastNotificationTime = now;
@@ -580,19 +634,12 @@ class DashboardManager {
         // Play alert sound
         this.playAlertSound();
 
-        // Show SweetAlert2 notification instead of toast
-        const machineName = problem.machine || problem.machine_name;
-        const problemType = problem.problem_type || problem.problemType;
+        // Show SweetAlert2 notification
         const severity = problem.severity || 'critical';
-        
-        // Determine icon based on severity
         let icon = 'error';
-        if (severity === 'critical') icon = 'error';
-        else if (severity === 'warning') icon = 'warning';
-        else if (severity === 'high') icon = 'error';
-        else icon = 'warning';
+        if (severity === 'warning') icon = 'warning';
 
-        console.log(`🔔 Showing notification for: ${machineName} - ${problemType} (Source: ${this.fallbackActive ? 'Fallback' : 'Socket'})`);
+        console.log(`🔔 Menampilkan notifikasi untuk: ${machineName} - ${problemType} (Role: ${this.userRole})`);
 
         Swal.fire({
             title: `⚠️ Problem Detected!`,
@@ -600,7 +647,7 @@ class DashboardManager {
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Mesin:</strong> ${machineName}</p>
                     <p><strong>Problem Type:</strong> ${problemType}</p>
-                    <p><strong>Severity:</strong> <span style="color: ${severity === 'critical' ? '#dc3545' : '#dc3545'}">${severity.toUpperCase()}</span></p>
+                    <p><strong>Severity:</strong> <span style="color: ${severity === 'critical' ? '#dc3545' : '#ffc107'}">${severity.toUpperCase()}</span></p>
                     <p><strong>Waktu:</strong> ${moment().format('DD/MM/YYYY HH:mm:ss')}</p>
                 </div>
             `,
@@ -623,7 +670,6 @@ class DashboardManager {
             timerProgressBar: true
         }).then((result) => {
             if (result.isConfirmed) {
-                // Show problem detail if user clicks "View Detail"
                 this.showProblemDetail(machineName);
             }
         });

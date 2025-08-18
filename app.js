@@ -38,7 +38,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Store active connections and last known problems
 let activeConnections = new Set();
-let lastKnownProblems = new Map(); // Track problems by machine to detect new ones
+let lastKnownProblems = new Set(); // Track problems by machine to detect new ones
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
@@ -207,7 +207,7 @@ app.get('/auth', (req, res) => {
     req.session.token = token;
     res.cookie('auth_token', token, { 
         maxAge: 24 * 60 * 60 * 1000, // 24 jam
-        httpOnly: true 
+        httpOnly: false 
     });
     
     res.redirect('/');
