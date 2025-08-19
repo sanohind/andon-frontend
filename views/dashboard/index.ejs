@@ -24,6 +24,12 @@
                     <div class="user-info">
                         <i class="fas fa-user"></i>
                         <span><%= user.name %></span>
+                         <% if (user.role === 'admin') { %>
+                            <a href="/analytics" class="analytics-link" title="Analytics Dashboard">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Analytics</span>
+                            </a>
+                        <% } %>
                         <form method="POST" action="/logout" style="display: inline; margin-left: 10px;">
                             <button type="submit" class="logout-btn" title="Logout">
                                 <i class="fas fa-sign-out-alt"></i>

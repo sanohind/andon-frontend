@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/image/Logo sanoh 2 2.png" alt="Sanoh Logo" class="logo-img">
+                    <h1 class="dashboard-title">Andon Dashboard</h1>
+                </div>
+                <div class="user-info">
+                    <i class="fas fa-user"></i>
+                    <span><%= user.name %></span>
+                    
+                    <a href="/" class="analytics-link" title="Dashboard Utama">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+
+                    <form method="POST" action="/logout" style="display: inline; margin-left: 10px;">
+                        <button type="submit" class="logout-btn" title="Logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="container">
+
+            <div class="page-header">
+                <h2>Analytics Dashboard</h2>
+                <input type="text" id="date-range-picker" placeholder="Pilih Rentang Tanggal" />
+            </div>
+
+            <div class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="kpi-total-problems">...</div>
+                        <div class="stat-label">Total Masalah</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning"><i class="fas fa-clock"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="kpi-total-downtime">...</div>
+                        <div class="stat-label">Total Waktu Henti</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon success"><i class="fas fa-tools"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="kpi-mttr">...</div>
+                        <div class="stat-label">Rata-rata Resolusi (MTTR)</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon critical"><i class="fas fa-industry"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-number" id="kpi-worst-machine">...</div>
+                        <div class="stat-label">Mesin Paling Bermasalah</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-section">
+                <div class="chart-card">
+                    <h3>Frekuensi Masalah per Mesin</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="frequencyChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h3>Waktu Henti per Mesin (Downtime)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="downtimeChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h3>Distribusi Tipe Masalah</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="problemTypeChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h3>MTTR per Tipe Masalah</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="mttrChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/analytics.js"></script> 
+</body>
+</html>

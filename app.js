@@ -109,6 +109,19 @@ app.get('/', requireAuth, (req, res) => {
   });
 });
 
+app.get('/analytics', requireAuth, (req, res) => {
+  // Pastikan hanya admin yang bisa mengakses halaman ini
+  if (req.user.role !== 'admin') {
+    return res.status(403).send('Akses Ditolak'); // atau redirect ke halaman utama
+  }
+
+  res.render('dashboard/analytics', {
+    title: 'Analytics Dashboard',
+    user: req.user
+  });
+});
+
+
 // Auth Routes - Login Page
 app.get('/login', (req, res) => {
     // Jika sudah login, redirect ke dashboard
@@ -361,6 +374,30 @@ app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch stats',
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics', requireAuth, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { // Meneruskan query parameter ke Laravel
+        start_date,
+        end_date
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching analytics data:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch analytics data',
       error: error.message 
     });
   }
