@@ -264,6 +264,7 @@ class DashboardManager {
             const statusText = document.getElementById(`status-${machineId}`);
             const lastCheck = document.getElementById(`lastcheck-${machineId}`);
             const problemInfo = document.getElementById(`problem-${machineId}`);
+            const quantity = document.getElementById(`quantity-${machineId}`);
 
             console.log(`updating ${machine} status:`, machineData);
 
@@ -306,6 +307,10 @@ class DashboardManager {
             // Update last check time
             if (machineData.last_check) {
                 lastCheck.textContent = moment(machineData.last_check).format('HH:mm:ss');
+            }
+
+            if (quantity && machineData.quantity !== undefined) {
+                quantity.textContent = machineData.quantity;
             }
         });
     }
