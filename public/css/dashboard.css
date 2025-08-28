@@ -807,7 +807,8 @@ body {
 }
 
 .analytics-link:hover {
-    background-color: #dbe5f0;
+    background-color: var(--primary-color);
+    color: white;
 }
 
 
@@ -867,4 +868,9 @@ body {
 .quantity-info .label i {
     margin-right: 5px;
     opacity: 0.7;
+}
+/* Style untuk link header yang aktif */
+.analytics-link.active {
+    background-color: var(--primary-color);
+    color: white;
 }

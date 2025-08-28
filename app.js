@@ -403,6 +403,28 @@ app.get('/api/dashboard/analytics', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/plc-monitoring', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).send('Akses Ditolak');
+  }
+  res.render('dashboard/plc-monitoring', {
+    title: 'PLC Monitoring',
+    user: req.user
+  });
+});
+
+// Rute proxy API untuk mengambil data dari Laravel
+app.get('/api/dashboard/plc-status', requireAuth, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/plc-status`, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch PLC status' });
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
