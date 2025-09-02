@@ -6,7 +6,7 @@ class DashboardManager {
         this.alertSound = document.getElementById('alertSound');
         this.succesSound = document.getElementById('succesSound');
         this.lastNotificationTime = 0;
-        this.machines = ['Mesin 1', 'Mesin 2', 'Mesin 3', 'Mesin 4', 'Mesin 5'];
+        this.machines = ['Meja Inspect 1', 'Meja Inspect 2', 'Meja Inspect 3', 'Meja Inspect 4', 'Meja Inspect 5'];
         this.processedNotifications = new Set();
         this.lastKnownProblems = new Set(); // Track problems for fallback detection
         this.socketConnected = false;
@@ -258,7 +258,7 @@ class DashboardManager {
             const machineData = statuses[machine];
             if (!machineData) return;
 
-            const machineId = machine.replace(' ', '');
+            const machineId = machine.replace(/ /g, ''); 
             const card = document.querySelector(`[data-machine="${machine}"]`);
             const light = document.getElementById(`light-${machineId}`);
             const statusText = document.getElementById(`status-${machineId}`);

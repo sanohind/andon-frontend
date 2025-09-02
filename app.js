@@ -84,6 +84,7 @@ async function requireAuth(req, res, next) {
 
     if (response.data.valid) {
       req.user = response.data.user;
+      req.user.token = token;
       next();
     } else {
       // Token tidak valid, hapus session dan redirect ke login
@@ -104,7 +105,7 @@ async function requireAuth(req, res, next) {
 app.get('/', requireAuth, (req, res) => {
   res.render('dashboard/index', {
     title: 'IoT Monitoring Dashboard',
-    machines: ['Mesin 1', 'Mesin 2', 'Mesin 3', 'Mesin 4', 'Mesin 5'],
+    machines: ['Meja Inspect 1', 'Meja Inspect 2', 'Meja Inspect 3', 'Meja Inspect 4', 'Meja Inspect 5'],
     user: req.user
   });
 });
@@ -422,6 +423,42 @@ app.get('/api/dashboard/plc-status', requireAuth, async (req, res) => {
     res.json(response.data);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch PLC status' });
+  }
+});
+
+app.get('/users', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).send('Akses Ditolak');
+  }
+  try {
+    // Gunakan token khusus dari .env untuk mengambil data
+    const response = await axios.get(`${LARAVEL_API_BASE}/users`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.render('dashboard/users', {
+      title: 'User Management',
+      user: req.user,
+      userList: response.data // Kirim daftar user ke halaman
+    });
+  } catch (error) {
+    console.error("Error dari Axios saat mengambil /users:", error.response?.data || error.message);
+    res.status(500).send('Gagal mengambil data pengguna. Periksa log server.');
+  }
+});
+
+// RUTE PROXY API UNTUK MENAMBAH PENGGUNA BARU
+app.post('/api/users', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    // Gunakan token khusus dari .env untuk mengirim data
+    const response = await axios.post(`${LARAVEL_API_BASE}/users`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
 
