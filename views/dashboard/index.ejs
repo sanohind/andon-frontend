@@ -12,6 +12,7 @@
 </head>
 <body>
     <div id="userData" data-role="<%= user.role %>" style="display: none;"></div>
+    <div id="dashboardData" data-machines='<%- JSON.stringify(machines) %>' style="display: none;"></div>
     <!-- Header -->
     <header class="dashboard-header">
         <div class="container">
@@ -34,11 +35,15 @@
                                 </a>
                                 <a href="/plc-monitoring" class="analytics-link" title="PLC Monitoring">
                                     <i class="fas fa-network-wired"></i>
-                                    <span>PLC Monitoring</span>
+                                    <span>PLC</span>
                                 </a>
                                 <a href="/users" class="analytics-link" title="User Management">
                                     <i class="fas fa-users-cog"></i>
                                     <span>Users</span>
+                                </a>
+                                <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
+                                    <i class="fas fa-table"></i>
+                                    <span>Manage Tables</span>
                                 </a>
                             <% } %>
                         </div>

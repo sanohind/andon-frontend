@@ -6,14 +6,15 @@ class DashboardManager {
         this.alertSound = document.getElementById('alertSound');
         this.succesSound = document.getElementById('succesSound');
         this.lastNotificationTime = 0;
-        this.machines = ['Meja Inspect 1', 'Meja Inspect 2', 'Meja Inspect 3', 'Meja Inspect 4', 'Meja Inspect 5'];
         this.processedNotifications = new Set();
         this.lastKnownProblems = new Set(); // Track problems for fallback detection
         this.socketConnected = false;
         this.fallbackActive = false;
         
+        const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
         this.userRole = userDataElement ? userDataElement.dataset.role : null;
+        this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
 
         this.init();
     }
@@ -254,65 +255,52 @@ class DashboardManager {
     }
 
     updateMachineStatuses(statuses) {
-        this.machines.forEach(machine => {
-            const machineData = statuses[machine];
-            if (!machineData) return;
+        if (!statuses) return;
 
-            const machineId = machine.replace(/ /g, ''); 
-            const card = document.querySelector(`[data-machine="${machine}"]`);
+        this.machines.forEach(machineName => {
+            const machineData = statuses[machineName];
+            const machineId = machineName.replace(/ /g, '');
+            
+            const card = document.querySelector(`[data-machine="${machineName}"]`);
             const light = document.getElementById(`light-${machineId}`);
             const statusText = document.getElementById(`status-${machineId}`);
-            const lastCheck = document.getElementById(`lastcheck-${machineId}`);
-            const problemInfo = document.getElementById(`problem-${machineId}`);
-            const quantity = document.getElementById(`quantity-${machineId}`);
 
-            console.log(`updating ${machine} status:`, machineData);
+            if (!card || !light || !statusText) {
+                return;
+            }
 
-            if (machineData.status === 'problem') {
-                // Machine has problem
-                if (card) card.classList.add('problem');
-                if (light) light.className = 'indicator-light problem';
-                
-                if (statusText) {
-                    statusText.className = 'status-text problem';
-                    statusText.innerHTML = `
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>Problem Detected!</span>
-                    `;
-                }
-                if (problemInfo) {
-                    problemInfo.style.display = 'flex';
-                    const valueElement = problemInfo.querySelector('.value');
-                    if (valueElement) {
-                        valueElement.textContent = machineData.problem_type || 'Unknown Problem';
-                    }
+            // Log 2: Memeriksa data yang diterima dari server
+            console.log(`[${machineName}]: Menerima data:`, machineData); 
+
+            if (machineData) {
+                if (machineData.status === 'problem') {
+                    card.classList.add('problem');
+                    light.className = 'indicator-light problem';
+                    statusText.className = 'status-text problem'; // <-- Tambahan
+                    statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${machineData.problem_type || 'Unknown'}</span>`;
+                } else {
+                    card.classList.remove('problem');
+                    light.className = 'indicator-light normal';
+                    statusText.className = 'status-text normal'; // <-- Tambahan
+                    statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
                 }
             } else {
-                // Machine normal
-                if (card) card.classList.remove('problem');
-                if (light) light.className = 'indicator-light normal';
-                
-                if (statusText) {
-                    statusText.className = 'status-text normal';
-                    statusText.innerHTML = `
-                        <i class="fas fa-check-circle"></i>
-                        <span>Normal Operation</span>
-                    `;
-                }
-                if (problemInfo) {
-                    problemInfo.style.display = 'none';
-                }
+                console.warn(`[${machineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
             }
 
-            // Update last check time
-            if (machineData.last_check) {
-                lastCheck.textContent = moment(machineData.last_check).format('HH:mm:ss');
+            const quantityEl = document.getElementById(`quantity-${machineId}`);
+            if (quantityEl) {
+                quantityEl.textContent = machineData.quantity !== undefined ? machineData.quantity : '0';
             }
 
-            if (quantity && machineData.quantity !== undefined) {
-                quantity.textContent = machineData.quantity;
+            // Perbarui Waktu Last Check (PASTIKAN INI BENAR)
+            const lastCheckEl = document.getElementById(`lastcheck-${machineId}`); // Mencari id 'lastcheck-...'
+            if (lastCheckEl && machineData.last_check) {
+                lastCheckEl.textContent = moment(machineData.last_check).format('HH:mm:ss');
             }
         });
+
+        console.log("--- Pembaruan Status Selesai ---");
     }
 
     updateActiveProblems(problems) {

@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %></title>
-    
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"> 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet"> 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.css" rel="stylesheet"> 
     <link rel="stylesheet" href="/css/dashboard.css">
-    
     <style>
         /* CSS Tambahan Khusus untuk Halaman User Management */
         .form-container, .table-container {
@@ -106,9 +105,9 @@
                                 <i class="fas fa-network-wired"></i>
                                 <span>PLC</span>
                             </a>
-                            <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
-                                <i class="fas fa-table"></i>
-                                <span>Manage Tables</span>
+                            <a href="/users" class="analytics-link" title="User Management">
+                                <i class="fas fa-users-cog"></i>
+                                <span>Users</span>
                             </a>
                         <% } %>
                     </div>
@@ -125,37 +124,27 @@
 
 <main class="dashboard-main">
     <div class="container">
-        <div class="form-container" style="margin-bottom: 2rem;">
-            <h3>Tambah User Baru</h3>
-            <form id="addUserForm">
-                <input type="text" name="name" placeholder="Nama Lengkap" required>
-                <input type="text" name="username" placeholder="Username" required>
-                <input type="password" name="password" placeholder="Password (min. 8 karakter)" required>
-                <select name="role" id="roleSelect" required>
-                    <option value="">Pilih Role</option>
-                    <option value="admin">Admin</option>
-                    <option value="leader">Leader</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="quality">Quality</option>
-                    <option value="warehouse">Warehouse</option>
-                </select>
-                <input type="number" name="line_number" id="lineNumberInput" placeholder="Nomor Line" style="display:none;">
-                <button type="submit">Tambah User</button>
+        <div class="form-container card" style="margin-bottom: 2rem;">
+            <h3>Tambah Meja Inspect Baru</h3>
+            <form id="addTableForm">
+                <input type="text" name="name" placeholder="Nama Meja (e.g., Meja Inspect 1)" required>
+                <button type="submit">Tambah Meja</button>
             </form>
         </div>
-        <div class="table-container">
-            <h3>Daftar User</h3>
-            <table id="userTable">
+        <div class="table-container card">
+            <h3>Daftar Meja Inspect</h3>
+            <table id="tablesTable">
                 <thead>
-                    <tr><th>Nama</th><th>Username</th><th>Role</th><th>Line</th></tr>
+                    <tr><th>Nama</th><th>Aksi</th></tr>
                 </thead>
                 <tbody>
-                    <% userList.forEach(u => { %>
-                        <tr>
-                            <td><%= u.name %></td>
-                            <td><%= u.username %></td>
-                            <td><%= u.role %></td>
-                            <td><%= u.line_number || 'N/A' %></td>
+                    <% tableList.forEach(table => { %>
+                        <tr data-id="<%= table.id %>">
+                            <td><%= table.name %></td>
+                            <td>
+                                <button class="btn-edit">Edit</button>
+                                <button class="btn-delete">Hapus</button>
+                            </td>
                         </tr>
                     <% }) %>
                 </tbody>
@@ -163,7 +152,7 @@
         </div>
     </div>
 </main>
-
-<script src="/js/users.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.js"></script>
+<script src="/js/inspect-tables.js"></script>
 </body>
 </html>

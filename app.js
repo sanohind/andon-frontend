@@ -102,12 +102,24 @@ async function requireAuth(req, res, next) {
 }
 
 // Routes
-app.get('/', requireAuth, (req, res) => {
-  res.render('dashboard/index', {
-    title: 'IoT Monitoring Dashboard',
-    machines: ['Meja Inspect 1', 'Meja Inspect 2', 'Meja Inspect 3', 'Meja Inspect 4', 'Meja Inspect 5'],
-    user: req.user
-  });
+app.get('/', requireAuth, async (req, res) => {
+  try {
+    // Ambil daftar meja dari Laravel
+    const tablesResponse = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+
+    const tableNames = tablesResponse.data.map(table => table.name);
+
+    res.render('dashboard/index', {
+      title: 'IoT Monitoring Dashboard',
+      machines: tableNames, // Gunakan daftar dinamis dari API
+      user: req.user
+    });
+  } catch (error) {
+    console.error("Gagal mengambil daftar meja inspect:", error.message);
+    res.status(500).send('Tidak dapat memuat data dashboard.');
+  }
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
@@ -460,6 +472,75 @@ app.post('/api/users', requireAuth, async (req, res) => {
   } catch (error) {
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
+});
+
+// RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN)
+app.get('/inspect-tables', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).send('Akses Ditolak');
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.render('dashboard/inspect-tables', {
+      title: 'Manage Inspect Tables',
+      user: req.user,
+      tableList: response.data
+    });
+  } catch (error) {
+    res.status(500).send('Gagal mengambil data meja inspect.');
+  }
+});
+
+// RUTE PROXY API UNTUK MANAJEMEN MEJA
+app.post('/api/inspect-tables', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+app.get('/api/machine-status/:name', requireAuth, async (req, res) => {
+    try {
+        const machineName = req.params.name;
+        // Asumsi ada endpoint di Laravel yang bisa memberikan status untuk mesin tertentu
+        // Ganti URL ini sesuai dengan endpoint Laravel Anda
+        const response = await axios.get(`${LARAVEL_API_BASE}/machine-status/${encodeURIComponent(machineName)}`, {
+            headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error(`Error fetching status for machine ${req.params.name}:`, error.message);
+        res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to fetch machine status' });
+    }
 });
 
 // Socket.IO connection handling
