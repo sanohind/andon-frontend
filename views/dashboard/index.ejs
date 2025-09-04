@@ -6,14 +6,12 @@
     <title><%= title %></title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
-    <!-- Add SweetAlert2 CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
-    <div id="userData" data-role="<%= user.role %>" style="display: none;"></div>
-    <div id="dashboardData" data-machines='<%- JSON.stringify(machines) %>' style="display: none;"></div>
-    <!-- Header -->
+    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_number || '' %>" style="display: none;"></div>
+    
     <header class="dashboard-header">
         <div class="container">
             <div class="header-content">
@@ -67,18 +65,16 @@
         </div>
     </header>
 
-    <!-- Main Dashboard -->
     <main class="dashboard-main">
         <div class="container">
-            <!-- Dashboard Stats -->
-            <div class="stats-section">
+            <div class="stats-section" id="globalStats">
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class="fas fa-industry"></i>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-number" id="totalMachines">5</div>
-                        <div class="stat-label">Total Mesin</div>
+                        <div class="stat-number" id="totalMachines">0</div>
+                        <div class="stat-label">Total Meja</div>
                     </div>
                 </div>
                 
@@ -113,56 +109,67 @@
                 </div>
             </div>
 
-            <!-- Machine Status Grid -->
-            <div class="machines-section">
-                <% if (user.role === 'leader' && user.line_number) { %>
-                    <h2>Status Line <%= user.line_number %></h2>
-                <% } else { %>
-                    <h2>Status Line</h2>
-                <% } %>
-                <div class="machines-grid" id="machinesGrid">
-                    <% machines.forEach((machine, index) => { %>
-                    <div class="machine-card" data-machine="<%= machine %>" onclick="showProblemDetail('<%= machine %>')">
-                        <div class="machine-header">
-                            <h3><%= machine %></h3>
-                            <div class="machine-indicator">
-                                <div class="indicator-light normal" id="light-<%= machine.replace(/ /g, '') %>">
-                                    <div class="pulse-ring"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="machine-info">
-                            <div class="status-text" id="status-<%= machine.replace(/ /g, '') %>">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Normal Operation</span>
-                            </div>
-                            
-                            <div class="machine-details">
-                                <div class="detail-item quantity-info">
-                                    <span class="label"><i class="fas fa-box"></i> Quantity:</span>
-                                    <span class="value" id="quantity-<%= machine.replace(/ /g, '') %>">0</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="label">Last Check:</span>
-                                    <span class="value" id="lastcheck-<%= machine.replace(/ /g, '') %>">--:--:--</span>
-                                </div>
-                                <div class="detail-item problem-info" id="problem-<%= machine.replace(/ /g, '') %>" style="display: none;">
-                                    <span class="label">Problem:</span>
-                                    <span class="value problem-type"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <% }) %>
-                </div>
-            </div>
+            <% 
+                const sortedLineNumbers = Object.keys(machinesByLine).sort((a, b) => a - b);
+                sortedLineNumbers.forEach(lineNumber => {
+            %>
+                <% 
+                    const shouldDisplayLine = user.role === 'admin' || 
+                                              user.role === 'maintenance' || 
+                                              user.role === 'quality' || 
+                                              user.role === 'warehouse' || 
+                                              (user.role === 'leader' && user.line_number == lineNumber);
+                %>
 
-            <!-- Active Problems List -->
+                <% if (shouldDisplayLine) { %>
+                    <section class="line-section" data-line-number="<%= lineNumber %>">
+                        <h2 class="line-header">Status Line <%= lineNumber %></h2>
+                        <div class="machines-grid" id="line-<%= lineNumber %>-machines">
+                            <% machinesByLine[lineNumber].forEach(machine => { %>
+                                <div class="machine-card" data-machine="<%= machine.name %>" data-line="<%= machine.line_number %>" onclick="showProblemDetail('<%= machine.name %>', '<%= machine.id %>')">
+                                    <div class="machine-header">
+                                        <h3><%= machine.name %></h3>
+                                        <div class="machine-indicator">
+                                            <div class="indicator-light <%= machine.status %>" id="light-<%= machine.name.replace(/ /g, '') %>">
+                                                <div class="pulse-ring"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="machine-info">
+                                        <div class="status-text <%= machine.status %>" id="status-<%= machine.name.replace(/ /g, '') %>">
+                                            <% if (machine.status === 'problem') { %>
+                                                <i class="fas fa-exclamation-triangle"></i><span>Problem - <%= machine.problem_type || 'Unknown' %></span>
+                                            <% } else { %>
+                                                <i class="fas fa-check-circle"></i><span>Normal Operation</span>
+                                            <% } %>
+                                        </div>
+                                        
+                                        <div class="machine-details">
+                                            <div class="detail-item quantity-info">
+                                                <span class="label"><i class="fas fa-box"></i> Quantity:</span>
+                                                <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="label">Last Check:</span>
+                                                <span class="value" id="lastcheck-<%= machine.name.replace(/ /g, '') %>"><%= moment(machine.last_check).format('HH:mm:ss') %></span>
+                                            </div>
+                                            <div class="detail-item problem-info <%= (machine.status === 'problem' && machine.problem_type) ? '' : 'hidden' %>" id="problem-<%= machine.name.replace(/ /g, '') %>">
+                                                <span class="label">Problem:</span>
+                                                <span class="value problem-type-value"><%= machine.problem_type || 'N/A' %></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </section>
+                <% } %>
+            <% }) %>
+
             <div class="problems-section">
-                <h2>Daftar Problem Aktif</h2>
+                <h2>Daftar Problem Aktif (<span id="activeProblemCount">0</span>)</h2>
                 <div class="problems-list" id="problemsList">
-                    <div class="no-problems" id="noProblems">
+                    <div class="no-problems" id="noProblems" style="display: block;">
                         <i class="fas fa-check-circle"></i>
                         <p>Tidak ada problem aktif saat ini</p>
                     </div>
@@ -171,7 +178,6 @@
         </div>
     </main>
 
-    <!-- Problem Detail Modal -->
     <div class="modal" id="problemModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -179,8 +185,7 @@
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body" id="modalBody">
-                <!-- Content will be loaded dynamically -->
-            </div>
+                </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
                 <button class="btn btn-primary" id="resolveBtn" onclick="resolveProblem()">Tandai Resolved</button>
@@ -188,7 +193,6 @@
         </div>
     </div>
 
-    <!-- Audio for notifications -->
     <audio id="alertSound" preload="auto">
         <source src="/audio/alert.mp3" type="audio/mpeg">
     </audio>
@@ -197,10 +201,8 @@
         <source src="/audio/success.mp3" type="audio/mpeg">
     </audio>
 
-    <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-    <!-- Add SweetAlert2 JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.js"></script>
     <script src="/js/dashboard.js"></script>
 </body>

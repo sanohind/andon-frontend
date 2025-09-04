@@ -222,12 +222,14 @@ body {
 }
 
 .machines-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 1rem;
 }
 
 .machine-card {
+    width: 230px;
     background: rgba(255, 255, 255, 0.95);
     border-radius: var(--border-radius);
     padding: 0.8rem;
@@ -1000,12 +1002,12 @@ body {
 }
 
 .table-container .btn-edit {
-    background-color: var(--info-color);
+    background-color: #117a8b;
     color: white;
 }
 
 .table-container .btn-edit:hover {
-    background-color: #117a8b;
+    background-color: #0f6370;
 }
 
 .table-container .btn-delete {
@@ -1026,4 +1028,19 @@ body {
 .status-text.problem {
     color: var(--danger-color, #e74c3c); /* Warna merah */
     font-weight: 600;
+}
+
+.hidden {
+    display: none !important; /* Gunakan !important untuk memastikan aturan ini menang */
+}
+
+.line-section {
+    margin-bottom: 40px; /* Memberi jarak antar bagian line */
+}
+
+.line-header {
+    color: #0A2856;
+    margin-bottom: 1.5rem;
+    font-size: 1.8rem;
+    text-align: center;
 }

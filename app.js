@@ -6,6 +6,7 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
+const moment = require('moment');
 require('dotenv').config();
 
 const app = express();
@@ -104,21 +105,23 @@ async function requireAuth(req, res, next) {
 // Routes
 app.get('/', requireAuth, async (req, res) => {
   try {
-    // Ambil daftar meja dari Laravel
-    const tablesResponse = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    // Panggil endpoint baru yang sudah terfilter
+    const dashboardDataResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
+        headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
     });
 
-    const tableNames = tablesResponse.data.map(table => table.name);
+    const machinesGroupedByLine = dashboardDataResponse.data.data.machine_statuses_by_line;
 
     res.render('dashboard/index', {
-      title: 'IoT Monitoring Dashboard',
-      machines: tableNames, // Gunakan daftar dinamis dari API
-      user: req.user
+        title: 'IoT Monitoring Dashboard',
+        machinesByLine: machinesGroupedByLine, // <-- Kirim data terkelompok ke EJS
+        user: req.user, // <-- Kirim objek user lengkap untuk filtering di EJS
+        globalStats: { /* Nanti bisa diisi dari data dashboardDataResponse jika ada */ },
+        moment: moment
     });
   } catch (error) {
-    console.error("Gagal mengambil daftar meja inspect:", error.message);
-    res.status(500).send('Tidak dapat memuat data dashboard.');
+      console.error('Error fetching dashboard data on initial load:', error.message);
+      res.status(500).render('error', { message: 'Failed to load dashboard data. Please try again later.' });
   }
 });
 
@@ -309,10 +312,7 @@ app.get('/health-check', (req, res) => {
 app.get('/api/dashboard/status', requireAuth, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
-      headers: {
-        'Authorization': `Bearer ${req.user.token || req.session.token}`,
-        'Accept': 'application/json'
-      }
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
     });
     res.json(response.data);
   } catch (error) {
@@ -569,86 +569,91 @@ function createProblemKey(problem) {
 
 // Function to fetch and emit dashboard data WITH problem detection
 async function fetchAndEmitDashboardData(socket = null) {
-  try {
-    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-    const data = response.data;
+    try {
+        const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+                'Accept': 'application/json'
+            }
+        });
+        const data = response.data; // Ini adalah { success: true, data: { machine_statuses_by_line: {...}, active_problems: [...] } }
 
-    if (data.success && data.data) {
-      // Detect new problems by comparing with last known state
-      const currentProblems = data.data.active_problems || [];
-      const newProblems = [];
+        if (data.success && data.data) {
+            console.log("Data diterima dari Laravel:", JSON.stringify(data.data, null, 2));
 
-      // Create a set of current problem keys
-      const currentProblemKeys = new Set();
-      currentProblems.forEach(problem => {
-        const problemKey = createProblemKey(problem);
-        currentProblemKeys.add(problemKey);
-        
-        // If this problem key wasn't in our last known problems, it's new
-        if (!lastKnownProblems.has(problemKey)) {
-          newProblems.push(problem);
-          console.log('🚨 New problem detected:', problem);
-        }
-      });
+            const currentProblems = data.data.active_problems || [];
+            const newProblems = [];
 
-      // Update our tracking of known problems
-      lastKnownProblems.clear();
-      currentProblemKeys.forEach(key => lastKnownProblems.add(key));
+            const currentProblemKeys = new Set();
+            currentProblems.forEach(problem => {
+                const problemKey = createProblemKey(problem);
+                currentProblemKeys.add(problemKey);
 
-      // Add new_problems to the data being sent to clients
-      const enhancedData = {
-        ...data,
-        data: {
-          ...data.data,
-          new_problems: newProblems
-        }
-      };
+                if (!lastKnownProblems.has(problemKey)) {
+                    newProblems.push(problem);
+                    console.log('🚨 New problem detected:', problem);
+                }
+            });
 
-      if (socket) {
-        // Send to specific socket
-        socket.emit('dashboardUpdate', enhancedData);
-      } else {
-        // Broadcast to all connected clients
-        io.emit('dashboardUpdate', enhancedData);
-      }
+            lastKnownProblems.clear();
+            currentProblemKeys.forEach(key => lastKnownProblems.add(key));
 
-      // Emit individual new problem notifications
-      newProblems.forEach(problem => {
-        const notification = {
-          id: problem.id,
-          machine: problem.machine,
-          machine_name: problem.machine, // Alias for compatibility
-          problem_type: problem.problem_type,
-          problemType: problem.problem_type, // Alias for compatibility
-          severity: problem.severity,
-          timestamp: problem.timestamp || new Date().toISOString(),
-          description: problem.description,
-          recommended_action: problem.recommended_action
-        };
+            // Gabungkan semua data yang perlu di-emit ke klien
+            const dataToEmit = {
+                machine_statuses_by_line: data.data.machine_statuses_by_line,
+                active_problems: data.data.active_problems,
+                new_problems: newProblems // Tambahkan new_problems di sini
+                // resolved_today: data.data.resolved_today, // Jika Anda punya ini dari Laravel
+                // critical_problems: data.data.critical_problems // Jika Anda punya ini dari Laravel
+            };
 
-        if (socket) {
-          socket.emit('newProblem', notification);
+            // Emit dashboardUpdate
+            if (socket) {
+                socket.emit('dashboardUpdate', { success: true, data: dataToEmit });
+            } else {
+                io.emit('dashboardUpdate', { success: true, data: dataToEmit });
+            }
+
+            // Emit individual new problem notifications
+            newProblems.forEach(problem => {
+                const notification = {
+                    id: problem.id,
+                    machine: problem.tipe_mesin, // Pastikan ini sesuai dengan key dari Laravel
+                    machine_name: problem.tipe_mesin,
+                    problem_type: problem.tipe_problem,
+                    problemType: problem.tipe_problem,
+                    severity: problem.severity || 'medium', // Tambahkan severity jika ada
+                    timestamp: problem.timestamp || new Date().toISOString(),
+                    description: problem.description,
+                    recommended_action: problem.recommended_action
+                };
+
+                if (socket) {
+                    socket.emit('newProblem', notification);
+                } else {
+                    io.emit('newProblem', notification);
+                }
+            });
+
         } else {
-          io.emit('newProblem', notification);
+            console.error('API response was not successful or data is missing:', data);
+            if (socket) {
+                socket.emit('error', { message: 'Failed to fetch dashboard data: API response issue' });
+            } else {
+                io.emit('error', { message: 'Failed to fetch dashboard data: API response issue' });
+            }
         }
-      });
 
+    } catch (error) {
+        console.error('Error fetching dashboard data from Laravel API:', error.message);
+        console.error('Axios error details:', error.response?.data || error.stack); // Tambahkan detail error
+        
+        if (socket) {
+            socket.emit('error', { message: 'Failed to fetch dashboard data from server' });
+        } else {
+            io.emit('error', { message: 'Failed to fetch dashboard data from server' });
+        }
     }
-
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error.message);
-    
-    // Emit error to clients
-    if (socket) {
-      socket.emit('error', { message: 'Failed to fetch dashboard data' });
-    } else {
-      io.emit('error', { message: 'Failed to fetch dashboard data' });
-    }
-  }
 }
 
 // Auto refresh dashboard data every 1 seconds with enhanced problem detection
