@@ -579,7 +579,7 @@ async function fetchAndEmitDashboardData(socket = null) {
         const data = response.data; // Ini adalah { success: true, data: { machine_statuses_by_line: {...}, active_problems: [...] } }
 
         if (data.success && data.data) {
-            console.log("Data diterima dari Laravel:", JSON.stringify(data.data, null, 2));
+            //console.log("Data diterima dari Laravel:", JSON.stringify(data.data, null, 2));
 
             const currentProblems = data.data.active_problems || [];
             const newProblems = [];
@@ -689,7 +689,7 @@ server.listen(PORT, () => {
   console.log(`🔗 Laravel API Base: ${LARAVEL_API_BASE}`);
   
   // Test connection to Laravel API
-  axios.get(`${LARAVEL_API_BASE}/dashboard/status`)
+  axios.get(`${LARAVEL_API_BASE}/health-check`)
     .then(() => {
       console.log('✅ Laravel API connection successful');
     })

@@ -149,14 +149,6 @@
                                                 <span class="label"><i class="fas fa-box"></i> Quantity:</span>
                                                 <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
                                             </div>
-                                            <div class="detail-item">
-                                                <span class="label">Last Check:</span>
-                                                <span class="value" id="lastcheck-<%= machine.name.replace(/ /g, '') %>"><%= moment(machine.last_check).format('HH:mm:ss') %></span>
-                                            </div>
-                                            <div class="detail-item problem-info <%= (machine.status === 'problem' && machine.problem_type) ? '' : 'hidden' %>" id="problem-<%= machine.name.replace(/ /g, '') %>">
-                                                <span class="label">Problem:</span>
-                                                <span class="value problem-type-value"><%= machine.problem_type || 'N/A' %></span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -167,7 +159,7 @@
             <% }) %>
 
             <div class="problems-section">
-                <h2>Daftar Problem Aktif (<span id="activeProblemCount">0</span>)</h2>
+                <h2>Daftar Problem Aktif</h2>
                 <div class="problems-list" id="problemsList">
                     <div class="no-problems" id="noProblems" style="display: block;">
                         <i class="fas fa-check-circle"></i>

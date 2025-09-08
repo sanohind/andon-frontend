@@ -63,6 +63,8 @@ class DashboardManager {
             this.socketConnected = true;
             this.fallbackActive = false;
             this.updateConnectionStatus(true);
+            this.loadDashboardData();
+            this.loadStats(); 
         });
 
         this.socket.on('disconnect', () => {
@@ -222,8 +224,8 @@ class DashboardManager {
     }
 
     handleDashboardUpdate(data) {
-        if (data.success) {
-            this.updateMachineStatuses(data.data.machine_statuses);
+        if (data.success && data.data) {
+            this.updateMachineStatuses(data.data.machine_statuses_by_line);
             this.updateActiveProblems(data.data.active_problems);
             this.updateStatsFromDashboardData(data.data);
             this.updateLastUpdateTime();
@@ -254,53 +256,68 @@ class DashboardManager {
         }
     }
 
-    updateMachineStatuses(statuses) {
-        if (!statuses) return;
+    updateMachineStatuses(groupedStatuses) {
+        if (!groupedStatuses) {
+            console.warn("Fungsi updateMachineStatuses dipanggil tanpa data status.");
+            return;
+        }
 
-        this.machines.forEach(machineName => {
-            const machineData = statuses[machineName];
-            const machineId = machineName.replace(/ /g, '');
+        // Iterasi melalui setiap NOMOR LINE yang diterima dari server (misalnya "1", "2")
+        for (const lineNumber in groupedStatuses) {
             
-            const card = document.querySelector(`[data-machine="${machineName}"]`);
-            const light = document.getElementById(`light-${machineId}`);
-            const statusText = document.getElementById(`status-${machineId}`);
+            // Dapatkan array dari semua meja yang ada di line tersebut
+            const machinesInLine = groupedStatuses[lineNumber];
 
-            if (!card || !light || !statusText) {
-                return;
-            }
+            // Sekarang, iterasi melalui setiap MEJA di dalam line tersebut
+            machinesInLine.forEach(machineData => {
+                const machineName = machineData.name;
+                const machineId = machineName.replace(/ /g, '');
+                
+                // --- Logika Inti Anda Dimulai di Sini (Tidak Diubah) ---
+                const card = document.querySelector(`[data-machine="${machineName}"]`);
+                const light = document.getElementById(`light-${machineId}`);
+                const statusText = document.getElementById(`status-${machineId}`);
 
-            // Log 2: Memeriksa data yang diterima dari server
-            console.log(`[${machineName}]: Menerima data:`, machineData); 
-
-            if (machineData) {
-                if (machineData.status === 'problem') {
-                    card.classList.add('problem');
-                    light.className = 'indicator-light problem';
-                    statusText.className = 'status-text problem'; // <-- Tambahan
-                    statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${machineData.problem_type || 'Unknown'}</span>`;
-                } else {
-                    card.classList.remove('problem');
-                    light.className = 'indicator-light normal';
-                    statusText.className = 'status-text normal'; // <-- Tambahan
-                    statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
+                if (!card || !light || !statusText) {
+                    return;
                 }
-            } else {
-                console.warn(`[${machineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
-            }
 
-            const quantityEl = document.getElementById(`quantity-${machineId}`);
-            if (quantityEl) {
-                quantityEl.textContent = machineData.quantity !== undefined ? machineData.quantity : '0';
-            }
+                if (machineData) {
+                    card.classList.remove('problem'); 
 
-            // Perbarui Waktu Last Check (PASTIKAN INI BENAR)
-            const lastCheckEl = document.getElementById(`lastcheck-${machineId}`); // Mencari id 'lastcheck-...'
-            if (lastCheckEl && machineData.last_check) {
-                lastCheckEl.textContent = moment(machineData.last_check).format('HH:mm:ss');
-            }
-        });
+                    if (machineData.status === 'problem') {
+                        card.classList.add('problem');
+                        light.className = 'indicator-light problem';
+                        statusText.className = 'status-text problem'; 
+                        statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${machineData.problem_type || 'Unknown'}</span>`;
+                    } else {
+                        light.className = 'indicator-light normal';
+                        statusText.className = 'status-text normal'; 
+                        statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
+                    }
+                } else {
+                    console.warn(`[${machineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
+                    card.classList.remove('problem'); 
+                    light.className = 'indicator-light unknown';
+                    statusText.className = 'status-text unknown';
+                    statusText.innerHTML = `<i class="fas fa-question-circle"></i><span>No Data / Disconnected</span>`;
+                }
 
-        console.log("--- Pembaruan Status Selesai ---");
+                const quantityEl = document.getElementById(`quantity-${machineId}`);
+                if (quantityEl) {
+                    // Perbaikan kecil untuk mencegah error jika machineData null
+                    quantityEl.textContent = (machineData && machineData.quantity !== undefined) ? machineData.quantity : '0';
+                }
+
+                const lastCheckEl = document.getElementById(`lastcheck-${machineId}`);
+                if (lastCheckEl && machineData && machineData.last_check) {
+                    lastCheckEl.textContent = moment(machineData.last_check).format('HH:mm:ss');
+                }
+                // --- Logika Inti Anda Berakhir di Sini ---
+            });
+        }
+
+        console.log("--- Pembaruan Status Real-time Selesai ---");
     }
 
     updateActiveProblems(problems) {
@@ -408,26 +425,34 @@ class DashboardManager {
 
     async getCurrentMachineStatus(machine) {
         try {
+            // Panggil API /status untuk mendapatkan data terbaru
             const response = await fetch('/api/dashboard/status');
-            const data = await response.json();
+            const result = await response.json();
             
-            if (data.success && data.data.machine_statuses) {
-                return data.data.machine_statuses[machine] || { 
-                    status: 'normal', 
-                    last_check: new Date().toISOString() 
-                };
+            if (result.success && result.data && result.data.machine_statuses_by_line) {
+                const groupedStatuses = result.data.machine_statuses_by_line;
+
+                // Cari data untuk mesin yang diklik di dalam struktur data yang baru
+                for (const lineNumber in groupedStatuses) {
+                    const foundMachine = groupedStatuses[lineNumber].find(m => m.name === machine);
+                    if (foundMachine) {
+                        // Jika ditemukan, kembalikan datanya
+                        return foundMachine;
+                    }
+                }
+
+                // Jika setelah dicari di semua line tidak ketemu
+                console.warn(`Status untuk '${machine}' tidak ditemukan di data terbaru.`);
+                return { status: 'normal', last_check: new Date().toISOString() };
+                
             } else {
-                return { 
-                    status: 'normal', 
-                    last_check: new Date().toISOString() 
-                };
+                // Jika respons API tidak sukses
+                console.error("Gagal mendapatkan data status dari API.");
+                return { status: 'normal', last_check: new Date().toISOString() };
             }
         } catch (error) {
-            console.error('Error fetching machine status:', error);
-            return { 
-                status: 'normal', 
-                last_check: new Date().toISOString() 
-            };
+            console.error('Error saat mengambil status mesin:', error);
+            return { status: 'normal', last_check: new Date().toISOString() };
         }
     }
 
