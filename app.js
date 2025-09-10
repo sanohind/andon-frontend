@@ -54,7 +54,17 @@ io.use(async (socket, next) => {
     });
     
     if (response.data.valid) {
-      socket.user = response.data.user;
+      socket.user = {
+        ...response.data.user,
+        line_number: response.data.user.line_number // PASTIKAN INI ADA
+      };
+      
+      console.log('🔐 Socket user authenticated:', {
+        id: socket.user.id,
+        role: socket.user.role,
+        line_number: socket.user.line_number
+      });
+      
       next();
     } else {
       next(new Error('Invalid token'));
@@ -120,8 +130,12 @@ app.get('/', requireAuth, async (req, res) => {
         moment: moment
     });
   } catch (error) {
-      console.error('Error fetching dashboard data on initial load:', error.message);
-      res.status(500).render('error', { message: 'Failed to load dashboard data. Please try again later.' });
+    console.error('Error fetching dashboard data on initial load:', error.message);
+    res.status(500).render('error', {
+        title: 'Error', // <-- TAMBAHKAN INI
+        message: 'Failed to load dashboard data. Please try again later.',
+        user: req.user || { name: 'Guest' } // Menambahkan user agar header tidak error
+    });
   }
 });
 
@@ -375,19 +389,34 @@ app.patch('/api/dashboard/problem/:id/status', requireAuth, async (req, res) => 
 
 app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   try {
-    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/stats`, {
+    // === AWAL DARI PERBAIKAN ===
+    
+    let requestUrl = `${LARAVEL_API_BASE}/dashboard/stats`;
+
+    // Cek apakah ada query parameter yang dikirim oleh klien (misalnya, ?line_number=1)
+    const queryParams = new URLSearchParams(req.query).toString();
+    
+    if (queryParams) {
+      // Jika ada, tambahkan ke URL
+      requestUrl += `?${queryParams}`;
+    }
+
+    // Gunakan URL yang sudah lengkap
+    const response = await axios.get(requestUrl, {
       headers: {
-        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`, 
         'Accept': 'application/json'
       }
     });
+    // === AKHIR DARI PERBAIKAN ===
+    
     res.json(response.data);
+
   } catch (error) {
     console.error('Error fetching stats:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to fetch stats',
-      error: error.message 
+      message: 'Failed to fetch stats'
     });
   }
 });
@@ -576,11 +605,9 @@ async function fetchAndEmitDashboardData(socket = null) {
                 'Accept': 'application/json'
             }
         });
-        const data = response.data; // Ini adalah { success: true, data: { machine_statuses_by_line: {...}, active_problems: [...] } }
+        const data = response.data;
 
         if (data.success && data.data) {
-            //console.log("Data diterima dari Laravel:", JSON.stringify(data.data, null, 2));
-
             const currentProblems = data.data.active_problems || [];
             const newProblems = [];
 
@@ -598,61 +625,110 @@ async function fetchAndEmitDashboardData(socket = null) {
             lastKnownProblems.clear();
             currentProblemKeys.forEach(key => lastKnownProblems.add(key));
 
-            // Gabungkan semua data yang perlu di-emit ke klien
             const dataToEmit = {
                 machine_statuses_by_line: data.data.machine_statuses_by_line,
                 active_problems: data.data.active_problems,
-                new_problems: newProblems // Tambahkan new_problems di sini
-                // resolved_today: data.data.resolved_today, // Jika Anda punya ini dari Laravel
-                // critical_problems: data.data.critical_problems // Jika Anda punya ini dari Laravel
+                new_problems: newProblems
             };
 
-            // Emit dashboardUpdate
+            // Emit dashboardUpdate ke semua client (ini OK karena frontend akan filter)
             if (socket) {
                 socket.emit('dashboardUpdate', { success: true, data: dataToEmit });
             } else {
                 io.emit('dashboardUpdate', { success: true, data: dataToEmit });
             }
 
-            // Emit individual new problem notifications
+            // PERBAIKAN: Filter dan kirim notifikasi berdasarkan user line
             newProblems.forEach(problem => {
                 const notification = {
                     id: problem.id,
-                    machine: problem.tipe_mesin, // Pastikan ini sesuai dengan key dari Laravel
+                    machine: problem.tipe_mesin,
                     machine_name: problem.tipe_mesin,
                     problem_type: problem.tipe_problem,
                     problemType: problem.tipe_problem,
-                    severity: problem.severity || 'medium', // Tambahkan severity jika ada
+                    line_number: problem.line_number, // PASTIKAN INI ADA
+                    severity: problem.severity || 'medium',
                     timestamp: problem.timestamp || new Date().toISOString(),
                     description: problem.description,
                     recommended_action: problem.recommended_action
                 };
 
-                if (socket) {
-                    socket.emit('newProblem', notification);
+                // PERBAIKAN: Kirim notifikasi hanya ke user yang sesuai
+                if (socket && socket.user) {
+                    // Untuk single socket dengan user info
+                    if (shouldSendNotificationToUser(socket.user, notification)) {
+                        socket.emit('newProblem', notification);
+                    }
                 } else {
-                    io.emit('newProblem', notification);
+                    // Untuk broadcast ke semua client, filter berdasarkan user
+                    io.sockets.sockets.forEach((clientSocket) => {
+                        if (clientSocket.user && shouldSendNotificationToUser(clientSocket.user, notification)) {
+                            clientSocket.emit('newProblem', notification);
+                        }
+                    });
                 }
             });
 
         } else {
             console.error('API response was not successful or data is missing:', data);
+            const errorMsg = { message: 'Failed to fetch dashboard data: API response issue' };
             if (socket) {
-                socket.emit('error', { message: 'Failed to fetch dashboard data: API response issue' });
+                socket.emit('error', errorMsg);
             } else {
-                io.emit('error', { message: 'Failed to fetch dashboard data: API response issue' });
+                io.emit('error', errorMsg);
             }
         }
 
     } catch (error) {
         console.error('Error fetching dashboard data from Laravel API:', error.message);
-        console.error('Axios error details:', error.response?.data || error.stack); // Tambahkan detail error
+        const errorMsg = { message: 'Failed to fetch dashboard data from server' };
         
         if (socket) {
-            socket.emit('error', { message: 'Failed to fetch dashboard data from server' });
+            socket.emit('error', errorMsg);
         } else {
-            io.emit('error', { message: 'Failed to fetch dashboard data from server' });
+            io.emit('error', errorMsg);
         }
+    }
+}
+
+function shouldSendNotificationToUser(user, notification) {
+    if (!user || !user.role) return false;
+
+    console.log(`🔍 Checking notification for user:`, {
+        role: user.role,
+        line: user.line_number,
+        problemLine: notification.line_number,
+        problemType: notification.problem_type
+    });
+
+    switch (user.role) {
+        case 'admin':
+            return false; // Admin tidak menerima notifikasi popup
+
+        case 'maintenance':
+            return notification.problem_type && notification.problem_type.toLowerCase() === 'machine';
+
+        case 'quality':
+            return notification.problem_type && notification.problem_type.toLowerCase() === 'quality';
+
+        case 'warehouse':
+            return notification.problem_type && notification.problem_type.toLowerCase() === 'material';
+
+        case 'leader':
+            // KUNCI: Filter berdasarkan line
+            if (!user.line_number || !notification.line_number) {
+                console.warn('⚠️ Missing line number data');
+                return false;
+            }
+            
+            const userLine = String(user.line_number).trim();
+            const problemLine = String(notification.line_number).trim();
+            
+            console.log(`🔍 Leader line check: "${userLine}" vs "${problemLine}"`);
+            return userLine === problemLine;
+
+        default:
+            return false;
     }
 }
 

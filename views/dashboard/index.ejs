@@ -126,17 +126,22 @@
                         <h2 class="line-header">Status Line <%= lineNumber %></h2>
                         <div class="machines-grid" id="line-<%= lineNumber %>-machines">
                             <% machinesByLine[lineNumber].forEach(machine => { %>
-                                <div class="machine-card" data-machine="<%= machine.name %>" data-line="<%= machine.line_number %>" onclick="showProblemDetail('<%= machine.name %>', '<%= machine.id %>')">
+                                <!-- PERBAIKAN: Ubah onclick parameter agar lebih eksplisit -->
+                                <div class="machine-card" 
+                                    data-machine="<%= machine.name %>" 
+                                    data-line="<%= machine.line_number %>" 
+                                    onclick="showProblemDetail('<%= machine.name %>')">
+                                    
                                     <div class="machine-header">
                                         <h3><%= machine.name %></h3>
                                         <div class="machine-indicator">
-                                            <div class="indicator-light <%= machine.status %>" id="light-<%= machine.name.replace(/ /g, '') %>">
+                                            <div class="indicator-light <%= machine.status %>" id="light-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>">
                                                 <div class="pulse-ring"></div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="machine-info">
-                                        <div class="status-text <%= machine.status %>" id="status-<%= machine.name.replace(/ /g, '') %>">
+                                        <div class="status-text <%= machine.status %>" id="status-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>">
                                             <% if (machine.status === 'problem') { %>
                                                 <i class="fas fa-exclamation-triangle"></i><span>Problem - <%= machine.problem_type || 'Unknown' %></span>
                                             <% } else { %>
@@ -147,7 +152,7 @@
                                         <div class="machine-details">
                                             <div class="detail-item quantity-info">
                                                 <span class="label"><i class="fas fa-box"></i> Quantity:</span>
-                                                <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
+                                                <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
                                             </div>
                                         </div>
                                     </div>

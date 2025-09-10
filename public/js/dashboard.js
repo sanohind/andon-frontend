@@ -14,6 +14,7 @@ class DashboardManager {
         const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
         this.userRole = userDataElement ? userDataElement.dataset.role : null;
+        this.userLineNumber = userDataElement ? userDataElement.dataset.line : null;
         this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
 
         this.init();
@@ -201,18 +202,37 @@ class DashboardManager {
     }
 
     updateStatsFromDashboardData(dashboardData) {
-        const activeProblemsCount = dashboardData.active_problems ? dashboardData.active_problems.length : 0;
-        const criticalProblemsCount = dashboardData.active_problems ? 
-            dashboardData.active_problems.filter(p => p.severity === 'critical').length : 0;
+        let activeProblems = dashboardData.active_problems || [];
         
-        // Update counters
+        // PERBAIKAN: Filter active problems berdasarkan role dan line
+        if (this.userRole === 'leader' && this.userLineNumber) {
+            activeProblems = activeProblems.filter(problem => {
+                return problem.line_number && problem.line_number.toString() === this.userLineNumber.toString();
+            });
+        }
+        // Untuk role lain (admin, maintenance, quality, warehouse) tidak difilter
+        
+        const activeProblemsCount = activeProblems.length;
+        const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
+        
+        // Update counters dengan data yang sudah difilter
         document.getElementById('activeProblems').textContent = activeProblemsCount;
         document.getElementById('criticalProblems').textContent = criticalProblemsCount;
     }
 
     async loadStats() {
+        const userRole = this.userRole;
+        const userLineNumber = this.userLineNumber;
+
+        let apiUrl = '/api/dashboard/stats';
+
+        // Jika pengguna adalah 'leader' dan memiliki nomor lini, tambahkan parameter ke URL
+        if (userRole === 'leader' && userLineNumber) {
+            apiUrl += `?line_number=${userLineNumber}`;
+        }
+
         try {
-            const response = await fetch('/api/dashboard/stats');
+            const response = await fetch(apiUrl);
             const data = await response.json();
             
             if (data.success) {
@@ -271,14 +291,16 @@ class DashboardManager {
             // Sekarang, iterasi melalui setiap MEJA di dalam line tersebut
             machinesInLine.forEach(machineData => {
                 const machineName = machineData.name;
+                const machineLineNumber = machineData.line_number; // PERBAIKAN: Ambil line_number dari data
                 const machineId = machineName.replace(/ /g, '');
                 
-                // --- Logika Inti Anda Dimulai di Sini (Tidak Diubah) ---
-                const card = document.querySelector(`[data-machine="${machineName}"]`);
-                const light = document.getElementById(`light-${machineId}`);
-                const statusText = document.getElementById(`status-${machineId}`);
+                // PERBAIKAN KRITIS: Gunakan kombinasi name + line_number untuk selector yang unik
+                const card = document.querySelector(`[data-machine="${machineName}"][data-line="${machineLineNumber}"]`);
+                const light = document.getElementById(`light-${machineId}-line-${machineLineNumber}`);
+                const statusText = document.getElementById(`status-${machineId}-line-${machineLineNumber}`);
 
                 if (!card || !light || !statusText) {
+                    console.warn(`Elements not found for ${machineName} line ${machineLineNumber}`);
                     return;
                 }
 
@@ -296,24 +318,23 @@ class DashboardManager {
                         statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
                     }
                 } else {
-                    console.warn(`[${machineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
+                    console.warn(`[${machineName} Line ${machineLineNumber}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
                     card.classList.remove('problem'); 
                     light.className = 'indicator-light unknown';
                     statusText.className = 'status-text unknown';
                     statusText.innerHTML = `<i class="fas fa-question-circle"></i><span>No Data / Disconnected</span>`;
                 }
 
-                const quantityEl = document.getElementById(`quantity-${machineId}`);
+                // PERBAIKAN: Update ID untuk quantity dan lastcheck dengan line_number
+                const quantityEl = document.getElementById(`quantity-${machineId}-line-${machineLineNumber}`);
                 if (quantityEl) {
-                    // Perbaikan kecil untuk mencegah error jika machineData null
                     quantityEl.textContent = (machineData && machineData.quantity !== undefined) ? machineData.quantity : '0';
                 }
 
-                const lastCheckEl = document.getElementById(`lastcheck-${machineId}`);
+                const lastCheckEl = document.getElementById(`lastcheck-${machineId}-line-${machineLineNumber}`);
                 if (lastCheckEl && machineData && machineData.last_check) {
                     lastCheckEl.textContent = moment(machineData.last_check).format('HH:mm:ss');
                 }
-                // --- Logika Inti Anda Berakhir di Sini ---
             });
         }
 
@@ -331,11 +352,31 @@ class DashboardManager {
             return;
         }
 
+        // PERBAIKAN: Filter problems berdasarkan role user
+        let filteredProblems = problems;
+
+        // Filter berdasarkan role dan line_number
+        if (this.userRole === 'leader' && this.userLineNumber) {
+            // Leader hanya melihat problem dari line mereka sendiri
+            filteredProblems = problems.filter(problem => {
+                return problem.line_number && problem.line_number.toString() === this.userLineNumber.toString();
+            });
+        }
+        // Admin, maintenance, quality, warehouse melihat semua problem (tidak difilter)
+
+        // Tampilkan hasil filter
+        if (filteredProblems.length === 0) {
+            noProblems.style.display = 'block';
+            const existingProblems = problemsList.querySelectorAll('.problem-item');
+            existingProblems.forEach(item => item.remove());
+            return;
+        }
+
         noProblems.style.display = 'none';
         const existingProblems = problemsList.querySelectorAll('.problem-item');
         existingProblems.forEach(item => item.remove());
 
-        problems.forEach(problem => {
+        filteredProblems.forEach(problem => {
             const problemElement = this.createProblemElement(problem);
             problemsList.appendChild(problemElement);
         });
@@ -413,8 +454,9 @@ class DashboardManager {
                     throw new Error(data.message);
                 }
             } else {
-                // Get current machine status to determine if there are any active problems
+                // PERBAIKAN: Get current machine status yang sudah diperbaiki
                 const machineStatus = await this.getCurrentMachineStatus(machine);
+                console.log('Machine status received:', machineStatus); // Debug log
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
             }
         } catch (error) {
@@ -423,40 +465,89 @@ class DashboardManager {
         }
     }
 
+
     async getCurrentMachineStatus(machine) {
         try {
+            console.log(`🔍 Mencari status untuk machine: "${machine}"`);
+            
             // Panggil API /status untuk mendapatkan data terbaru
             const response = await fetch('/api/dashboard/status');
             const result = await response.json();
             
+            console.log('📡 Response dari API:', result);
+            
             if (result.success && result.data && result.data.machine_statuses_by_line) {
                 const groupedStatuses = result.data.machine_statuses_by_line;
+                console.log('📊 Grouped statuses:', groupedStatuses);
 
-                // Cari data untuk mesin yang diklik di dalam struktur data yang baru
+                // Cari data untuk mesin yang diklik di dalam struktur data
                 for (const lineNumber in groupedStatuses) {
-                    const foundMachine = groupedStatuses[lineNumber].find(m => m.name === machine);
+                    console.log(`🔍 Mencari di line ${lineNumber}:`, groupedStatuses[lineNumber]);
+                    
+                    const foundMachine = groupedStatuses[lineNumber].find(m => {
+                        console.log(`🔍 Comparing "${m.name}" with "${machine}"`);
+                        return m.name === machine;
+                    });
+                    
                     if (foundMachine) {
-                        // Jika ditemukan, kembalikan datanya
-                        return foundMachine;
+                        console.log('✅ Machine ditemukan:', foundMachine);
+                        return {
+                            ...foundMachine,
+                            line_number: foundMachine.line_number || lineNumber
+                        };
                     }
                 }
 
-                // Jika setelah dicari di semua line tidak ketemu
-                console.warn(`Status untuk '${machine}' tidak ditemukan di data terbaru.`);
-                return { status: 'normal', last_check: new Date().toISOString() };
+                // Jika tidak ditemukan di manapun
+                console.warn(`❌ Status untuk '${machine}' tidak ditemukan di data terbaru.`);
+                
+                // PERBAIKAN: Cek apakah ada active problem untuk machine ini dari active_problems
+                const activeProblems = result.data.active_problems || [];
+                const machineActiveProblem = activeProblems.find(problem => 
+                    problem.machine === machine || problem.tipe_mesin === machine
+                );
+                
+                if (machineActiveProblem) {
+                    console.log('✅ Ditemukan active problem untuk machine ini:', machineActiveProblem);
+                    return {
+                        status: 'problem',
+                        name: machine,
+                        problem_type: machineActiveProblem.problem_type,
+                        line_number: machineActiveProblem.line_number,
+                        last_check: new Date().toISOString()
+                    };
+                }
+                
+                return { 
+                    status: 'normal', 
+                    last_check: new Date().toISOString(),
+                    name: machine,
+                    problem_type: null
+                };
                 
             } else {
-                // Jika respons API tidak sukses
-                console.error("Gagal mendapatkan data status dari API.");
-                return { status: 'normal', last_check: new Date().toISOString() };
+                console.error("❌ Respons API tidak valid:", result);
+                return { 
+                    status: 'normal', 
+                    last_check: new Date().toISOString(),
+                    name: machine,
+                    problem_type: null
+                };
             }
         } catch (error) {
-            console.error('Error saat mengambil status mesin:', error);
-            return { status: 'normal', last_check: new Date().toISOString() };
+            console.error('❌ Error saat mengambil status mesin:', error);
+            return { 
+                status: 'normal', 
+                last_check: new Date().toISOString(),
+                name: machine,
+                problem_type: null
+            };
         }
     }
 
     createMachineDetailHTML(machine, machineStatus) {
+        console.log('Creating detail HTML for:', machine, machineStatus); // Debug log
+        
         const isProblematic = machineStatus.status === 'problem';
         const statusClass = isProblematic ? 'problem' : 'normal';
         const statusIcon = isProblematic ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle';
@@ -469,6 +560,17 @@ class DashboardManager {
                 <div class="detail-item">
                     <span class="label">Problem Type:</span>
                     <span class="value problem-type" style="color: #dc3545; font-weight: bold;">${machineStatus.problem_type}</span>
+                </div>
+            `;
+        }
+
+        // TAMBAHAN: Tampilkan line number juga
+        let lineSection = '';
+        if (machineStatus.line_number) {
+            lineSection = `
+                <div class="detail-item">
+                    <span class="label">Line Number:</span>
+                    <span class="value">${machineStatus.line_number}</span>
                 </div>
             `;
         }
@@ -496,10 +598,18 @@ class DashboardManager {
                         <span class="label">Connection:</span>
                         <span class="value" style="color: #28a745;">Online</span>
                     </div>
+                    ${lineSection}
                     ${problemSection}
                 </div>
                 
                 ${isProblematic ? `
+                    <div class="problem-alert" style="margin-top: 15px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 8px;"></i>
+                            <strong style="color: #721c24;">Problem Detected!</strong>
+                        </div>
+                        <p style="margin: 0; color: #721c24;">Machine ${machine} is experiencing ${machineStatus.problem_type} issue.</p>
+                    </div>
                 ` : `
                     <div class="normal-status" style="margin-top: 15px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
                         <div style="display: flex; align-items: center; margin-bottom: 10px;">
@@ -597,56 +707,96 @@ class DashboardManager {
     showProblemNotification(problem) {
         const machineName = problem.machine || problem.machine_name;
         const problemType = problem.problem_type || problem.problemType;
+        const problemLineNumber = problem.line_number || problem.lineNumber || problem.line; // Multiple fallback
+        
+        // DEBUG: Log semua data untuk debugging
+        console.log('=== DEBUG NOTIFICATION DATA ===');
+        console.log('Problem data:', problem);
+        console.log('User role:', this.userRole);
+        console.log('User line number:', this.userLineNumber);
+        console.log('Problem line number:', problemLineNumber);
+        console.log('================================');
 
         // ==========================================================
-        // AWAL DARI LOGIKA FILTER BERBASIS ROLE
+        // LOGIKA FILTER BERBASIS ROLE DAN LINE
         // ==========================================================
+
         switch (this.userRole) {
             case 'admin':
                 // Admin tidak pernah melihat pop-up notifikasi.
                 console.log(`🔔 Notifikasi untuk Admin disembunyikan. Masalah: ${machineName} - ${problemType}`);
-                return; // Langsung hentikan fungsi di sini.
+                return;
 
             case 'maintenance':
                 // Maintenance hanya melihat notifikasi tipe 'Machine'.
-                if (problemType.toLowerCase() !== 'machine') {
+                if (problemType && problemType.toLowerCase() !== 'machine') {
                     console.log(`🔔 Notifikasi untuk Maintenance disembunyikan. Tipe masalah: ${problemType}`);
                     return;
                 }
-                break; // Lanjutkan untuk menampilkan notifikasi
+                break;
 
             case 'quality':
                 // Quality hanya melihat notifikasi tipe 'Quality'.
-                if (problemType.toLowerCase() !== 'quality') {
+                if (problemType && problemType.toLowerCase() !== 'quality') {
                     console.log(`🔔 Notifikasi untuk Quality disembunyikan. Tipe masalah: ${problemType}`);
                     return;
                 }
-                break; // Lanjutkan untuk menampilkan notifikasi
+                break;
 
             case 'warehouse':
                 // Warehouse hanya melihat notifikasi tipe 'Material'.
-                if (problemType.toLowerCase() !== 'material') {
+                if (problemType && problemType.toLowerCase() !== 'material') {
                     console.log(`🔔 Notifikasi untuk Warehouse disembunyikan. Tipe masalah: ${problemType}`);
                     return;
                 }
-                break; // Lanjutkan untuk menampilkan notifikasi
-            
+                break;
+
             case 'leader':
-                // Leader melihat semua notifikasi, jadi tidak ada filter.
+                // PERBAIKAN: Validasi data dan filter berdasarkan line
+                console.log(`🔍 Checking leader notification filter...`);
+                
+                // Validasi apakah userLineNumber tersedia
+                if (!this.userLineNumber) {
+                    console.warn('⚠️ User line number tidak tersedia untuk leader, notifikasi akan ditampilkan');
+                    break; // Jika tidak ada line number user, tampilkan semua
+                }
+                
+                // Validasi apakah problemLineNumber tersedia
+                if (!problemLineNumber) {
+                    console.warn('⚠️ Problem line number tidak tersedia, notifikasi akan ditampilkan');
+                    break; // Jika tidak ada line number problem, tampilkan
+                }
+                
+                // Convert ke string untuk comparison yang lebih reliable
+                const userLine = String(this.userLineNumber).trim();
+                const problemLine = String(problemLineNumber).trim();
+                
+                console.log(`🔍 Comparing lines - User: "${userLine}" vs Problem: "${problemLine}"`);
+                
+                // Jika line tidak cocok, sembunyikan notifikasi
+                if (userLine !== problemLine) {
+                    console.log(`🔔 Notifikasi untuk Leader disembunyikan. Problem line: ${problemLine}, User line: ${userLine}`);
+                    return; // STOP eksekusi di sini
+                }
+                
+                console.log(`✅ Line cocok, notifikasi akan ditampilkan untuk leader`);
                 break;
 
             default:
-                // Perilaku default jika role tidak dikenali (jika ada).
+                console.log('🔔 Role tidak dikenali atau tidak ada filter khusus');
                 break;
         }
+
         // ==========================================================
         // AKHIR DARI LOGIKA FILTER
         // ==========================================================
 
-
-        // Kode di bawah ini hanya akan dieksekusi jika notifikasi lolos filter.
+        // Cooldown check
         const now = Date.now();
-        if (now - this.lastNotificationTime < 3000) return; // 3 second cooldown
+        if (now - this.lastNotificationTime < 3000) {
+            console.log('🔔 Notifikasi diblokir karena cooldown');
+            return;
+        }
         this.lastNotificationTime = now;
 
         // Play alert sound
@@ -657,7 +807,7 @@ class DashboardManager {
         let icon = 'error';
         if (severity === 'warning') icon = 'warning';
 
-        console.log(`🔔 Menampilkan notifikasi untuk: ${machineName} - ${problemType} (Role: ${this.userRole})`);
+        console.log(`🔔 Menampilkan notifikasi untuk: ${machineName} - ${problemType} (Role: ${this.userRole}, Line: ${this.userLineNumber})`);
 
         Swal.fire({
             title: `⚠️ Problem Detected!`,
@@ -665,6 +815,7 @@ class DashboardManager {
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Mesin:</strong> ${machineName}</p>
                     <p><strong>Problem Type:</strong> ${problemType}</p>
+                    <p><strong>Line:</strong> ${problemLineNumber || 'N/A'}</p>
                     <p><strong>Severity:</strong> <span style="color: ${severity === 'critical' ? '#dc3545' : '#ffc107'}">${severity.toUpperCase()}</span></p>
                     <p><strong>Waktu:</strong> ${moment().format('DD/MM/YYYY HH:mm:ss')}</p>
                 </div>
@@ -691,6 +842,25 @@ class DashboardManager {
                 this.showProblemDetail(machineName);
             }
         });
+    }
+
+    // TAMBAHAN: Method untuk memverifikasi data user line saat login
+    verifyUserLineData() {
+        console.log('=== USER LINE VERIFICATION ===');
+        console.log('User role:', this.userRole);
+        console.log('User line number:', this.userLineNumber);
+        console.log('User line type:', typeof this.userLineNumber);
+        console.log('===============================');
+        
+        if (this.userRole === 'leader' && !this.userLineNumber) {
+            console.error('⚠️ PERINGATAN: User dengan role leader tidak memiliki line number!');
+            // Tampilkan peringatan ke user atau admin
+            Swal.fire({
+                title: 'Konfigurasi Tidak Lengkap',
+                text: 'User leader tidak memiliki line number yang valid. Silakan hubungi administrator.',
+                icon: 'warning'
+            });
+        }
     }
 
     playAlertSound() {
