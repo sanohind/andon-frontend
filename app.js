@@ -21,6 +21,7 @@ const io = socketIo(server, {
 // Configuration
 const PORT = process.env.PORT || 3001;
 const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://localhost:8000/api';
+// const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
 
 // Middleware
 app.use(cors());
