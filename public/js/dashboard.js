@@ -430,14 +430,21 @@ class DashboardManager {
         document.getElementById('lastUpdate').textContent = moment().format('HH:mm:ss');
     }
 
-    async showProblemDetail(machine, problemId = null) {
+    async showProblemDetail(machine, problemId = null, machineLine = null) {
         const modal = document.getElementById('problemModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
+        const resolveBtn = document.getElementById('resolveBtn'); 
         
-        if (!modal || !modalTitle || !modalBody) return;
+        if (!modal || !modalTitle || !modalBody || !resolveBtn) return;
 
-        modalTitle.textContent = `Problem Detail - ${machine}`;
+        if (problemId) {
+            resolveBtn.style.display = 'inline-block'; // Tampilkan jika ada problem
+        } else {
+            resolveBtn.style.display = 'none'; // Sembunyikan jika hanya lihat detail meja
+        }
+
+        modalTitle.textContent = `Detail - ${machine}`;
         modalBody.innerHTML = '<div class="loading">Loading...</div>';
         
         modal.classList.add('show');
@@ -454,8 +461,19 @@ class DashboardManager {
                     throw new Error(data.message);
                 }
             } else {
-                // PERBAIKAN: Get current machine status yang sudah diperbaiki
-                const machineStatus = await this.getCurrentMachineStatus(machine);
+                // PERBAIKAN: Pastikan machineLine diteruskan dengan benar
+                console.log(`🔍 showProblemDetail called with machine: ${machine}, machineLine: ${machineLine}`);
+                
+                // Jika machineLine tidak tersedia, coba extract dari DOM
+                if (!machineLine) {
+                    const machineCard = document.querySelector(`[data-machine="${machine}"]`);
+                    if (machineCard) {
+                        machineLine = machineCard.getAttribute('data-line');
+                        console.log(`🔍 Extracted line from DOM: ${machineLine}`);
+                    }
+                }
+                
+                const machineStatus = await this.getCurrentMachineStatus(machine, machineLine);
                 console.log('Machine status received:', machineStatus); // Debug log
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
             }
@@ -466,9 +484,10 @@ class DashboardManager {
     }
 
 
-    async getCurrentMachineStatus(machine) {
+
+    async getCurrentMachineStatus(machine, machineLine) {
         try {
-            console.log(`🔍 Mencari status untuk machine: "${machine}"`);
+            console.log(`🔍 getCurrentMachineStatus called with machine: "${machine}", line: "${machineLine}"`);
             
             // Panggil API /status untuk mendapatkan data terbaru
             const response = await fetch('/api/dashboard/status');
@@ -480,9 +499,26 @@ class DashboardManager {
                 const groupedStatuses = result.data.machine_statuses_by_line;
                 console.log('📊 Grouped statuses:', groupedStatuses);
 
-                // Cari data untuk mesin yang diklik di dalam struktur data
+                // PERBAIKAN UTAMA: Prioritaskan pencarian berdasarkan machineLine jika tersedia
+                if (machineLine) {
+                    console.log(`🎯 Mencari di line spesifik: ${machineLine}`);
+                    const machinesInLine = groupedStatuses[machineLine];
+                    
+                    if (machinesInLine && Array.isArray(machinesInLine)) {
+                        const foundMachine = machinesInLine.find(m => m.name === machine);
+                        if (foundMachine) {
+                            console.log('✅ Machine ditemukan di line yang tepat:', foundMachine);
+                            return {
+                                ...foundMachine,
+                                line_number: foundMachine.line_number || machineLine // Pastikan line_number benar
+                            };
+                        }
+                    }
+                }
+
+                // Fallback: Cari di semua line jika machineLine tidak tersedia atau tidak ditemukan
                 for (const lineNumber in groupedStatuses) {
-                    console.log(`🔍 Mencari di line ${lineNumber}:`, groupedStatuses[lineNumber]);
+                    console.log(`🔍 Fallback search di line ${lineNumber}:`, groupedStatuses[lineNumber]);
                     
                     const foundMachine = groupedStatuses[lineNumber].find(m => {
                         console.log(`🔍 Comparing "${m.name}" with "${machine}"`);
@@ -490,7 +526,7 @@ class DashboardManager {
                     });
                     
                     if (foundMachine) {
-                        console.log('✅ Machine ditemukan:', foundMachine);
+                        console.log('✅ Machine ditemukan via fallback:', foundMachine);
                         return {
                             ...foundMachine,
                             line_number: foundMachine.line_number || lineNumber
@@ -513,7 +549,7 @@ class DashboardManager {
                         status: 'problem',
                         name: machine,
                         problem_type: machineActiveProblem.problem_type,
-                        line_number: machineActiveProblem.line_number,
+                        line_number: machineActiveProblem.line_number || machineLine, // PERBAIKAN: Gunakan line dari problem atau parameter
                         last_check: new Date().toISOString()
                     };
                 }
@@ -522,7 +558,8 @@ class DashboardManager {
                     status: 'normal', 
                     last_check: new Date().toISOString(),
                     name: machine,
-                    problem_type: null
+                    problem_type: null,
+                    line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
                 };
                 
             } else {
@@ -531,7 +568,8 @@ class DashboardManager {
                     status: 'normal', 
                     last_check: new Date().toISOString(),
                     name: machine,
-                    problem_type: null
+                    problem_type: null,
+                    line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
                 };
             }
         } catch (error) {
@@ -540,85 +578,77 @@ class DashboardManager {
                 status: 'normal', 
                 last_check: new Date().toISOString(),
                 name: machine,
-                problem_type: null
+                problem_type: null,
+                line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
             };
         }
     }
 
+
     createMachineDetailHTML(machine, machineStatus) {
-        console.log('Creating detail HTML for:', machine, machineStatus); // Debug log
+        console.log('Creating new detail HTML for:', machine, machineStatus);
         
-        const isProblematic = machineStatus.status === 'problem';
-        const statusClass = isProblematic ? 'problem' : 'normal';
-        const statusIcon = isProblematic ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle';
-        const statusText = isProblematic ? 'Problem Detected!' : 'Normal Operation';
-        const statusColor = isProblematic ? '#dc3545' : '#28a745';
-        
-        let problemSection = '';
-        if (isProblematic && machineStatus.problem_type) {
-            problemSection = `
-                <div class="detail-item">
-                    <span class="label">Problem Type:</span>
-                    <span class="value problem-type" style="color: #dc3545; font-weight: bold;">${machineStatus.problem_type}</span>
+        const isProblem = machineStatus.status === 'problem';
+        const statusClass = isProblem ? 'status-problem' : 'status-normal';
+        const statusIcon = isProblem ? 'fa-exclamation-triangle' : 'fa-check-circle';
+        const statusText = isProblem ? (machineStatus.problem_type || 'Problem') : 'Normal Operation';
+
+        const lastCheck = machineStatus.last_check ? moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss') : 'N/A';
+        const lineNumber = machineStatus.line_number || 'N/A';
+
+        let messageBoxHTML = '';
+        if (isProblem) {
+            messageBoxHTML = `
+                <div class="system-message system-problem">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Problem Detected!</h4>
+                    <p>Machine ${machine} is experiencing a <strong>${machineStatus.problem_type || 'Unknown'}</strong> issue.</p>
+                </div>
+            `;
+        } else {
+            messageBoxHTML = `
+                <div class="system-message system-normal">
+                    <h4><i class="fas fa-check-circle"></i> All Systems Normal</h4>
+                    <p>Machine is operating within normal parameters. No action required.</p>
                 </div>
             `;
         }
 
-        // TAMBAHAN: Tampilkan line number juga
-        let lineSection = '';
-        if (machineStatus.line_number) {
-            lineSection = `
-                <div class="detail-item">
-                    <span class="label">Line Number:</span>
-                    <span class="value">${machineStatus.line_number}</span>
-                </div>
-            `;
-        }
-
+        // Ini adalah template HTML baru yang lebih bersih
         return `
-            <div class="machine-detail ${statusClass}">
-                <div class="machine-header">
-                    <h4>${machine}</h4>
-                    <div class="status-indicator ${statusClass}">
-                        <i class="${statusIcon}" style="color: ${statusColor};"></i>
-                        <span style="color: ${statusColor}; font-weight: bold;">${statusText}</span>
-                    </div>
+            <div class="new-modal-layout">
+                <div class="modal-main-header">
+                    <h3>${machine}</h3>
+                    <span class="status-badge ${statusClass}">
+                        <i class="fas ${statusIcon}"></i>
+                        ${statusText}
+                    </span>
                 </div>
-                <p>Real-time machine status and operational information</p>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <span class="label">Current Status:</span>
-                        <span class="value status-value" style="color: ${statusColor}; font-weight: bold;">${statusText}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">Last Check:</span>
-                        <span class="value">${moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss')}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="label">Connection:</span>
-                        <span class="value" style="color: #28a745;">Online</span>
-                    </div>
-                    ${lineSection}
-                    ${problemSection}
-                </div>
-                
-                ${isProblematic ? `
-                    <div class="problem-alert" style="margin-top: 15px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px;">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 8px;"></i>
-                            <strong style="color: #721c24;">Problem Detected!</strong>
-                        </div>
-                        <p style="margin: 0; color: #721c24;">Machine ${machine} is experiencing ${machineStatus.problem_type} issue.</p>
-                    </div>
-                ` : `
-                    <div class="normal-status" style="margin-top: 15px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>
-                            <strong style="color: #155724;">All Systems Normal</strong>
-                        </div>
-                        <p style="margin: 0; color: #155724;">Machine is operating within normal parameters. No action required.</p>
-                    </div>
-                `}
+                <p class="modal-description">Real-time machine status and operational information.</p>
+
+                <ul class="detail-list">
+                    <li>
+                        <i class="fas fa-power-off detail-icon"></i>
+                        <strong>Current Status:</strong>
+                        <span class="status-value ${statusClass}">${statusText}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-clock detail-icon"></i>
+                        <strong>Last Check:</strong>
+                        <span>${lastCheck}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-wifi detail-icon"></i>
+                        <strong>Connection:</strong>
+                        <span style="color: #28a745;">Online</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-sitemap detail-icon"></i>
+                        <strong>Line Number:</strong>
+                        <span>${lineNumber}</span>
+                    </li>
+                </ul>
+
+                ${messageBoxHTML}
             </div>
         `;
     }

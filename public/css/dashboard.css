@@ -1044,3 +1044,125 @@ body {
     font-size: 1.8rem;
     text-align: center;
 }
+
+/* CSS untuk Tampilan Modal Baru */
+.new-modal-layout {
+    padding: 10px;
+}
+
+.modal-main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 15px;
+    margin-bottom: 10px;
+}
+
+.modal-main-header h3 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #333;
+}
+
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.9em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-badge.status-normal {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-badge.status-problem {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.modal-description {
+    font-size: 0.95em;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.detail-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.detail-list li {
+    display: flex;
+    align-items: center;
+    background-color: #f9f9f9;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+
+.detail-list .detail-icon {
+    color: #007bff;
+    margin-right: 12px;
+    width: 20px;
+    text-align: center;
+}
+
+.detail-list strong {
+    color: #555;
+    margin-right: auto;
+}
+
+.detail-list span {
+    font-weight: 500;
+    color: #333;
+}
+
+.detail-list .status-value.status-normal {
+    font-weight: bold;
+    color: #155724;
+}
+
+.detail-list .status-value.status-problem {
+    font-weight: bold;
+    color: #721c24;
+}
+
+.system-message {
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid;
+    margin-top: 20px;
+}
+
+.system-message h4 {
+    margin: 0 0 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.system-message p {
+    margin: 0;
+}
+
+.system-message.system-normal {
+    background-color: #e2f0e5;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.system-message.system-problem {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
