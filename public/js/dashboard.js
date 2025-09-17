@@ -91,7 +91,12 @@ class DashboardManager {
         this.socket.on('newProblem', (problem) => {
             console.log('🚨 Received newProblem via socket:', problem);
             this.showProblemNotification(problem);
-            // Tidak perlu load dashboard data lagi karena dashboardUpdate akan handle ini
+        });
+
+        // TAMBAHAN BARU: Handler untuk problem forwarded
+        this.socket.on('problemForwarded', (data) => {
+            console.log('📧 Received problemForwarded via socket:', data);
+            this.showForwardedProblemNotification(data);
         });
 
         this.socket.on('problemResolved', (data) => {
@@ -457,14 +462,22 @@ class DashboardManager {
                 if (data.success) {
                     this.currentProblemId = problemId;
                     modalBody.innerHTML = this.createProblemDetailHTML(data.data);
+                    
+                    // TAMBAHAN BARU: Event listener untuk tombol forward (hanya untuk leader)
+                    if (this.userRole === 'leader') {
+                        const forwardBtn = document.getElementById('forwardBtn');
+                        if (forwardBtn) {
+                            forwardBtn.addEventListener('click', () => {
+                                this.showForwardConfirmation(problemId, data.data);
+                            });
+                        }
+                    }
                 } else {
                     throw new Error(data.message);
                 }
             } else {
-                // PERBAIKAN: Pastikan machineLine diteruskan dengan benar
                 console.log(`🔍 showProblemDetail called with machine: ${machine}, machineLine: ${machineLine}`);
                 
-                // Jika machineLine tidak tersedia, coba extract dari DOM
                 if (!machineLine) {
                     const machineCard = document.querySelector(`[data-machine="${machine}"]`);
                     if (machineCard) {
@@ -474,7 +487,7 @@ class DashboardManager {
                 }
                 
                 const machineStatus = await this.getCurrentMachineStatus(machine, machineLine);
-                console.log('Machine status received:', machineStatus); // Debug log
+                console.log('Machine status received:', machineStatus);
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
             }
         } catch (error) {
@@ -482,8 +495,6 @@ class DashboardManager {
             modalBody.innerHTML = `<div class="error">Failed to load problem details: ${error.message}</div>`;
         }
     }
-
-
 
     async getCurrentMachineStatus(machine, machineLine) {
         try {
@@ -654,6 +665,24 @@ class DashboardManager {
     }
 
     createProblemDetailHTML(problem) {
+        const isLeader = this.userRole === 'leader';
+        
+        // Tentukan target role berdasarkan problem type
+        let targetRole = '';
+        switch (problem.problem_type.toLowerCase()) {
+            case 'machine':
+                targetRole = 'Maintenance';
+                break;
+            case 'quality':
+                targetRole = 'Quality Control';
+                break;
+            case 'material':
+                targetRole = 'Warehouse';
+                break;
+            default:
+                targetRole = 'Unknown';
+        }
+
         return `
             <div class="problem-detail">
                 <div class="problem-header">
@@ -686,12 +715,28 @@ class DashboardManager {
                 </div>
 
                 <div class="problem-alert" style="margin-top: 15px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px;">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 8px;"></i>
-                            <strong style="color: #721c24;">Action Required</strong>
-                        </div>
-                        <p style="margin: 0; color: #721c24;">${problem.recommended_action}</p>
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <i class="fas fa-exclamation-triangle" style="color: #dc3545; margin-right: 8px;"></i>
+                        <strong style="color: #721c24;">Action Required</strong>
+                    </div>
+                    <p style="margin: 0; color: #721c24;">${problem.recommended_action}</p>
                 </div>
+
+                ${isLeader ? `
+                    <div class="forward-section" style="margin-top: 20px; padding: 15px; background-color: #e7f3ff; border: 1px solid #b8daff; border-radius: 5px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <i class="fas fa-share" style="color: #0066cc; margin-right: 8px;"></i>
+                            <strong style="color: #0066cc;">Forward Problem</strong>
+                        </div>
+                        <p style="margin: 5px 0; color: #0066cc; font-size: 14px;">
+                            Problem ini akan diteruskan ke tim <strong>${targetRole}</strong> untuk penanganan.
+                        </p>
+                        <button class="btn btn-forward" id="forwardBtn" style="margin-top: 10px; background-color: #0066cc; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-share" style="margin-right: 5px;"></i>
+                            Forward ke ${targetRole}
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
@@ -891,6 +936,149 @@ class DashboardManager {
                 icon: 'warning'
             });
         }
+    }
+
+    showForwardConfirmation(problemId, problemData) {
+    let targetRole = '';
+    switch (problemData.problem_type.toLowerCase()) {
+        case 'machine':
+            targetRole = 'Maintenance Team';
+            break;
+        case 'quality':
+            targetRole = 'Quality Control Team';
+            break;
+        case 'material':
+            targetRole = 'Warehouse Team';
+            break;
+        default:
+            targetRole = 'Unknown Team';
+    }
+
+    Swal.fire({
+        title: 'Forward Problem?',
+        html: `
+            <div style="text-align: left; margin: 15px 0;">
+                <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                <p><strong>Akan diteruskan ke:</strong> <span style="color: #0066cc; font-weight: bold;">${targetRole}</span></p>
+            </div>
+            <div style="text-align: left; margin-top: 15px;">
+                <label for="forwardMessage" style="display: block; margin-bottom: 5px; font-weight: bold;">Pesan (Opsional):</label>
+                <textarea id="forwardMessage" class="swal2-input" placeholder="Tambahkan pesan untuk tim yang menangani..." style="height: 80px; resize: vertical;"></textarea>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Forward',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#0066cc',
+        cancelButtonColor: '#6c757d',
+        preConfirm: () => {
+            const message = document.getElementById('forwardMessage').value;
+            return { message: message };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            this.forwardProblem(problemId, result.value.message);
+        }
+    });
+}
+
+    // 5. METHOD BARU: forwardProblem
+    async forwardProblem(problemId, message = '') {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/forward`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message || 'Problem telah diteruskan untuk penanganan.'
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Problem Forwarded', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error forwarding problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to forward problem: ' + error.message);
+        }
+    }
+
+    // 6. METHOD BARU: showForwardedProblemNotification
+    showForwardedProblemNotification(data) {
+        console.log(`📧 Showing forwarded problem notification for role: ${this.userRole}`);
+
+        // Play alert sound
+        this.playAlertSound();
+
+        // Determine icon and color based on target role
+        let roleIcon = 'fas fa-tools';
+        let roleColor = '#0066cc';
+        
+        switch(data.target_role) {
+            case 'maintenance':
+                roleIcon = 'fas fa-tools';
+                roleColor = '#dc3545';
+                break;
+            case 'quality':
+                roleIcon = 'fas fa-clipboard-check';
+                roleColor = '#ffc107';
+                break;
+            case 'warehouse':
+                roleIcon = 'fas fa-boxes';
+                roleColor = '#28a745';
+                break;
+        }
+
+        Swal.fire({
+            title: `📧 Problem Forwarded to You!`,
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <div style="display: flex; align-items: center; margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+                        <i class="${roleIcon}" style="color: ${roleColor}; font-size: 24px; margin-right: 12px;"></i>
+                        <div>
+                            <div style="font-weight: bold; color: #333;">Assigned to: ${data.target_role.toUpperCase()}</div>
+                            <div style="font-size: 12px; color: #666;">From: ${data.forwarded_by}</div>
+                        </div>
+                    </div>
+                    <p><strong>Mesin:</strong> ${data.machine_name}</p>
+                    <p><strong>Problem Type:</strong> ${data.problem_type}</p>
+                    <p><strong>Line:</strong> ${data.line_number || 'N/A'}</p>
+                    <p><strong>Waktu Forward:</strong> ${moment(data.timestamp).format('DD/MM/YYYY HH:mm:ss')}</p>
+                    ${data.message ? `<div style="margin-top: 15px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;"><strong>Pesan:</strong><br>"${data.message}"</div>` : ''}
+                </div>
+            `,
+            icon: 'info',
+            iconColor: roleColor,
+            confirmButtonText: 'View Problem',
+            cancelButtonText: 'OK',
+            showCancelButton: true,
+            confirmButtonColor: roleColor,
+            cancelButtonColor: '#6c757d',
+            toast: false,
+            position: 'center',
+            timer: 12000,
+            timerProgressBar: true,
+            showClass: {
+                popup: 'animate__animated animate__bounceIn'
+            },
+            hideClass: {
+                popup: 'animate__animated animate__fadeOut'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Tutup SweetAlert dan buka problem detail
+                this.showProblemDetail(data.machine_name, data.id);
+            }
+        });
     }
 
     playAlertSound() {

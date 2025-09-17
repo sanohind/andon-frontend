@@ -733,6 +733,61 @@ function shouldSendNotificationToUser(user, notification) {
     }
 }
 
+app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => {
+  try {
+    // Validasi bahwa user adalah leader
+    if (req.user.role !== 'leader') {
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya leader yang dapat melakukan forward problem.'
+      });
+    }
+
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/forward`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.data.success) {
+      // Broadcast forward notification ke user yang sesuai
+      const forwardData = response.data.data;
+      
+      console.log(`📤 Broadcasting forward notification to role: ${forwardData.target_role}`);
+      
+      // Kirim notifikasi hanya ke user dengan role yang sesuai
+      io.sockets.sockets.forEach((clientSocket) => {
+        if (clientSocket.user && clientSocket.user.role === forwardData.target_role) {
+          console.log(`📧 Sending forward notification to user: ${clientSocket.user.name} (${clientSocket.user.role})`);
+          
+          clientSocket.emit('problemForwarded', {
+            id: forwardData.problem_id,
+            machine_name: forwardData.machine_name,
+            problem_type: forwardData.problem_type,
+            line_number: forwardData.line_number,
+            forwarded_by: forwardData.forwarded_by,
+            message: forwardData.message,
+            timestamp: forwardData.forwarded_at,
+            severity: 'high', // Karena ini forwarded problem, set sebagai high priority
+            target_role: forwardData.target_role
+          });
+        }
+      });
+    }
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error forwarding problem:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to forward problem',
+      error: error.message 
+    });
+  }
+});
+
 // Auto refresh dashboard data every 1 seconds with enhanced problem detection
 setInterval(() => {
   if (activeConnections.size > 0) {
