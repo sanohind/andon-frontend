@@ -10,6 +10,8 @@ class DashboardManager {
         this.lastKnownProblems = new Set(); // Track problems for fallback detection
         this.socketConnected = false;
         this.fallbackActive = false;
+        this.lastMachineStatuses = {}; // Menyimpan data machine status yang sudah difilter
+        this.lastActiveProblems = []; // Menyimpan data active problems yang sudah difilter
         
         const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
@@ -97,6 +99,28 @@ class DashboardManager {
         this.socket.on('problemForwarded', (data) => {
             console.log('📧 Received problemForwarded via socket:', data);
             this.showForwardedProblemNotification(data);
+            // PERBAIKAN: Refresh data setelah forward untuk update machine status dan problem list
+            this.loadDashboardData();
+        });
+
+        // Handler untuk problem received
+        this.socket.on('problemReceived', (data) => {
+            console.log('📥 Received problemReceived via socket:', data);
+            this.showProblemReceivedNotification(data);
+        });
+
+        // Handler untuk problem feedback resolved
+        this.socket.on('problemFeedbackResolved', (data) => {
+            console.log('📝 Received problemFeedbackResolved via socket:', data);
+            this.showProblemFeedbackResolvedNotification(data);
+        });
+
+        // Handler untuk problem final resolved
+        this.socket.on('problemFinalResolved', (data) => {
+            console.log('✅ Received problemFinalResolved via socket:', data);
+            this.showProblemFinalResolvedNotification(data);
+            this.loadDashboardData();
+            this.loadStats();
         });
 
         this.socket.on('problemResolved', (data) => {
@@ -143,16 +167,17 @@ class DashboardManager {
 
     async loadDashboardData() {
         try {
-            const response = await fetch('/api/dashboard/status');
-            const data = await response.json();
-            
-            if (data.success) {
-                this.updateMachineStatuses(data.data.machine_statuses);
-                this.updateActiveProblems(data.data.active_problems);
-                this.updateStatsFromDashboardData(data.data);
+            // PERBAIKAN: Gunakan data yang sudah difilter dari socket, bukan memanggil API langsung
+            // Ini memastikan department users tidak melihat problem sebelum forward
+            if (this.lastMachineStatuses && this.lastActiveProblems) {
+                console.log('🔄 Using cached filtered data for refresh');
+                this.updateMachineStatuses(this.lastMachineStatuses);
+                this.updateActiveProblems(this.lastActiveProblems);
                 this.updateLastUpdateTime();
             } else {
-                throw new Error(data.message || 'Failed to load dashboard data');
+                // Fallback: Jika data tidak tersedia, minta refresh dari server
+                console.log('🔄 No cached data, requesting refresh from server');
+                this.socket.emit('requestUpdate');
             }
         } catch (error) {
             console.error('Error loading dashboard data:', error);
@@ -163,7 +188,13 @@ class DashboardManager {
     // Special method for fallback with problem detection
     async loadDashboardDataWithFallbackDetection() {
         try {
-            const response = await fetch('/api/dashboard/status');
+            const token = this.getCookieValue('auth_token');
+            const response = await fetch('/api/dashboard/status', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
             const data = await response.json();
             
             if (data.success) {
@@ -193,7 +224,7 @@ class DashboardManager {
                 });
 
                 // Update UI
-                this.updateMachineStatuses(data.data.machine_statuses);
+                this.updateMachineStatuses(data.data.machine_statuses_by_line);
                 this.updateActiveProblems(data.data.active_problems);
                 this.updateStatsFromDashboardData(data.data);
                 this.updateLastUpdateTime();
@@ -237,7 +268,13 @@ class DashboardManager {
         }
 
         try {
-            const response = await fetch(apiUrl);
+            const token = this.getCookieValue('auth_token');
+            const response = await fetch(apiUrl, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
             const data = await response.json();
             
             if (data.success) {
@@ -287,6 +324,9 @@ class DashboardManager {
             return;
         }
 
+        // PERBAIKAN: Simpan data machine status yang sudah difilter untuk digunakan di getCurrentMachineStatus
+        this.lastMachineStatuses = groupedStatuses;
+
         // Iterasi melalui setiap NOMOR LINE yang diterima dari server (misalnya "1", "2")
         for (const lineNumber in groupedStatuses) {
             
@@ -312,6 +352,7 @@ class DashboardManager {
                 if (machineData) {
                     card.classList.remove('problem'); 
 
+                    // PERBAIKAN: Backend sudah melakukan role filtering, jadi kita langsung gunakan status dari backend
                     if (machineData.status === 'problem') {
                         card.classList.add('problem');
                         light.className = 'indicator-light problem';
@@ -366,8 +407,16 @@ class DashboardManager {
             filteredProblems = problems.filter(problem => {
                 return problem.line_number && problem.line_number.toString() === this.userLineNumber.toString();
             });
+        } else if (['maintenance', 'quality', 'warehouse'].includes(this.userRole)) {
+            // Department users hanya melihat problem yang sudah di-forward ke mereka
+            filteredProblems = problems.filter(problem => {
+                return problem.is_forwarded && problem.forwarded_to_role === this.userRole;
+            });
         }
-        // Admin, maintenance, quality, warehouse melihat semua problem (tidak difilter)
+        // Admin melihat semua problem (tidak difilter)
+
+        // PERBAIKAN: Simpan data active problems yang sudah difilter untuk digunakan di loadDashboardData
+        this.lastActiveProblems = filteredProblems;
 
         // Tampilkan hasil filter
         if (filteredProblems.length === 0) {
@@ -439,18 +488,16 @@ class DashboardManager {
         const modal = document.getElementById('problemModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
-        const resolveBtn = document.getElementById('resolveBtn'); 
+        const modalFooter = document.querySelector('.modal-footer');
         
-        if (!modal || !modalTitle || !modalBody || !resolveBtn) return;
-
-        if (problemId) {
-            resolveBtn.style.display = 'inline-block'; // Tampilkan jika ada problem
-        } else {
-            resolveBtn.style.display = 'none'; // Sembunyikan jika hanya lihat detail meja
-        }
+        if (!modal || !modalTitle || !modalBody) return;
 
         modalTitle.textContent = `Detail - ${machine}`;
         modalBody.innerHTML = '<div class="loading">Loading...</div>';
+        
+        // Clear any existing action buttons from footer
+        const existingActionButtons = modalFooter.querySelectorAll('.action-buttons');
+        existingActionButtons.forEach(btn => btn.remove());
         
         modal.classList.add('show');
 
@@ -461,17 +508,26 @@ class DashboardManager {
 
                 if (data.success) {
                     this.currentProblemId = problemId;
-                    modalBody.innerHTML = this.createProblemDetailHTML(data.data);
+                    const problemDetailHTML = this.createProblemDetailHTML(data.data);
                     
-                    // TAMBAHAN BARU: Event listener untuk tombol forward (hanya untuk leader)
-                    if (this.userRole === 'leader') {
-                        const forwardBtn = document.getElementById('forwardBtn');
-                        if (forwardBtn) {
-                            forwardBtn.addEventListener('click', () => {
-                                this.showForwardConfirmation(problemId, data.data);
-                            });
-                        }
+                    // Extract action buttons from the HTML and move them to footer
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = problemDetailHTML;
+                    const actionButtons = tempDiv.querySelector('.action-buttons');
+                    
+                    if (actionButtons) {
+                        // Remove action buttons from the main content
+                        const contentWithoutActions = problemDetailHTML.replace(/<div class="action-buttons"[\s\S]*?<\/div>/g, '');
+                        modalBody.innerHTML = contentWithoutActions;
+                        
+                        // Add action buttons to footer
+                        modalFooter.appendChild(actionButtons);
+                    } else {
+                        modalBody.innerHTML = problemDetailHTML;
                     }
+                    
+                    // Event listeners untuk tombol-tombol action
+                    this.bindProblemActionButtons(problemId, data.data);
                 } else {
                     throw new Error(data.message);
                 }
@@ -500,89 +556,55 @@ class DashboardManager {
         try {
             console.log(`🔍 getCurrentMachineStatus called with machine: "${machine}", line: "${machineLine}"`);
             
-            // Panggil API /status untuk mendapatkan data terbaru
-            const response = await fetch('/api/dashboard/status');
-            const result = await response.json();
-            
-            console.log('📡 Response dari API:', result);
-            
-            if (result.success && result.data && result.data.machine_statuses_by_line) {
-                const groupedStatuses = result.data.machine_statuses_by_line;
-                console.log('📊 Grouped statuses:', groupedStatuses);
+            // PERBAIKAN: Gunakan data yang sudah difilter dari socket, bukan memanggil API langsung
+            // Ini memastikan department users tidak melihat problem sebelum forward
+            const groupedStatuses = this.lastMachineStatuses || {};
+            console.log('📊 Using filtered machine statuses:', groupedStatuses);
 
-                // PERBAIKAN UTAMA: Prioritaskan pencarian berdasarkan machineLine jika tersedia
-                if (machineLine) {
-                    console.log(`🎯 Mencari di line spesifik: ${machineLine}`);
-                    const machinesInLine = groupedStatuses[machineLine];
-                    
-                    if (machinesInLine && Array.isArray(machinesInLine)) {
-                        const foundMachine = machinesInLine.find(m => m.name === machine);
-                        if (foundMachine) {
-                            console.log('✅ Machine ditemukan di line yang tepat:', foundMachine);
-                            return {
-                                ...foundMachine,
-                                line_number: foundMachine.line_number || machineLine // Pastikan line_number benar
-                            };
-                        }
-                    }
-                }
-
-                // Fallback: Cari di semua line jika machineLine tidak tersedia atau tidak ditemukan
-                for (const lineNumber in groupedStatuses) {
-                    console.log(`🔍 Fallback search di line ${lineNumber}:`, groupedStatuses[lineNumber]);
-                    
-                    const foundMachine = groupedStatuses[lineNumber].find(m => {
-                        console.log(`🔍 Comparing "${m.name}" with "${machine}"`);
-                        return m.name === machine;
-                    });
-                    
+            // PERBAIKAN UTAMA: Prioritaskan pencarian berdasarkan machineLine jika tersedia
+            if (machineLine) {
+                console.log(`🎯 Mencari di line spesifik: ${machineLine}`);
+                const machinesInLine = groupedStatuses[machineLine];
+                
+                if (machinesInLine && Array.isArray(machinesInLine)) {
+                    const foundMachine = machinesInLine.find(m => m.name === machine);
                     if (foundMachine) {
-                        console.log('✅ Machine ditemukan via fallback:', foundMachine);
+                        console.log('✅ Machine ditemukan di line yang tepat:', foundMachine);
                         return {
                             ...foundMachine,
-                            line_number: foundMachine.line_number || lineNumber
+                            line_number: foundMachine.line_number || machineLine // Pastikan line_number benar
                         };
                     }
                 }
+            }
 
-                // Jika tidak ditemukan di manapun
-                console.warn(`❌ Status untuk '${machine}' tidak ditemukan di data terbaru.`);
+            // Fallback: Cari di semua line jika machineLine tidak tersedia atau tidak ditemukan
+            for (const lineNumber in groupedStatuses) {
+                console.log(`🔍 Fallback search di line ${lineNumber}:`, groupedStatuses[lineNumber]);
                 
-                // PERBAIKAN: Cek apakah ada active problem untuk machine ini dari active_problems
-                const activeProblems = result.data.active_problems || [];
-                const machineActiveProblem = activeProblems.find(problem => 
-                    problem.machine === machine || problem.tipe_mesin === machine
-                );
+                const foundMachine = groupedStatuses[lineNumber].find(m => {
+                    console.log(`🔍 Comparing "${m.name}" with "${machine}"`);
+                    return m.name === machine;
+                });
                 
-                if (machineActiveProblem) {
-                    console.log('✅ Ditemukan active problem untuk machine ini:', machineActiveProblem);
+                if (foundMachine) {
+                    console.log('✅ Machine ditemukan via fallback:', foundMachine);
                     return {
-                        status: 'problem',
-                        name: machine,
-                        problem_type: machineActiveProblem.problem_type,
-                        line_number: machineActiveProblem.line_number || machineLine, // PERBAIKAN: Gunakan line dari problem atau parameter
-                        last_check: new Date().toISOString()
+                        ...foundMachine,
+                        line_number: foundMachine.line_number || lineNumber
                     };
                 }
-                
-                return { 
-                    status: 'normal', 
-                    last_check: new Date().toISOString(),
-                    name: machine,
-                    problem_type: null,
-                    line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
-                };
-                
-            } else {
-                console.error("❌ Respons API tidak valid:", result);
-                return { 
-                    status: 'normal', 
-                    last_check: new Date().toISOString(),
-                    name: machine,
-                    problem_type: null,
-                    line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
-                };
             }
+
+            // Jika tidak ditemukan di manapun, return status normal
+            console.warn(`❌ Status untuk '${machine}' tidak ditemukan di data terbaru.`);
+            return { 
+                status: 'normal', 
+                last_check: new Date().toISOString(),
+                name: machine,
+                problem_type: null,
+                line_number: machineLine || 'N/A'
+            };
         } catch (error) {
             console.error('❌ Error saat mengambil status mesin:', error);
             return { 
@@ -666,6 +688,7 @@ class DashboardManager {
 
     createProblemDetailHTML(problem) {
         const isLeader = this.userRole === 'leader';
+        const isDepartmentUser = ['maintenance', 'quality', 'warehouse'].includes(this.userRole);
         
         // Tentukan target role berdasarkan problem type
         let targetRole = '';
@@ -683,11 +706,112 @@ class DashboardManager {
                 targetRole = 'Unknown';
         }
 
+        // Tentukan status problem dan tampilan yang sesuai
+        let statusDisplay = '';
+        let actionButtons = '';
+        
+        // Debug log untuk troubleshooting
+        console.log('Creating problem detail HTML:', {
+            problem_status: problem.problem_status,
+            is_forwarded: problem.is_forwarded,
+            is_received: problem.is_received,
+            has_feedback_resolved: problem.has_feedback_resolved,
+            userRole: this.userRole,
+            isLeader,
+            isDepartmentUser
+        });
+        
+        // Tentukan status berdasarkan kondisi problem
+        let actualStatus = 'active';
+        if (problem.status === 'OFF') {
+            actualStatus = 'resolved';
+        } else if (problem.has_feedback_resolved) {
+            actualStatus = 'feedback_resolved';
+        } else if (problem.is_received) {
+            actualStatus = 'received';
+        } else if (problem.is_forwarded) {
+            actualStatus = 'forwarded';
+        }
+        
+        // Update problem object dengan status yang benar
+        problem.problem_status = actualStatus;
+        
+        if (actualStatus === 'active' && isLeader) {
+            // Problem baru, leader bisa forward atau resolve langsung
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-forward" id="forwardBtn" style="background-color: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-share" style="margin-right: 5px;"></i>
+                        Forward ke ${targetRole}
+                    </button>
+                    <button class="btn btn-direct-resolve" id="directResolveBtn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-check" style="margin-right: 5px;"></i>
+                        Direct Resolve
+                    </button>
+                </div>
+            `;
+        } else if (actualStatus === 'forwarded' && isDepartmentUser) {
+            // Problem sudah di-forward, department user bisa receive
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button class="btn btn-receive" id="receiveBtn" style="background-color: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                        <i class="fas fa-hand-paper" style="margin-right: 5px;"></i>
+                        Receive Problem
+                    </button>
+                </div>
+            `;
+        } else if (actualStatus === 'received' && isDepartmentUser) {
+            // Problem sudah diterima, department user bisa feedback resolved
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                        <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
+                        Mark as Resolved (Feedback)
+                    </button>
+                </div>
+            `;
+        } else if (actualStatus === 'feedback_resolved' && isLeader) {
+            // Problem sudah ada feedback resolved, leader bisa final resolve
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button class="btn btn-final-resolve" id="finalResolveBtn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                        <i class="fas fa-check-double" style="margin-right: 5px;"></i>
+                        Final Resolve
+                    </button>
+                </div>
+            `;
+        }
+
+        // Status display berdasarkan problem status
+        switch (actualStatus) {
+            case 'active':
+                statusDisplay = '<span class="status-badge status-active">Active - Waiting for Action</span>';
+                break;
+            case 'forwarded':
+                statusDisplay = '<span class="status-badge status-forwarded">Forwarded - Waiting for Receive</span>';
+                break;
+            case 'received':
+                statusDisplay = '<span class="status-badge status-received">Received - In Progress</span>';
+                break;
+            case 'feedback_resolved':
+                statusDisplay = '<span class="status-badge status-feedback-resolved">Feedback Resolved - Waiting for Final Confirmation</span>';
+                break;
+            case 'resolved':
+                statusDisplay = '<span class="status-badge status-resolved">Resolved</span>';
+                break;
+            default:
+                statusDisplay = '<span class="status-badge status-unknown">Unknown Status</span>';
+        }
+
         return `
             <div class="problem-detail">
                 <div class="problem-header">
                     <h4>${problem.machine}</h4>
                     <span class="severity-badge ${problem.severity}">${problem.severity.toUpperCase()}</span>
+                </div>
+                
+                <div class="problem-status-display" style="margin: 15px 0; text-align: center;">
+                    ${statusDisplay}
                 </div>
                 
                 <div class="detail-grid">
@@ -704,10 +828,34 @@ class DashboardManager {
                         <span class="value">${problem.duration}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="label">Status:</span>
-                        <span class="value problem-status">${problem.status}</span>
+                        <span class="label">Line:</span>
+                        <span class="value">${problem.line_number || 'N/A'}</span>
                     </div>
                 </div>
+
+                ${problem.forwarded_by ? `
+                    <div class="forward-info" style="margin: 15px 0; padding: 10px; background-color: #e7f3ff; border-left: 4px solid #0066cc; border-radius: 4px;">
+                        <strong>Forwarded by:</strong> ${problem.forwarded_by}<br>
+                        <strong>Forwarded at:</strong> ${problem.forwarded_at || 'N/A'}<br>
+                        <strong>Target:</strong> ${targetRole}<br>
+                        ${problem.forward_message ? `<strong>Message:</strong> ${problem.forward_message}` : ''}
+                    </div>
+                ` : ''}
+
+                ${problem.received_by ? `
+                    <div class="receive-info" style="margin: 15px 0; padding: 10px; background-color: #d1ecf1; border-left: 4px solid #17a2b8; border-radius: 4px;">
+                        <strong>Received by:</strong> ${problem.received_by}<br>
+                        <strong>Received at:</strong> ${problem.received_at || 'N/A'}
+                    </div>
+                ` : ''}
+
+                ${problem.feedback_resolved_by ? `
+                    <div class="feedback-info" style="margin: 15px 0; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                        <strong>Feedback by:</strong> ${problem.feedback_resolved_by}<br>
+                        <strong>Feedback at:</strong> ${problem.feedback_resolved_at || 'N/A'}<br>
+                        ${problem.feedback_message ? `<strong>Message:</strong> ${problem.feedback_message}` : ''}
+                    </div>
+                ` : ''}
 
                 <div class="problem-description">
                     <h5>Description:</h5>
@@ -722,21 +870,7 @@ class DashboardManager {
                     <p style="margin: 0; color: #721c24;">${problem.recommended_action}</p>
                 </div>
 
-                ${isLeader ? `
-                    <div class="forward-section" style="margin-top: 20px; padding: 15px; background-color: #e7f3ff; border: 1px solid #b8daff; border-radius: 5px;">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <i class="fas fa-share" style="color: #0066cc; margin-right: 8px;"></i>
-                            <strong style="color: #0066cc;">Forward Problem</strong>
-                        </div>
-                        <p style="margin: 5px 0; color: #0066cc; font-size: 14px;">
-                            Problem ini akan diteruskan ke tim <strong>${targetRole}</strong> untuk penanganan.
-                        </p>
-                        <button class="btn btn-forward" id="forwardBtn" style="margin-top: 10px; background-color: #0066cc; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
-                            <i class="fas fa-share" style="margin-right: 5px;"></i>
-                            Forward ke ${targetRole}
-                        </button>
-                    </div>
-                ` : ''}
+                ${actionButtons}
             </div>
         `;
     }
@@ -803,28 +937,12 @@ class DashboardManager {
                 return;
 
             case 'maintenance':
-                // Maintenance hanya melihat notifikasi tipe 'Machine'.
-                if (problemType && problemType.toLowerCase() !== 'machine') {
-                    console.log(`🔔 Notifikasi untuk Maintenance disembunyikan. Tipe masalah: ${problemType}`);
-                    return;
-                }
-                break;
-
             case 'quality':
-                // Quality hanya melihat notifikasi tipe 'Quality'.
-                if (problemType && problemType.toLowerCase() !== 'quality') {
-                    console.log(`🔔 Notifikasi untuk Quality disembunyikan. Tipe masalah: ${problemType}`);
-                    return;
-                }
-                break;
-
             case 'warehouse':
-                // Warehouse hanya melihat notifikasi tipe 'Material'.
-                if (problemType && problemType.toLowerCase() !== 'material') {
-                    console.log(`🔔 Notifikasi untuk Warehouse disembunyikan. Tipe masalah: ${problemType}`);
-                    return;
-                }
-                break;
+                // Department users TIDAK PERNAH melihat notifikasi problem baru
+                // Mereka hanya melihat notifikasi ketika problem di-forward ke mereka
+                console.log(`🔔 Notifikasi untuk Department User (${this.userRole}) disembunyikan. Mereka hanya melihat notifikasi forward.`);
+                return;
 
             case 'leader':
                 // PERBAIKAN: Validasi data dan filter berdasarkan line
@@ -1012,9 +1130,254 @@ class DashboardManager {
         }
     }
 
+    // Method untuk bind event listeners pada tombol-tombol action
+    bindProblemActionButtons(problemId, problemData) {
+        // Forward button
+        const forwardBtn = document.getElementById('forwardBtn');
+        if (forwardBtn) {
+            forwardBtn.addEventListener('click', () => {
+                this.showForwardConfirmation(problemId, problemData);
+            });
+        }
+
+        // Receive button
+        const receiveBtn = document.getElementById('receiveBtn');
+        if (receiveBtn) {
+            receiveBtn.addEventListener('click', () => {
+                this.receiveProblem(problemId);
+            });
+        }
+
+        // Feedback resolved button
+        const feedbackResolvedBtn = document.getElementById('feedbackResolvedBtn');
+        if (feedbackResolvedBtn) {
+            feedbackResolvedBtn.addEventListener('click', () => {
+                this.showFeedbackResolvedConfirmation(problemId, problemData);
+            });
+        }
+
+        // Final resolve button
+        const finalResolveBtn = document.getElementById('finalResolveBtn');
+        if (finalResolveBtn) {
+            finalResolveBtn.addEventListener('click', () => {
+                this.showFinalResolveConfirmation(problemId, problemData);
+            });
+        }
+
+        // Direct resolve button (for direct resolve by leader without forward)
+        const directResolveBtn = document.getElementById('directResolveBtn');
+        if (directResolveBtn) {
+            directResolveBtn.addEventListener('click', () => {
+                this.showDirectResolveConfirmation(problemId, problemData);
+            });
+        }
+    }
+
+    // Method untuk receive problem
+    async receiveProblem(problemId) {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/receive`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Problem Received', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error receiving problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to receive problem: ' + error.message);
+        }
+    }
+
+    // Method untuk show feedback resolved confirmation
+    showFeedbackResolvedConfirmation(problemId, problemData) {
+        Swal.fire({
+            title: 'Mark as Resolved?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                    <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                    <p style="color: #ffc107; font-weight: bold;">Ini adalah feedback bahwa problem sudah selesai ditangani. Leader akan melakukan final confirmation.</p>
+                </div>
+                <div style="text-align: left; margin-top: 15px;">
+                    <label for="feedbackMessage" style="display: block; margin-bottom: 5px; font-weight: bold;">Pesan (Opsional):</label>
+                    <textarea id="feedbackMessage" class="swal2-input" placeholder="Tambahkan catatan tentang penanganan problem..." style="height: 80px; resize: vertical;"></textarea>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Mark as Resolved',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#ffc107',
+            cancelButtonColor: '#6c757d',
+            preConfirm: () => {
+                const message = document.getElementById('feedbackMessage').value;
+                return { message: message };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                this.feedbackResolvedProblem(problemId, result.value.message);
+            }
+        });
+    }
+
+    // Method untuk feedback resolved problem
+    async feedbackResolvedProblem(problemId, message = '') {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/feedback-resolved`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message || 'Problem sudah selesai ditangani.'
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Feedback Sent', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error feedback resolved problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to send feedback: ' + error.message);
+        }
+    }
+
+    // Method untuk show direct resolve confirmation (leader resolve without forward)
+    showDirectResolveConfirmation(problemId, problemData) {
+        Swal.fire({
+            title: 'Direct Resolve Problem?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                    <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                    <p style="color: #28a745; font-weight: bold;">Ini akan menyelesaikan problem secara langsung tanpa forward ke department.</p>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Resolve Directly',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                this.directResolveProblem(problemId);
+            }
+        });
+    }
+
+    // Method untuk direct resolve problem
+    async directResolveProblem(problemId) {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/final-resolved`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Problem Resolved', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+                this.loadStats(); // Refresh stats
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error direct resolving problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to direct resolve problem: ' + error.message);
+        }
+    }
+
+    // Method untuk show final resolve confirmation
+    showFinalResolveConfirmation(problemId, problemData) {
+        Swal.fire({
+            title: 'Final Resolve Problem?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                    <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                    <p style="color: #28a745; font-weight: bold;">Ini akan menyelesaikan problem secara final. Problem akan dihapus dari daftar aktif.</p>
+                    ${problemData.feedback_resolved_by ? `<p><strong>Feedback dari:</strong> ${problemData.feedback_resolved_by}</p>` : ''}
+                    ${problemData.feedback_message ? `<p><strong>Feedback message:</strong> ${problemData.feedback_message}</p>` : ''}
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Final Resolve',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                this.finalResolveProblem(problemId);
+            }
+        });
+    }
+
+    // Method untuk final resolve problem
+    async finalResolveProblem(problemId) {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/final-resolved`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Problem Resolved', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+                this.loadStats(); // Refresh stats
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error final resolving problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to final resolve problem: ' + error.message);
+        }
+    }
+
     // 6. METHOD BARU: showForwardedProblemNotification
     showForwardedProblemNotification(data) {
         console.log(`📧 Showing forwarded problem notification for role: ${this.userRole}`);
+
+        // PERBAIKAN: Pastikan hanya department users yang sesuai yang melihat notifikasi ini
+        if (['maintenance', 'quality', 'warehouse'].includes(this.userRole)) {
+            // Cek apakah notifikasi ini untuk role user ini
+            if (data.target_role !== this.userRole) {
+                console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole}, disembunyikan`);
+                return;
+            }
+        } else {
+            console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole}, disembunyikan`);
+            return;
+        }
 
         // Play alert sound
         this.playAlertSound();
@@ -1081,6 +1444,90 @@ class DashboardManager {
         });
     }
 
+    // Method untuk show problem received notification (untuk leader)
+    showProblemReceivedNotification(data) {
+        console.log(`📥 Showing problem received notification for leader`);
+
+        Swal.fire({
+            title: `📥 Problem Received`,
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Problem ID:</strong> ${data.problem_id}</p>
+                    <p><strong>Received by:</strong> ${data.received_by}</p>
+                    <p><strong>Received at:</strong> ${data.received_at}</p>
+                    <p style="color: #17a2b8; font-weight: bold;">Problem telah diterima dan sedang ditangani.</p>
+                </div>
+            `,
+            icon: 'info',
+            iconColor: '#17a2b8',
+            confirmButtonText: 'OK',
+            toast: true,
+            position: 'top-end',
+            timer: 5000,
+            timerProgressBar: true
+        });
+    }
+
+    // Method untuk show problem feedback resolved notification (untuk leader)
+    showProblemFeedbackResolvedNotification(data) {
+        console.log(`📝 Showing problem feedback resolved notification for leader`);
+
+        Swal.fire({
+            title: `📝 Problem Feedback Resolved`,
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Problem ID:</strong> ${data.problem_id}</p>
+                    <p><strong>Feedback by:</strong> ${data.feedback_by}</p>
+                    <p><strong>Feedback at:</strong> ${data.feedback_at}</p>
+                    <p><strong>Message:</strong> ${data.message}</p>
+                    <p style="color: #ffc107; font-weight: bold;">Problem sudah selesai ditangani, menunggu konfirmasi final dari leader.</p>
+                </div>
+            `,
+            icon: 'warning',
+            iconColor: '#ffc107',
+            confirmButtonText: 'View Problem',
+            cancelButtonText: 'OK',
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            cancelButtonColor: '#6c757d',
+            toast: false,
+            position: 'center',
+            timer: 10000,
+            timerProgressBar: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Buka problem detail untuk final resolve
+                this.loadDashboardData(); // Refresh data first
+                // Note: Problem ID akan didapat dari data yang sudah di-refresh
+            }
+        });
+    }
+
+    // Method untuk show problem final resolved notification
+    showProblemFinalResolvedNotification(data) {
+        console.log(`✅ Showing problem final resolved notification`);
+
+        Swal.fire({
+            title: `✅ Problem Resolved`,
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Problem ID:</strong> ${data.problem_id}</p>
+                    <p><strong>Resolved by:</strong> ${data.resolved_by}</p>
+                    <p><strong>Resolved at:</strong> ${data.resolved_at}</p>
+                    <p><strong>Duration:</strong> ${data.duration_seconds} seconds</p>
+                    <p style="color: #28a745; font-weight: bold;">Problem telah diselesaikan secara final.</p>
+                </div>
+            `,
+            icon: 'success',
+            iconColor: '#28a745',
+            confirmButtonText: 'OK',
+            toast: true,
+            position: 'top-end',
+            timer: 5000,
+            timerProgressBar: true
+        });
+    }
+
     playAlertSound() {
         try {
             this.alertSound.currentTime = 0;
@@ -1134,7 +1581,8 @@ function closeModal() {
 }
 
 function resolveProblem() {
-    dashboardManager.resolveProblem();
+    // This function is deprecated - use new forward problem workflow instead
+    console.warn('resolveProblem() is deprecated. Use new forward problem workflow.');
 }
 
 // Initialize when DOM is ready

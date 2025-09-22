@@ -1166,3 +1166,250 @@ body {
     border-color: #f5c6cb;
     color: #721c24;
 }
+
+/* Forward Problem Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background-color: #dc3545;
+    color: white;
+}
+
+.status-forwarded {
+    background-color: #0066cc;
+    color: white;
+}
+
+.status-received {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.status-feedback-resolved {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.status-resolved {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-unknown {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Action Buttons */
+.action-buttons {
+    margin-top: 20px;
+}
+
+.action-buttons .btn {
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.action-buttons .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-forward {
+    background-color: #0066cc !important;
+    border-color: #0066cc !important;
+}
+
+.btn-forward:hover {
+    background-color: #0056b3 !important;
+    border-color: #0056b3 !important;
+}
+
+.btn-receive {
+    background-color: #17a2b8 !important;
+    border-color: #17a2b8 !important;
+}
+
+.btn-receive:hover {
+    background-color: #138496 !important;
+    border-color: #138496 !important;
+}
+
+.btn-feedback-resolved {
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.btn-feedback-resolved:hover {
+    background-color: #e0a800 !important;
+    border-color: #e0a800 !important;
+}
+
+.btn-final-resolve {
+    background-color: #28a745 !important;
+    border-color: #28a745 !important;
+}
+
+.btn-final-resolve:hover {
+    background-color: #218838 !important;
+    border-color: #218838 !important;
+}
+
+/* Problem Status Info Boxes */
+.forward-info,
+.receive-info,
+.feedback-info {
+    border-radius: 6px;
+    margin: 15px 0;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.forward-info {
+    background-color: #e7f3ff;
+    border-left: 4px solid #0066cc;
+}
+
+.receive-info {
+    background-color: #d1ecf1;
+    border-left: 4px solid #17a2b8;
+}
+
+.feedback-info {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+/* Problem Status Display */
+.problem-status-display {
+    margin: 15px 0;
+    text-align: center;
+}
+
+.problem-status-display .status-badge {
+    font-size: 14px;
+    padding: 8px 16px;
+}
+
+/* Enhanced Problem Detail */
+.problem-detail .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.problem-detail .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.problem-detail .detail-item .label {
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.problem-detail .detail-item .value {
+    font-weight: 500;
+    color: #212529;
+    font-size: 14px;
+}
+
+/* Status Badge Styles */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-active {
+    background-color: #dc3545;
+    color: white;
+}
+
+.status-forwarded {
+    background-color: #0066cc;
+    color: white;
+}
+
+.status-received {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.status-feedback-resolved {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.status-resolved {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-unknown {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Action Buttons in Modal Footer */
+.modal-footer .action-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-left: auto;
+}
+
+.modal-footer .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* Problem Status Display */
+.problem-status-display {
+    text-align: center;
+    margin: 1rem 0;
+}
+
+/* Forward/Receive/Feedback Info Boxes */
+.forward-info,
+.receive-info,
+.feedback-info {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.forward-info {
+    background-color: #e7f3ff;
+    border-left: 4px solid #0066cc;
+}
+
+.receive-info {
+    background-color: #d1ecf1;
+    border-left: 4px solid #17a2b8;
+}
+
+.feedback-info {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+}

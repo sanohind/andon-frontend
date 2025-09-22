@@ -600,6 +600,7 @@ function createProblemKey(problem) {
 // Function to fetch and emit dashboard data WITH problem detection
 async function fetchAndEmitDashboardData(socket = null) {
     try {
+        // Ambil data mentah dari backend tanpa filtering (karena filtering dilakukan di Node.js)
         const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
             headers: {
                 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
@@ -609,11 +610,12 @@ async function fetchAndEmitDashboardData(socket = null) {
         const data = response.data;
 
         if (data.success && data.data) {
-            const currentProblems = data.data.active_problems || [];
+            // Ambil data mentah dari backend
+            const rawActiveProblems = data.data.active_problems || [];
             const newProblems = [];
 
             const currentProblemKeys = new Set();
-            currentProblems.forEach(problem => {
+            rawActiveProblems.forEach(problem => {
                 const problemKey = createProblemKey(problem);
                 currentProblemKeys.add(problemKey);
 
@@ -628,15 +630,23 @@ async function fetchAndEmitDashboardData(socket = null) {
 
             const dataToEmit = {
                 machine_statuses_by_line: data.data.machine_statuses_by_line,
-                active_problems: data.data.active_problems,
+                active_problems: rawActiveProblems,
                 new_problems: newProblems
             };
 
-            // Emit dashboardUpdate ke semua client (ini OK karena frontend akan filter)
-            if (socket) {
-                socket.emit('dashboardUpdate', { success: true, data: dataToEmit });
+            // Emit dashboardUpdate dengan filtering berdasarkan user role
+            if (socket && socket.user) {
+                // Untuk single socket dengan user info, kirim data yang sudah difilter
+                const filteredData = filterDataForUser(socket.user, dataToEmit);
+                socket.emit('dashboardUpdate', { success: true, data: filteredData });
             } else {
-                io.emit('dashboardUpdate', { success: true, data: dataToEmit });
+                // Untuk broadcast ke semua client, filter untuk setiap user
+                io.sockets.sockets.forEach((clientSocket) => {
+                    if (clientSocket.user) {
+                        const filteredData = filterDataForUser(clientSocket.user, dataToEmit);
+                        clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
+                    }
+                });
             }
 
             // PERBAIKAN: Filter dan kirim notifikasi berdasarkan user line
@@ -692,6 +702,95 @@ async function fetchAndEmitDashboardData(socket = null) {
     }
 }
 
+function filterDataForUser(user, data) {
+    if (!user || !user.role) {
+        return {
+            machine_statuses_by_line: {},
+            active_problems: [],
+            new_problems: []
+        };
+    }
+
+    let filteredActiveProblems = data.active_problems || [];
+    let filteredMachineStatuses = data.machine_statuses_by_line || {};
+
+    switch (user.role) {
+        case 'admin':
+            // Admin melihat semua data
+            return data;
+
+        case 'leader':
+            // Leader hanya melihat problem dari line mereka
+            if (user.line_number) {
+                filteredActiveProblems = filteredActiveProblems.filter(problem => 
+                    problem.line_number == user.line_number
+                );
+                
+                // Filter machine statuses untuk line yang sesuai
+                const filteredMachineStatusesByLine = {};
+                if (filteredMachineStatuses[user.line_number]) {
+                    filteredMachineStatusesByLine[user.line_number] = filteredMachineStatuses[user.line_number];
+                }
+                filteredMachineStatuses = filteredMachineStatusesByLine;
+            }
+            break;
+
+        case 'maintenance':
+        case 'quality':
+        case 'warehouse':
+            // Department users hanya melihat problem yang sudah di-forward ke mereka
+            filteredActiveProblems = filteredActiveProblems.filter(problem => 
+                problem.is_forwarded && problem.forwarded_to_role === user.role
+            );
+            
+            // PERBAIKAN: Department users bisa melihat machine status problem jika ada problem yang sudah di-forward ke mereka
+            filteredMachineStatuses = {};
+            for (const lineNumber in data.machine_statuses_by_line) {
+                filteredMachineStatuses[lineNumber] = data.machine_statuses_by_line[lineNumber].map(machine => {
+                    // Cek apakah ada problem yang sudah di-forward ke user role ini untuk machine ini
+                    const hasForwardedProblem = filteredActiveProblems.some(problem => 
+                        problem.machine === machine.name && 
+                        problem.line_number == machine.line_number &&
+                        problem.is_forwarded && 
+                        problem.forwarded_to_role === user.role
+                    );
+                    
+                    if (hasForwardedProblem) {
+                        // Jika ada problem yang sudah di-forward, tampilkan sebagai problem
+                        return {
+                            ...machine,
+                            status: 'problem',
+                            color: 'red',
+                            problem_type: machine.problem_type,
+                            timestamp: machine.timestamp
+                        };
+                    } else {
+                        // Jika tidak ada problem yang di-forward, tampilkan sebagai normal
+                        return {
+                            ...machine,
+                            status: 'normal',
+                            color: 'green',
+                            problem_type: null,
+                            timestamp: null
+                        };
+                    }
+                });
+            }
+            break;
+
+        default:
+            // Role tidak dikenal, tidak ada data
+            filteredActiveProblems = [];
+            filteredMachineStatuses = {};
+    }
+
+    return {
+        machine_statuses_by_line: filteredMachineStatuses,
+        active_problems: filteredActiveProblems,
+        new_problems: [] // new_problems sudah difilter di shouldSendNotificationToUser
+    };
+}
+
 function shouldSendNotificationToUser(user, notification) {
     if (!user || !user.role) return false;
 
@@ -699,21 +798,45 @@ function shouldSendNotificationToUser(user, notification) {
         role: user.role,
         line: user.line_number,
         problemLine: notification.line_number,
-        problemType: notification.problem_type
+        problemType: notification.problem_type,
+        problemStatus: notification.problem_status
     });
 
+    // Untuk forward problem notifications, gunakan logika yang berbeda
+    if (notification.isForwarded) {
+        switch (user.role) {
+            case 'admin':
+                return false; // Admin tidak menerima notifikasi popup
+
+            case 'maintenance':
+                return notification.forwarded_to_role === 'maintenance';
+
+            case 'quality':
+                return notification.forwarded_to_role === 'quality';
+
+            case 'warehouse':
+                return notification.forwarded_to_role === 'warehouse';
+
+            case 'leader':
+                // Leader tidak menerima notifikasi untuk problem yang sudah di-forward
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    // Untuk problem baru (belum di-forward)
     switch (user.role) {
         case 'admin':
             return false; // Admin tidak menerima notifikasi popup
 
         case 'maintenance':
-            return notification.problem_type && notification.problem_type.toLowerCase() === 'machine';
-
         case 'quality':
-            return notification.problem_type && notification.problem_type.toLowerCase() === 'quality';
-
         case 'warehouse':
-            return notification.problem_type && notification.problem_type.toLowerCase() === 'material';
+            // Department users TIDAK PERNAH menerima notifikasi problem baru
+            // Mereka hanya menerima notifikasi ketika problem di-forward ke mereka
+            return false;
 
         case 'leader':
             // KUNCI: Filter berdasarkan line
@@ -733,6 +856,7 @@ function shouldSendNotificationToUser(user, notification) {
     }
 }
 
+// Forward Problem Routes
 app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => {
   try {
     // Validasi bahwa user adalah leader
@@ -783,6 +907,175 @@ app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => 
     res.status(500).json({ 
       success: false, 
       message: 'Failed to forward problem',
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/dashboard/problem/:id/receive', requireAuth, async (req, res) => {
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/receive`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.data.success) {
+      // Broadcast receive notification ke leader yang terkait
+      const receiveData = response.data.data;
+      
+      console.log(`📥 Broadcasting receive notification to leaders`);
+      
+      // Kirim notifikasi ke leader yang terkait
+      io.sockets.sockets.forEach((clientSocket) => {
+        if (clientSocket.user && clientSocket.user.role === 'leader') {
+          console.log(`📧 Sending receive notification to leader: ${clientSocket.user.name}`);
+          
+          clientSocket.emit('problemReceived', {
+            problem_id: receiveData.problem_id,
+            received_by: receiveData.received_by,
+            received_at: receiveData.received_at,
+            message: 'Problem telah diterima oleh user terkait'
+          });
+        }
+      });
+    }
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error receiving problem:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to receive problem',
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/dashboard/problem/:id/feedback-resolved', requireAuth, async (req, res) => {
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/feedback-resolved`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.data.success) {
+      // Broadcast feedback resolved notification ke leader yang terkait
+      const feedbackData = response.data.data;
+      
+      console.log(`📝 Broadcasting feedback resolved notification to leaders`);
+      
+      // Kirim notifikasi ke leader yang terkait
+      io.sockets.sockets.forEach((clientSocket) => {
+        if (clientSocket.user && clientSocket.user.role === 'leader') {
+          console.log(`📧 Sending feedback resolved notification to leader: ${clientSocket.user.name}`);
+          
+          clientSocket.emit('problemFeedbackResolved', {
+            problem_id: feedbackData.problem_id,
+            feedback_by: feedbackData.feedback_by,
+            feedback_at: feedbackData.feedback_at,
+            message: feedbackData.message,
+            notification: 'Problem sudah selesai ditangani, menunggu konfirmasi final dari leader'
+          });
+        }
+      });
+    }
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error feedback resolved problem:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to feedback resolved problem',
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/dashboard/problem/:id/final-resolved', requireAuth, async (req, res) => {
+  try {
+    // Validasi bahwa user adalah leader
+    if (req.user.role !== 'leader') {
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya leader yang dapat melakukan final resolved problem.'
+      });
+    }
+
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/final-resolved`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.data.success) {
+      // Broadcast final resolved notification ke semua user
+      const resolvedData = response.data.data;
+      
+      console.log(`✅ Broadcasting final resolved notification to all users`);
+      
+      // Kirim notifikasi ke semua user
+      io.emit('problemFinalResolved', {
+        problem_id: resolvedData.problem_id,
+        resolved_by: resolvedData.resolved_by,
+        resolved_at: resolvedData.resolved_at,
+        duration_seconds: resolvedData.duration_seconds,
+        message: 'Problem telah diselesaikan secara final'
+      });
+    }
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error final resolved problem:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to final resolved problem',
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/dashboard/forward-logs', requireAuth, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/forward-logs`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: req.query
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching forward logs:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch forward logs',
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/dashboard/forward-logs/:problemId', requireAuth, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/forward-logs/${req.params.problemId}`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching forward logs for problem:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch forward logs for problem',
       error: error.message 
     });
   }
