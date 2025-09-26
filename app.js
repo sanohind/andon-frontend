@@ -446,6 +446,31 @@ app.get('/api/dashboard/analytics', requireAuth, async (req, res) => {
   }
 });
 
+// Endpoint untuk detailed forward analytics
+app.get('/api/dashboard/analytics/detailed-forward', requireAuth, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/detailed-forward`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: {
+        start_date,
+        end_date
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching detailed forward analytics:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch detailed forward analytics',
+      error: error.message 
+    });
+  }
+});
+
 app.get('/plc-monitoring', requireAuth, (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).send('Akses Ditolak');

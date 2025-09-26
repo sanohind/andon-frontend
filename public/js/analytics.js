@@ -66,6 +66,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('duration-chart-card').style.display = 'none';
                     document.getElementById('flow-type-chart-card').style.display = 'none';
                 }
+
+                // Fetch detailed forward analytics data untuk tabel
+                try {
+                    const forwardResp = await fetch(`/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`);
+                    if (forwardResp.ok) {
+                        const forwardJson = await forwardResp.json();
+                        if (forwardJson.success && forwardJson.data) {
+                            updateDetailedForwardAnalyticsTable(forwardJson.data);
+                        }
+                    }
+                } catch (forwardErr) {
+                    console.warn('Detailed forward analytics not available:', forwardErr);
+                }
             } else {
                 console.error('Analytics API Error:', analyticsResult.message);
             }
@@ -208,8 +221,331 @@ document.addEventListener('DOMContentLoaded', () => {
         },
     });
 
+    // Helper untuk mengambil rentang tanggal yang sedang dipilih
+    function getCurrentDateRange() {
+        const dates = picker.getDateRange ? picker.getDateRange() : picker.getDate();
+        if (dates && dates.start && dates.end) {
+            return [moment(dates.start).format('YYYY-MM-DD'), moment(dates.end).format('YYYY-MM-DD')];
+        }
+        if (Array.isArray(dates) && dates.length === 2) {
+            return [moment(dates[0]).format('YYYY-MM-DD'), moment(dates[1]).format('YYYY-MM-DD')];
+        }
+        return null;
+    }
+
+    // Global variables untuk tabel forward analytics
+    let forwardTableData = [];
+    let currentDisplayedData = [];
+    let currentSortColumn = null;
+    let currentSortDirection = 'asc';
+
+    // Fungsi untuk mengupdate tabel detail forward analytics
+    function updateDetailedForwardAnalyticsTable(data) {
+        const tableBody = document.getElementById('forward-analytics-table-body');
+        const emptyState = document.getElementById('forward-table-empty-state');
+        
+        if (!data || !data.problems || data.problems.length === 0) {
+            tableBody.innerHTML = '';
+            emptyState.style.display = 'block';
+            forwardTableData = [];
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        forwardTableData = data.problems;
+        
+        renderForwardTable(forwardTableData);
+        setupForwardTableSearch();
+    }
+
+    // Fungsi untuk render tabel forward analytics
+    function renderForwardTable(data) {
+        const tableBody = document.getElementById('forward-analytics-table-body');
+        // Simpan data yang sedang ditampilkan (hasil filter/sort)
+        currentDisplayedData = Array.isArray(data) ? data : [];
+        
+        tableBody.innerHTML = currentDisplayedData.map(problem => {
+            const flowTypeClass = problem.flow_type.toLowerCase().replace(/\s+/g, '-');
+            const problemTypeClass = problem.problem_type.toLowerCase();
+            
+            // Tentukan class durasi berdasarkan nilai
+            const getDurationClass = (minutes) => {
+                if (minutes === null || minutes === undefined) return '';
+                if (minutes > 60) return 'high';
+                if (minutes > 30) return 'medium';
+                return 'low';
+            };
+            
+            return `
+                <tr>
+                    <td><span class="problem-id">#${problem.problem_id}</span></td>
+                    <td><span class="machine-info">${problem.machine}</span></td>
+                    <td><span class="problem-type ${problemTypeClass}">${problem.problem_type}</span></td>
+                    <td><span class="flow-type ${flowTypeClass}">${problem.flow_type}</span></td>
+                    <td><span class="timestamp">${problem.timestamps.active_at}</span></td>
+                    <td><span class="timestamp">${problem.timestamps.forwarded_at || '-'}</span></td>
+                    <td><span class="timestamp">${problem.timestamps.received_at || '-'}</span></td>
+                    <td><span class="timestamp">${problem.timestamps.feedback_resolved_at || '-'}</span></td>
+                    <td><span class="timestamp">${problem.timestamps.final_resolved_at}</span></td>
+                    <td><span class="duration ${getDurationClass(problem.durations_minutes.active_to_forward)}">${problem.durations_formatted.active_to_forward}</span></td>
+                    <td><span class="duration ${getDurationClass(problem.durations_minutes.forward_to_receive)}">${problem.durations_formatted.forward_to_receive}</span></td>
+                    <td><span class="duration ${getDurationClass(problem.durations_minutes.receive_to_feedback)}">${problem.durations_formatted.receive_to_feedback}</span></td>
+                    <td><span class="duration ${getDurationClass(problem.durations_minutes.feedback_to_final)}">${problem.durations_formatted.feedback_to_final}</span></td>
+                    <td><span class="duration ${getDurationClass(problem.durations_minutes.total_duration)}">${problem.durations_formatted.total_duration}</span></td>
+                    <td>
+                        <div class="user-info">
+                            ${problem.users.forwarded_by ? `<div><strong>Forward:</strong> ${problem.users.forwarded_by}</div>` : ''}
+                            ${problem.users.received_by ? `<div><strong>Receive:</strong> ${problem.users.received_by}</div>` : ''}
+                            ${problem.users.feedback_by ? `<div><strong>Feedback:</strong> ${problem.users.feedback_by}</div>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Fungsi untuk setup search pada tabel forward analytics
+    function setupForwardTableSearch() {
+        const searchInput = document.getElementById('forward-table-search');
+        if (!searchInput) return;
+        
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const baseData = forwardTableData || [];
+            const filteredData = baseData.filter(problem => {
+                return problem.problem_id.toString().includes(searchTerm) ||
+                       problem.machine.toLowerCase().includes(searchTerm) ||
+                       problem.problem_type.toLowerCase().includes(searchTerm) ||
+                       problem.flow_type.toLowerCase().includes(searchTerm);
+            });
+            renderForwardTable(filteredData);
+        });
+    }
+
+    // Fungsi untuk sorting tabel
+    function setupTableSorting() {
+        const sortableHeaders = document.querySelectorAll('.forward-analytics-table th.sortable');
+        
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.dataset.column;
+            
+                // Toggle sort direction
+                if (currentSortColumn === column) {
+                    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSortDirection = 'asc';
+                }
+                currentSortColumn = column;
+            
+                // Update header classes
+                sortableHeaders.forEach(h => {
+                    h.classList.remove('asc', 'desc');
+                });
+                this.classList.add(currentSortDirection);
+            
+                // Sort data berdasarkan data yang sedang ditampilkan sekarang
+                const baseData = currentDisplayedData && currentDisplayedData.length > 0 ? currentDisplayedData : forwardTableData;
+                const sortedData = [...baseData].sort((a, b) => {
+                    let aVal, bVal;
+            
+                    switch (column) {
+                        case 'problem_id':
+                            aVal = a.problem_id;
+                            bVal = b.problem_id;
+                            break;
+                        case 'machine':
+                            aVal = a.machine;
+                            bVal = b.machine;
+                            break;
+                        case 'problem_type':
+                            aVal = a.problem_type;
+                            bVal = b.problem_type;
+                            break;
+                        case 'flow_type':
+                            aVal = a.flow_type;
+                            bVal = b.flow_type;
+                            break;
+                        case 'active_at':
+                        case 'forwarded_at':
+                        case 'received_at':
+                        case 'feedback_at':
+                        case 'resolved_at':
+                            const timestampKey = column === 'active_at' ? 'active_at' :
+                                               column === 'forwarded_at' ? 'forwarded_at' :
+                                               column === 'received_at' ? 'received_at' :
+                                               column === 'feedback_at' ? 'feedback_resolved_at' :
+                                               'final_resolved_at';
+                            aVal = a.timestamps[timestampKey] || '';
+                            bVal = b.timestamps[timestampKey] || '';
+                            break;
+                        case 'active_to_forward':
+                        case 'forward_to_receive':
+                        case 'receive_to_feedback':
+                        case 'feedback_to_final':
+                        case 'total_duration':
+                            const durationKey = column === 'active_to_forward' ? 'active_to_forward' :
+                                              column === 'forward_to_receive' ? 'forward_to_receive' :
+                                              column === 'receive_to_feedback' ? 'receive_to_feedback' :
+                                              column === 'feedback_to_final' ? 'feedback_to_final' :
+                                              'total_duration';
+                            aVal = a.durations_minutes[durationKey] || 0;
+                            bVal = b.durations_minutes[durationKey] || 0;
+                            break;
+                        default:
+                            return 0;
+                    }
+            
+                    if (aVal < bVal) return currentSortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return currentSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            
+                renderForwardTable(sortedData);
+            });
+        });
+    }
+
+    // Fungsi untuk export PDF
+    function exportForwardTableToPDF() {
+        const exportData = (currentDisplayedData && currentDisplayedData.length > 0) ? currentDisplayedData : forwardTableData;
+        if (!exportData || exportData.length === 0) {
+            alert('Tidak ada data untuk diekspor');
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a3'); // Lebar lebih besar agar kolom tidak terpotong
+
+        // Siapkan header info agar bisa dicetak di setiap halaman
+        const range = getCurrentDateRange();
+        const headerLines = [
+            'Data Detail Forward Problem Resolution',
+            range ? `Rentang: ${range[0]} s/d ${range[1]}` : null,
+            `Tanggal Export: ${moment().format('DD/MM/YYYY HH:mm:ss')}`,
+            `Total Data: ${exportData.length} problem`
+        ].filter(Boolean);
+
+        // Prepare table data
+        const tableData = exportData.map(problem => [
+            problem.problem_id,
+            problem.machine,
+            problem.problem_type,
+            problem.flow_type,
+            problem.timestamps.active_at,
+            problem.timestamps.forwarded_at || '-',
+            problem.timestamps.received_at || '-',
+            problem.timestamps.feedback_resolved_at || '-',
+            problem.timestamps.final_resolved_at,
+            problem.durations_formatted.active_to_forward,
+            problem.durations_formatted.forward_to_receive,
+            problem.durations_formatted.receive_to_feedback,
+            problem.durations_formatted.feedback_to_final,
+            problem.durations_formatted.total_duration,
+            `${problem.users.forwarded_by || '-'} | ${problem.users.received_by || '-'} | ${problem.users.feedback_by || '-'}`
+        ]);
+
+        // Table headers
+        const headers = [
+            'Problem ID',
+            'Mesin',
+            'Tipe Problem',
+            'Flow Type',
+            'Active At',
+            'Forwarded At',
+            'Received At',
+            'Feedback At',
+            'Resolved At',
+            'Active → Forward',
+            'Forward → Receive',
+            'Receive → Feedback',
+            'Feedback → Final',
+            'Total Duration',
+            'Users'
+        ];
+
+        // Create table
+        doc.autoTable({
+            head: [headers],
+            body: tableData,
+            // Gunakan margin top yang sedikit besar untuk header setiap halaman
+            margin: { top: 40, left: 10, right: 10, bottom: 15 },
+            tableWidth: 'auto',
+            styles: {
+                fontSize: 8,
+                cellPadding: 1.5,
+                overflow: 'linebreak',
+                halign: 'left',
+                valign: 'top'
+            },
+            headStyles: {
+                fillColor: [0, 123, 255],
+                textColor: 255,
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [248, 249, 250]
+            },
+            columnStyles: {
+                // Biarkan auto width, hanya kolom Users yang diberi lebar lebih besar
+                14: { cellWidth: 60 }
+            },
+            didDrawPage: (data) => {
+                // Header per halaman
+                doc.setFontSize(16);
+                doc.setFont(undefined, 'bold');
+                doc.text(headerLines[0], data.settings.margin.left, 20);
+
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                let y = 26;
+                for (let i = 1; i < headerLines.length; i++) {
+                    doc.text(headerLines[i], data.settings.margin.left, y);
+                    y += 6;
+                }
+
+                // Footer nomor halaman
+                const pageCount = doc.getNumberOfPages();
+                const pageSize = doc.internal.pageSize;
+                const pageWidth = pageSize.getWidth();
+                doc.setFontSize(9);
+                doc.text(
+                    `Halaman ${doc.internal.getCurrentPageInfo().pageNumber} dari ${pageCount}`,
+                    pageWidth - data.settings.margin.right - 50,
+                    pageSize.getHeight() - 8
+                );
+            }
+        });
+
+        // Save PDF
+        const fileName = `forward_problem_analytics_${moment().format('YYYY-MM-DD_HH-mm-ss')}.pdf`;
+        doc.save(fileName);
+    }
+
+    // Event listeners untuk tombol tabel forward analytics (langsung, karena sudah di dalam DOMContentLoaded)
+    const exportPdfBtn = document.getElementById('export-pdf-btn');
+    const refreshForwardBtn = document.getElementById('refresh-forward-table-btn');
+
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', exportForwardTableToPDF);
+    }
+
+    if (refreshForwardBtn) {
+        refreshForwardBtn.addEventListener('click', function() {
+            const range = getCurrentDateRange();
+            if (range) {
+                fetchAnalyticsData(range[0], range[1]);
+            }
+        });
+    }
+
+    // Setup table sorting
+    setupTableSorting();
+
     // Panggilan data awal saat halaman dimuat (untuk 30 hari terakhir)
     const thirtyDaysAgo = moment().subtract(29, 'days').format('YYYY-MM-DD');
     const today = moment().format('YYYY-MM-DD');
     picker.setDateRange(thirtyDaysAgo, today);
+    // Pastikan langsung fetch data untuk range default
+    fetchAnalyticsData(thirtyDaysAgo, today);
 });

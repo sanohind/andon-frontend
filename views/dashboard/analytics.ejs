@@ -189,12 +189,87 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Detailed Forward Problem Analytics Table Section -->
+            <div class="detailed-forward-analytics-section">
+                <h3>Data Detail Forward Problem Resolution</h3>
+                <div class="table-actions">
+                    <button class="btn btn-primary" id="export-pdf-btn">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </button>
+                    <button class="btn btn-secondary" id="refresh-forward-table-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <input type="text" class="search-box" id="forward-table-search" placeholder="Cari problem ID, mesin, atau tipe...">
+                </div>
+                <div class="forward-analytics-table-container">
+                    <table class="forward-analytics-table" id="forward-analytics-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="problem_id">
+                                    Problem ID <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="machine">
+                                    Mesin <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="problem_type">
+                                    Tipe Problem <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="flow_type">
+                                    Flow Type <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="active_at">
+                                    Active At <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="forwarded_at">
+                                    Forwarded At <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="received_at">
+                                    Received At <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="feedback_at">
+                                    Feedback At <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="resolved_at">
+                                    Resolved At <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="active_to_forward">
+                                    Active → Forward <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="forward_to_receive">
+                                    Forward → Receive <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="receive_to_feedback">
+                                    Receive → Feedback <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="feedback_to_final">
+                                    Feedback → Final <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="total_duration">
+                                    Total Duration <i class="fas fa-sort"></i>
+                                </th>
+                                <th>Users</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forward-analytics-table-body">
+                            <!-- Data akan diisi oleh JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="forward-table-empty-state" style="display: none;">
+                    <i class="fas fa-table"></i>
+                    <h4>Tidak ada data</h4>
+                    <p>Pilih rentang tanggal untuk melihat data detail forward problem resolution.</p>
+                </div>
+            </div>
         </div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="/js/analytics.js"></script> 
 </body>
 </html>
