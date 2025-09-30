@@ -6,8 +6,14 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
-const moment = require('moment');
+const moment = require('moment-timezone');
 require('dotenv').config();
+
+// Set timezone untuk Node.js
+process.env.TZ = 'Asia/Jakarta';
+
+// Konfigurasi moment-timezone untuk konsistensi
+moment.tz.setDefault('Asia/Jakarta');
 
 const app = express();
 const server = http.createServer(app);
@@ -676,17 +682,32 @@ async function fetchAndEmitDashboardData(socket = null) {
 
             // PERBAIKAN: Filter dan kirim notifikasi berdasarkan user line
             newProblems.forEach(problem => {
+                // Format timestamp dengan timezone Asia/Jakarta yang konsisten
+                let formattedTimestamp;
+                if (problem.timestamp) {
+                    // Jika timestamp sudah dalam format yang benar, gunakan langsung
+                    if (typeof problem.timestamp === 'string' && problem.timestamp.includes(' ')) {
+                        formattedTimestamp = moment.tz(problem.timestamp, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+                    } else {
+                        // Jika timestamp dalam format ISO, konversi ke Asia/Jakarta
+                        formattedTimestamp = moment.tz(problem.timestamp, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+                    }
+                } else {
+                    // Jika tidak ada timestamp, gunakan waktu sekarang
+                    formattedTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+                }
+
                 const notification = {
                     id: problem.id,
-                    machine: problem.tipe_mesin,
-                    machine_name: problem.tipe_mesin,
-                    problem_type: problem.tipe_problem,
-                    problemType: problem.tipe_problem,
-                    line_number: problem.line_number, // PASTIKAN INI ADA
+                    machine: problem.tipe_mesin || problem.machine || 'Unknown Machine',
+                    machine_name: problem.tipe_mesin || problem.machine_name || 'Unknown Machine',
+                    problem_type: problem.tipe_problem || problem.problem_type || 'Unknown Problem',
+                    problemType: problem.tipe_problem || problem.problemType || 'Unknown Problem',
+                    line_number: problem.line_number || problem.line || 0,
                     severity: problem.severity || 'medium',
-                    timestamp: problem.timestamp || new Date().toISOString(),
-                    description: problem.description,
-                    recommended_action: problem.recommended_action
+                    timestamp: formattedTimestamp,
+                    description: problem.description || 'No description available',
+                    recommended_action: problem.recommended_action || 'No action recommended'
                 };
 
                 // PERBAIKAN: Kirim notifikasi hanya ke user yang sesuai
@@ -911,16 +932,26 @@ app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => 
         if (clientSocket.user && clientSocket.user.role === forwardData.target_role) {
           console.log(`📧 Sending forward notification to user: ${clientSocket.user.name} (${clientSocket.user.role})`);
           
+          // Format timestamp untuk forwarded problem
+          let forwardedTimestamp;
+          if (forwardData.forwarded_at) {
+            forwardedTimestamp = moment.tz(forwardData.forwarded_at, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          } else {
+            forwardedTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          }
+
           clientSocket.emit('problemForwarded', {
             id: forwardData.problem_id,
-            machine_name: forwardData.machine_name,
-            problem_type: forwardData.problem_type,
-            line_number: forwardData.line_number,
-            forwarded_by: forwardData.forwarded_by,
-            message: forwardData.message,
-            timestamp: forwardData.forwarded_at,
+            machine: forwardData.machine_name || 'Unknown Machine',
+            machine_name: forwardData.machine_name || 'Unknown Machine',
+            problem_type: forwardData.problem_type || 'Unknown Problem',
+            problemType: forwardData.problem_type || 'Unknown Problem',
+            line_number: forwardData.line_number || 0,
+            forwarded_by: forwardData.forwarded_by || 'Unknown User',
+            message: forwardData.message || 'Problem has been forwarded',
+            timestamp: forwardedTimestamp,
             severity: 'high', // Karena ini forwarded problem, set sebagai high priority
-            target_role: forwardData.target_role
+            target_role: forwardData.target_role || 'unknown'
           });
         }
       });
@@ -958,10 +989,18 @@ app.post('/api/dashboard/problem/:id/receive', requireAuth, async (req, res) => 
         if (clientSocket.user && clientSocket.user.role === 'leader') {
           console.log(`📧 Sending receive notification to leader: ${clientSocket.user.name}`);
           
+          // Format timestamp untuk received problem
+          let receivedTimestamp;
+          if (receiveData.received_at) {
+            receivedTimestamp = moment.tz(receiveData.received_at, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          } else {
+            receivedTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          }
+
           clientSocket.emit('problemReceived', {
             problem_id: receiveData.problem_id,
-            received_by: receiveData.received_by,
-            received_at: receiveData.received_at,
+            received_by: receiveData.received_by || 'Unknown User',
+            received_at: receivedTimestamp,
             message: 'Problem telah diterima oleh user terkait'
           });
         }
@@ -1000,11 +1039,19 @@ app.post('/api/dashboard/problem/:id/feedback-resolved', requireAuth, async (req
         if (clientSocket.user && clientSocket.user.role === 'leader') {
           console.log(`📧 Sending feedback resolved notification to leader: ${clientSocket.user.name}`);
           
+          // Format timestamp untuk feedback resolved
+          let feedbackTimestamp;
+          if (feedbackData.feedback_at) {
+            feedbackTimestamp = moment.tz(feedbackData.feedback_at, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          } else {
+            feedbackTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          }
+
           clientSocket.emit('problemFeedbackResolved', {
             problem_id: feedbackData.problem_id,
-            feedback_by: feedbackData.feedback_by,
-            feedback_at: feedbackData.feedback_at,
-            message: feedbackData.message,
+            feedback_by: feedbackData.feedback_by || 'Unknown User',
+            feedback_at: feedbackTimestamp,
+            message: feedbackData.message || 'Problem sudah selesai ditangani',
             notification: 'Problem sudah selesai ditangani, menunggu konfirmasi final dari leader'
           });
         }
@@ -1046,12 +1093,20 @@ app.post('/api/dashboard/problem/:id/final-resolved', requireAuth, async (req, r
       
       console.log(`✅ Broadcasting final resolved notification to all users`);
       
+      // Format timestamp untuk final resolved
+      let resolvedTimestamp;
+      if (resolvedData.resolved_at) {
+        resolvedTimestamp = moment.tz(resolvedData.resolved_at, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+      } else {
+        resolvedTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+      }
+
       // Kirim notifikasi ke semua user
       io.emit('problemFinalResolved', {
         problem_id: resolvedData.problem_id,
-        resolved_by: resolvedData.resolved_by,
-        resolved_at: resolvedData.resolved_at,
-        duration_seconds: resolvedData.duration_seconds,
+        resolved_by: resolvedData.resolved_by || 'Unknown User',
+        resolved_at: resolvedTimestamp,
+        duration_seconds: resolvedData.duration_seconds || 0,
         message: 'Problem telah diselesaikan secara final'
       });
     }
