@@ -217,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const startDate = moment(date1.dateInstance).format('YYYY-MM-DD');
                 const endDate = moment(date2.dateInstance).format('YYYY-MM-DD');
                 fetchAnalyticsData(startDate, endDate);
+                fetchTicketingData(startDate, endDate);
             });
         },
     });
@@ -238,6 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDisplayedData = [];
     let currentSortColumn = null;
     let currentSortDirection = 'asc';
+
+    // Global variables untuk tabel ticketing analytics
+    let ticketingTableData = [];
+    let currentTicketingDisplayedData = [];
+    let currentTicketingSortColumn = null;
+    let currentTicketingSortDirection = 'asc';
 
     // Fungsi untuk mengupdate tabel detail forward analytics
     function updateDetailedForwardAnalyticsTable(data) {
@@ -322,8 +329,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Fungsi untuk setup search pada tabel ticketing analytics
+    function setupTicketingTableSearch() {
+        const searchInput = document.getElementById('ticketing-table-search');
+        if (!searchInput) return;
+        
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const baseData = ticketingTableData || [];
+            const filteredData = baseData.filter(ticketing => {
+                return ticketing.id.toString().includes(searchTerm) ||
+                       ticketing.problem_id.toString().includes(searchTerm) ||
+                       ticketing.machine.toLowerCase().includes(searchTerm) ||
+                       ticketing.problem_type.toLowerCase().includes(searchTerm) ||
+                       ticketing.pic_technician.toLowerCase().includes(searchTerm) ||
+                       ticketing.status.toLowerCase().includes(searchTerm);
+            });
+            updateTicketingTable(filteredData);
+            currentTicketingDisplayedData = filteredData;
+        });
+    }
+
     // Fungsi untuk sorting tabel
     function setupTableSorting() {
+        // Setup sorting untuk forward analytics table
         const sortableHeaders = document.querySelectorAll('.forward-analytics-table th.sortable');
         
         sortableHeaders.forEach(header => {
@@ -402,6 +431,87 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             
                 renderForwardTable(sortedData);
+            });
+        });
+
+        // Setup sorting untuk ticketing analytics table
+        const ticketingSortableHeaders = document.querySelectorAll('.ticketing-analytics-table th.sortable');
+        
+        ticketingSortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.dataset.column;
+            
+                // Toggle sort direction
+                if (currentTicketingSortColumn === column) {
+                    currentTicketingSortDirection = currentTicketingSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentTicketingSortDirection = 'asc';
+                }
+                currentTicketingSortColumn = column;
+            
+                // Update header classes
+                ticketingSortableHeaders.forEach(h => {
+                    h.classList.remove('sort-asc', 'sort-desc');
+                });
+                this.classList.add(`sort-${currentTicketingSortDirection}`);
+            
+                // Sort data berdasarkan data yang sedang ditampilkan sekarang
+                const baseData = currentTicketingDisplayedData && currentTicketingDisplayedData.length > 0 ? currentTicketingDisplayedData : ticketingTableData;
+                const sortedData = [...baseData].sort((a, b) => {
+                    let aVal, bVal;
+            
+                    switch (column) {
+                        case 'id':
+                            aVal = a.id;
+                            bVal = b.id;
+                            break;
+                        case 'problem_id':
+                            aVal = a.problem_id;
+                            bVal = b.problem_id;
+                            break;
+                        case 'machine':
+                            aVal = a.machine;
+                            bVal = b.machine;
+                            break;
+                        case 'problem_type':
+                            aVal = a.problem_type;
+                            bVal = b.problem_type;
+                            break;
+                        case 'pic_technician':
+                            aVal = a.pic_technician;
+                            bVal = b.pic_technician;
+                            break;
+                        case 'status':
+                            aVal = a.status;
+                            bVal = b.status;
+                            break;
+                        case 'problem_received_at':
+                        case 'diagnosis_started_at':
+                        case 'repair_started_at':
+                        case 'repair_completed_at':
+                        case 'created_at':
+                            const timestampKey = column;
+                            aVal = a.timestamps[timestampKey] || '';
+                            bVal = b.timestamps[timestampKey] || '';
+                            break;
+                        case 'downtime':
+                        case 'mttr':
+                        case 'mttd':
+                            const durationKey = column;
+                            aVal = a.durations_seconds[`${durationKey}_seconds`] || 0;
+                            bVal = b.durations_seconds[`${durationKey}_seconds`] || 0;
+                            break;
+                        default:
+                            return 0;
+                    }
+            
+                    if (aVal < bVal) return currentTicketingSortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return currentTicketingSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            
+                updateTicketingTable(sortedData);
+                currentTicketingDisplayedData = sortedData;
             });
         });
     }
@@ -522,12 +632,115 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.save(fileName);
     }
 
+    // Fungsi untuk fetch data ticketing
+    async function fetchTicketingData(startDate, endDate) {
+        try {
+            const response = await fetch(`/api/dashboard/analytics/ticketing?start_date=${startDate}&end_date=${endDate}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch ticketing data');
+            }
+            const result = await response.json();
+
+            if (result.success) {
+                updateTicketingTable(result.data.ticketing);
+            } else {
+                console.error('Error fetching ticketing data:', result.message);
+            }
+        } catch (error) {
+            console.error('Error fetching ticketing data:', error);
+        }
+    }
+
+    // Fungsi untuk update tabel ticketing
+    function updateTicketingTable(ticketingData) {
+        const tbody = document.getElementById('ticketing-analytics-table-body');
+        const emptyState = document.getElementById('ticketing-table-empty-state');
+
+        if (!tbody) return;
+
+        // Simpan data ke variabel global
+        ticketingTableData = ticketingData || [];
+
+        // Clear existing rows
+        tbody.innerHTML = '';
+
+        if (!ticketingData || ticketingData.length === 0) {
+            emptyState.style.display = 'block';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+
+        ticketingData.forEach(ticketing => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${ticketing.id}</td>
+                <td>${ticketing.problem_id}</td>
+                <td>${ticketing.machine}</td>
+                <td>${ticketing.problem_type}</td>
+                <td>${ticketing.pic_technician}</td>
+                <td><span class="status-badge ${ticketing.status}">${ticketing.status_label}</span></td>
+                <td>${ticketing.timestamps.problem_received_at || '-'}</td>
+                <td>${ticketing.timestamps.diagnosis_started_at || '-'}</td>
+                <td>${ticketing.timestamps.repair_started_at || '-'}</td>
+                <td>${ticketing.timestamps.repair_completed_at || '-'}</td>
+                <td>${ticketing.durations.downtime || '-'}</td>
+                <td>${ticketing.durations.mttr || '-'}</td>
+                <td>${ticketing.durations.mttd || '-'}</td>
+                <td>${ticketing.timestamps.created_at}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Setup search functionality
+        setupTicketingTableSearch();
+    }
+
+    // Fungsi untuk export ticketing table ke Excel
+    function exportTicketingTableToExcel() {
+        const table = document.getElementById('ticketing-analytics-table');
+        if (!table) return;
+
+        const ws = XLSX.utils.table_to_sheet(table);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Ticketing Data');
+
+        const fileName = `ticketing_analytics_${moment().format('YYYY-MM-DD_HH-mm-ss')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // Fungsi untuk export forward table ke Excel
+    function exportForwardTableToExcel() {
+        const table = document.getElementById('forward-analytics-table');
+        if (!table) return;
+
+        const ws = XLSX.utils.table_to_sheet(table);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Forward Problem Data');
+
+        const fileName = `forward_problem_analytics_${moment().format('YYYY-MM-DD_HH-mm-ss')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // Global functions untuk ticketing actions
+    window.viewTicketingDetail = function(ticketingId) {
+        // Implementasi untuk view ticketing detail
+        console.log('View ticketing detail:', ticketingId);
+        // Bisa ditambahkan modal atau redirect ke halaman detail
+    };
+
+    window.editTicketing = function(ticketingId) {
+        // Implementasi untuk edit ticketing
+        console.log('Edit ticketing:', ticketingId);
+        // Bisa ditambahkan modal edit atau redirect ke halaman edit
+    };
+
     // Event listeners untuk tombol tabel forward analytics (langsung, karena sudah di dalam DOMContentLoaded)
-    const exportPdfBtn = document.getElementById('export-pdf-btn');
+    const exportExcelForwardBtn = document.getElementById('export-excel-forward-btn');
     const refreshForwardBtn = document.getElementById('refresh-forward-table-btn');
 
-    if (exportPdfBtn) {
-        exportPdfBtn.addEventListener('click', exportForwardTableToPDF);
+    if (exportExcelForwardBtn) {
+        exportExcelForwardBtn.addEventListener('click', exportForwardTableToExcel);
     }
 
     if (refreshForwardBtn) {
@@ -535,6 +748,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const range = getCurrentDateRange();
             if (range) {
                 fetchAnalyticsData(range[0], range[1]);
+            }
+        });
+    }
+
+    // Event listeners untuk tombol tabel ticketing analytics
+    const exportExcelTicketingBtn = document.getElementById('export-excel-ticketing-btn');
+    const refreshTicketingBtn = document.getElementById('refresh-ticketing-table-btn');
+
+    if (exportExcelTicketingBtn) {
+        exportExcelTicketingBtn.addEventListener('click', exportTicketingTableToExcel);
+    }
+
+    if (refreshTicketingBtn) {
+        refreshTicketingBtn.addEventListener('click', function() {
+            const range = getCurrentDateRange();
+            if (range) {
+                fetchTicketingData(range[0], range[1]);
             }
         });
     }
@@ -548,4 +778,5 @@ document.addEventListener('DOMContentLoaded', () => {
     picker.setDateRange(thirtyDaysAgo, today);
     // Pastikan langsung fetch data untuk range default
     fetchAnalyticsData(thirtyDaysAgo, today);
+    fetchTicketingData(thirtyDaysAgo, today);
 });

@@ -508,7 +508,7 @@ class DashboardManager {
 
                 if (data.success) {
                     this.currentProblemId = problemId;
-                    const problemDetailHTML = this.createProblemDetailHTML(data.data);
+                    const problemDetailHTML = await this.createProblemDetailHTML(data.data);
                     
                     // Extract action buttons from the HTML and move them to footer
                     const tempDiv = document.createElement('div');
@@ -686,7 +686,7 @@ class DashboardManager {
         `;
     }
 
-    createProblemDetailHTML(problem) {
+    async createProblemDetailHTML(problem) {
         const isLeader = this.userRole === 'leader';
         const isDepartmentUser = ['maintenance', 'quality', 'warehouse'].includes(this.userRole);
         
@@ -762,12 +762,45 @@ class DashboardManager {
             `;
         } else if (actualStatus === 'received' && isDepartmentUser) {
             // Problem sudah diterima, department user bisa feedback resolved
-            actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px;">
+            let ticketingButton = '';
+            let resolvedButton = '';
+            
+            if (this.userRole === 'maintenance' && problem.problem_type.toLowerCase() === 'machine') {
+                // Cek apakah sudah ada ticketing untuk problem ini
+                const hasTicketing = await this.checkTicketingExists(problem.id);
+                
+                if (!hasTicketing) {
+                    // Belum ada ticketing, tampilkan tombol isi form
+                    ticketingButton = `
+                        <button class="btn ticketing-btn" id="ticketingBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 10px; width: 100%;">
+                            <i class="fas fa-clipboard-list" style="margin-right: 5px;"></i>
+                            Isi Form Ticketing
+                        </button>
+                    `;
+                    // Jangan tampilkan tombol resolved jika belum ada ticketing
+                } else {
+                    // Sudah ada ticketing, tampilkan tombol mark as resolved
+                    resolvedButton = `
+                        <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                            <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
+                            Mark as Resolved (Feedback)
+                        </button>
+                    `;
+                }
+            } else {
+                // Bukan maintenance atau bukan machine problem, langsung tampilkan resolved button
+                resolvedButton = `
                     <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
                         <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
                         Mark as Resolved (Feedback)
                     </button>
+                `;
+            }
+            
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px;">
+                    ${ticketingButton}
+                    ${resolvedButton}
                 </div>
             `;
         } else if (actualStatus === 'feedback_resolved' && isLeader) {
@@ -1171,6 +1204,14 @@ class DashboardManager {
                 this.showDirectResolveConfirmation(problemId, problemData);
             });
         }
+
+        // Ticketing button
+        const ticketingBtn = document.getElementById('ticketingBtn');
+        if (ticketingBtn) {
+            ticketingBtn.addEventListener('click', () => {
+                this.openTicketingForm(problemId);
+            });
+        }
     }
 
     // Method untuk receive problem
@@ -1190,6 +1231,25 @@ class DashboardManager {
                 this.showSweetAlert('success', 'Problem Received', data.message);
                 this.closeModal();
                 this.loadDashboardData(); // Refresh data
+                
+                // Jika user adalah maintenance dan problem type adalah machine, tampilkan form ticketing
+                if (this.userRole === 'maintenance') {
+                    // Get problem detail untuk cek tipe problem
+                    try {
+                        const problemResponse = await fetch(`http://localhost:8000/api/dashboard/problem/${problemId}`);
+                        const problemData = await problemResponse.json();
+                        
+                        if (problemData.success && problemData.data.problem_type && 
+                            problemData.data.problem_type.toLowerCase() === 'machine') {
+                            // Delay sedikit untuk memastikan modal sebelumnya sudah tertutup
+                            setTimeout(() => {
+                                this.openTicketingForm(problemId);
+                            }, 1000);
+                        }
+                    } catch (error) {
+                        console.error('Error checking problem type:', error);
+                    }
+                }
             } else {
                 throw new Error(data.message);
             }
@@ -1566,6 +1626,224 @@ class DashboardManager {
 
         Swal.fire(config);
     }
+
+    // Method untuk cek apakah sudah ada ticketing untuk problem
+    async checkTicketingExists(problemId) {
+        try {
+            const response = await fetch(`/api/dashboard/ticketing/problem/${problemId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.getCookieValue('auth_token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.status === 404) {
+                return false; // Ticketing belum ada
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.success && data.data; // Return true jika ada ticketing
+        } catch (error) {
+            console.error('Error checking ticketing:', error);
+            return false; // Default ke false jika error
+        }
+    }
+
+    // Ticketing methods
+    async openTicketingForm(problemId) {
+        try {
+            // Load technicians list
+            await this.loadTechnicians();
+            
+            // Set problem ID
+            document.getElementById('ticketingProblemId').value = problemId;
+            
+            // Show modal
+            document.getElementById('ticketingModal').style.display = 'flex';
+            
+            // Set current time as default for received time
+            const now = new Date();
+            const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('problemReceivedAt').value = localDateTime;
+            
+        } catch (error) {
+            console.error('Error opening ticketing form:', error);
+            this.showSweetAlert('error', 'Error', 'Gagal membuka form ticketing');
+        }
+    }
+
+    closeTicketingModal() {
+        document.getElementById('ticketingModal').style.display = 'none';
+        document.getElementById('ticketingForm').reset();
+    }
+
+    async loadTechnicians() {
+        try {
+            const response = await fetch('/api/dashboard/ticketing/technicians', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.getCookieValue('auth_token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Technicians data:', data); // Debug log
+            
+            const select = document.getElementById('picTechnician');
+            
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Pilih Teknisi</option>';
+            
+            // Add technician options
+            if (data.success && data.data && Array.isArray(data.data)) {
+                data.data.forEach(technician => {
+                    const option = document.createElement('option');
+                    option.value = technician;
+                    option.textContent = technician;
+                    select.appendChild(option);
+                });
+            } else {
+                throw new Error('Invalid data format received');
+            }
+            
+        } catch (error) {
+            console.error('Error loading technicians:', error);
+            // Fallback to default technicians if API fails
+            const select = document.getElementById('picTechnician');
+            select.innerHTML = `
+                <option value="">Pilih Teknisi</option>
+                <option value="Teknisi A">Teknisi A</option>
+                <option value="Teknisi B">Teknisi B</option>
+                <option value="Teknisi C">Teknisi C</option>
+            `;
+        }
+    }
+
+    async submitTicketingForm() {
+        try {
+            const form = document.getElementById('ticketingForm');
+            const formData = new FormData(form);
+            
+            // Convert form data to JSON
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            
+            // Validate required fields
+            if (!data.pic_technician || !data.diagnosis || !data.result_repair) {
+                this.showSweetAlert('warning', 'Validasi Error', 'Mohon isi semua field yang wajib diisi');
+                return;
+            }
+            
+            // Show loading
+            Swal.fire({
+                title: 'Menyimpan...',
+                text: 'Sedang menyimpan ticketing problem',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            const response = await fetch('/api/dashboard/ticketing', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.getCookieValue('auth_token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                Swal.fire({
+                    title: 'Berhasil!',
+                    text: 'Ticketing problem berhasil disimpan',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    this.closeTicketingModal();
+                    this.loadDashboardData(); // Refresh dashboard
+                    
+                    // Jika modal problem detail masih terbuka, refresh detail untuk update tombol
+                    const problemModal = document.getElementById('problemModal');
+                    if (problemModal && problemModal.classList.contains('show') && this.currentProblemId) {
+                        // Refresh problem detail untuk update tombol
+                        setTimeout(() => {
+                            this.refreshCurrentProblemDetail();
+                        }, 500);
+                    }
+                });
+            } else {
+                throw new Error(result.message || 'Failed to save ticketing');
+            }
+            
+        } catch (error) {
+            console.error('Error submitting ticketing form:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: error.message || 'Gagal menyimpan ticketing problem',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+
+    // Method untuk refresh problem detail yang sedang terbuka
+    async refreshCurrentProblemDetail() {
+        if (!this.currentProblemId) return;
+        
+        try {
+            const response = await fetch(`http://localhost:8000/api/dashboard/problem/${this.currentProblemId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const modalBody = document.getElementById('modalBody');
+                const modalFooter = document.querySelector('.modal-footer');
+                
+                if (modalBody && modalFooter) {
+                    const problemDetailHTML = await this.createProblemDetailHTML(data.data);
+                    
+                    // Extract action buttons from the HTML and move them to footer
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = problemDetailHTML;
+                    const actionButtons = tempDiv.querySelector('.action-buttons');
+                    
+                    // Clear existing action buttons from footer
+                    const existingActionButtons = modalFooter.querySelectorAll('.action-buttons');
+                    existingActionButtons.forEach(btn => btn.remove());
+                    
+                    if (actionButtons) {
+                        // Remove action buttons from the main content
+                        const contentWithoutActions = problemDetailHTML.replace(/<div class="action-buttons"[\s\S]*?<\/div>/g, '');
+                        modalBody.innerHTML = contentWithoutActions;
+                        
+                        // Add action buttons to footer
+                        modalFooter.appendChild(actionButtons);
+                    } else {
+                        modalBody.innerHTML = problemDetailHTML;
+                    }
+                    
+                    // Re-bind event listeners untuk tombol-tombol action
+                    this.bindProblemActionButtons(this.currentProblemId, data.data);
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing problem detail:', error);
+        }
+    }
 }
 
 // Global functions (called from HTML)
@@ -1583,6 +1861,19 @@ function closeModal() {
 function resolveProblem() {
     // This function is deprecated - use new forward problem workflow instead
     console.warn('resolveProblem() is deprecated. Use new forward problem workflow.');
+}
+
+// Ticketing functions
+function openTicketingForm(problemId) {
+    dashboardManager.openTicketingForm(problemId);
+}
+
+function closeTicketingModal() {
+    dashboardManager.closeTicketingModal();
+}
+
+function submitTicketingForm() {
+    dashboardManager.submitTicketingForm();
 }
 
 // Initialize when DOM is ready

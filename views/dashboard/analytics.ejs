@@ -194,8 +194,8 @@
             <div class="detailed-forward-analytics-section">
                 <h3>Data Detail Forward Problem Resolution</h3>
                 <div class="table-actions">
-                    <button class="btn btn-primary" id="export-pdf-btn">
-                        <i class="fas fa-file-pdf"></i> Export PDF
+                    <button class="btn btn-primary" id="export-excel-forward-btn">
+                        <i class="fas fa-file-excel"></i> Export Excel
                     </button>
                     <button class="btn btn-secondary" id="refresh-forward-table-btn">
                         <i class="fas fa-sync-alt"></i> Refresh
@@ -262,6 +262,78 @@
                     <p>Pilih rentang tanggal untuk melihat data detail forward problem resolution.</p>
                 </div>
             </div>
+
+            <!-- Ticketing Problem Analytics Table Section -->
+            <div class="ticketing-analytics-section">
+                <h3>Data Ticketing Problem</h3>
+                <div class="table-actions">
+                    <button class="btn btn-primary" id="export-excel-ticketing-btn">
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </button>
+                    <button class="btn btn-secondary" id="refresh-ticketing-table-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <input type="text" class="search-box" id="ticketing-table-search" placeholder="Cari ticketing ID, mesin, atau teknisi...">
+                </div>
+                <div class="ticketing-analytics-table-container">
+                    <table class="ticketing-analytics-table" id="ticketing-analytics-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="id">
+                                    Ticketing ID <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="problem_id">
+                                    Problem ID <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="machine">
+                                    Mesin <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="problem_type">
+                                    Tipe Problem <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="pic_technician">
+                                    PIC/Teknisi <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="status">
+                                    Status <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="problem_received_at">
+                                    Problem Received <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="diagnosis_started_at">
+                                    Diagnosis Started <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="repair_started_at">
+                                    Repair Started <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="repair_completed_at">
+                                    Repair Completed <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="downtime">
+                                    Downtime <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="mttr">
+                                    MTTR <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="mttd">
+                                    MTTD <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="created_at">
+                                    Created At <i class="fas fa-sort"></i>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="ticketing-analytics-table-body">
+                            <!-- Data akan diisi oleh JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="ticketing-table-empty-state" style="display: none;">
+                    <i class="fas fa-table"></i>
+                    <h4>Tidak ada data</h4>
+                    <p>Pilih rentang tanggal untuk melihat data ticketing problem.</p>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -270,6 +342,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="/js/analytics.js"></script> 
 </body>
 </html>

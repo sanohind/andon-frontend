@@ -382,3 +382,138 @@
         padding: 0.5rem 0.25rem;
     }
 }
+
+/* Ticketing Analytics Styles */
+.ticketing-analytics-section {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.ticketing-analytics-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.ticketing-analytics-table-container {
+    overflow-x: auto;
+    border-radius: var(--border-radius);
+    border: 1px solid #e1e5e9;
+}
+
+.ticketing-analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 0.85rem;
+}
+
+.ticketing-analytics-table th {
+    background: #f8f9fa;
+    padding: 0.75rem 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--primary-color);
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.ticketing-analytics-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.ticketing-analytics-table th.sortable:hover {
+    background: #e9ecef;
+}
+
+.ticketing-analytics-table th.sortable i {
+    margin-left: 0.5rem;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.ticketing-analytics-table th.sortable:hover i {
+    opacity: 1;
+}
+
+.ticketing-analytics-table th.sortable.asc i::before {
+    content: "\f0de";
+    opacity: 1;
+}
+
+.ticketing-analytics-table th.sortable.desc i::before {
+    content: "\f0dd";
+    opacity: 1;
+}
+
+.ticketing-analytics-table td {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: top;
+}
+
+.ticketing-analytics-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.ticketing-analytics-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.ticketing-analytics-table tbody tr:nth-child(even):hover {
+    background-color: #e9ecef;
+}
+
+/* Status badges for ticketing */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.open {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-badge.in-progress {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.status-badge.completed {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-badge.cancelled {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+
+/* Responsive ticketing table */
+@media (max-width: 768px) {
+    .ticketing-analytics-table th,
+    .ticketing-analytics-table td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.8rem;
+    }
+    
+}

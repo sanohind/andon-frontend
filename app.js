@@ -81,7 +81,7 @@ io.use(async (socket, next) => {
   }
 });
 
-// Auth Middleware
+// Auth Middleware untuk halaman web
 async function requireAuth(req, res, next) {
   const token = req.session.token || req.cookies.auth_token;
   
@@ -116,6 +116,53 @@ async function requireAuth(req, res, next) {
     req.session.destroy();
     res.clearCookie('auth_token');
     return res.redirect('/login');
+  }
+}
+
+// Auth Middleware untuk API endpoints - mengembalikan JSON response
+async function requireAuthAPI(req, res, next) {
+  const token = req.session.token || req.cookies.auth_token || req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required'
+    });
+  }
+  
+  try {
+    // Validate token dengan Laravel API
+    const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
+      token: token
+    }, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.data.valid) {
+      req.user = response.data.user;
+      req.user.token = token;
+      next();
+    } else {
+      // Token tidak valid
+      req.session.destroy();
+      res.clearCookie('auth_token');
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+  } catch (error) {
+    console.error('Token validation error:', error.message);
+    // Jika ada error validasi, anggap tidak terautentikasi
+    req.session.destroy();
+    res.clearCookie('auth_token');
+    return res.status(500).json({
+      success: false,
+      message: 'Authentication service error'
+    });
   }
 }
 
@@ -330,7 +377,7 @@ app.get('/health-check', (req, res) => {
 });
 
 // API Routes - Proxy to Laravel backend dengan Authorization header
-app.get('/api/dashboard/status', requireAuth, async (req, res) => {
+app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -346,7 +393,7 @@ app.get('/api/dashboard/status', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/dashboard/problem/:id', requireAuth, async (req, res) => {
+app.get('/api/dashboard/problem/:id', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}`, {
       headers: {
@@ -366,7 +413,7 @@ app.get('/api/dashboard/problem/:id', requireAuth, async (req, res) => {
 });
 
 // TAMBAH ROUTE INI - YANG HILANG!
-app.patch('/api/dashboard/problem/:id/status', requireAuth, async (req, res) => {
+app.patch('/api/dashboard/problem/:id/status', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.patch(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/status`, req.body, {
       headers: {
@@ -394,7 +441,7 @@ app.patch('/api/dashboard/problem/:id/status', requireAuth, async (req, res) => 
   }
 });
 
-app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
+app.get('/api/dashboard/stats', requireAuthAPI, async (req, res) => {
   try {
     // === AWAL DARI PERBAIKAN ===
     
@@ -428,7 +475,7 @@ app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/dashboard/analytics', requireAuth, async (req, res) => {
+app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics`, {
@@ -453,7 +500,7 @@ app.get('/api/dashboard/analytics', requireAuth, async (req, res) => {
 });
 
 // Endpoint untuk detailed forward analytics
-app.get('/api/dashboard/analytics/detailed-forward', requireAuth, async (req, res) => {
+app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/detailed-forward`, {
@@ -488,7 +535,7 @@ app.get('/plc-monitoring', requireAuth, (req, res) => {
 });
 
 // Rute proxy API untuk mengambil data dari Laravel
-app.get('/api/dashboard/plc-status', requireAuth, async (req, res) => {
+app.get('/api/dashboard/plc-status', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/plc-status`, {
       headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
@@ -520,7 +567,7 @@ app.get('/users', requireAuth, async (req, res) => {
 });
 
 // RUTE PROXY API UNTUK MENAMBAH PENGGUNA BARU
-app.post('/api/users', requireAuth, async (req, res) => {
+app.post('/api/users', requireAuthAPI, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -553,7 +600,7 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
 });
 
 // RUTE PROXY API UNTUK MANAJEMEN MEJA
-app.post('/api/inspect-tables', requireAuth, async (req, res) => {
+app.post('/api/inspect-tables', requireAuthAPI, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
@@ -565,7 +612,7 @@ app.post('/api/inspect-tables', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+app.put('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
@@ -577,7 +624,7 @@ app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+app.delete('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
@@ -589,7 +636,7 @@ app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/machine-status/:name', requireAuth, async (req, res) => {
+app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
     try {
         const machineName = req.params.name;
         // Asumsi ada endpoint di Laravel yang bisa memberikan status untuk mesin tertentu
@@ -903,7 +950,7 @@ function shouldSendNotificationToUser(user, notification) {
 }
 
 // Forward Problem Routes
-app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => {
+app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, async (req, res) => {
   try {
     // Validasi bahwa user adalah leader
     if (req.user.role !== 'leader') {
@@ -968,7 +1015,7 @@ app.post('/api/dashboard/problem/:id/forward', requireAuth, async (req, res) => 
   }
 });
 
-app.post('/api/dashboard/problem/:id/receive', requireAuth, async (req, res) => {
+app.post('/api/dashboard/problem/:id/receive', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/receive`, req.body, {
       headers: {
@@ -1018,7 +1065,7 @@ app.post('/api/dashboard/problem/:id/receive', requireAuth, async (req, res) => 
   }
 });
 
-app.post('/api/dashboard/problem/:id/feedback-resolved', requireAuth, async (req, res) => {
+app.post('/api/dashboard/problem/:id/feedback-resolved', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/feedback-resolved`, req.body, {
       headers: {
@@ -1069,7 +1116,7 @@ app.post('/api/dashboard/problem/:id/feedback-resolved', requireAuth, async (req
   }
 });
 
-app.post('/api/dashboard/problem/:id/final-resolved', requireAuth, async (req, res) => {
+app.post('/api/dashboard/problem/:id/final-resolved', requireAuthAPI, async (req, res) => {
   try {
     // Validasi bahwa user adalah leader
     if (req.user.role !== 'leader') {
@@ -1122,7 +1169,7 @@ app.post('/api/dashboard/problem/:id/final-resolved', requireAuth, async (req, r
   }
 });
 
-app.get('/api/dashboard/forward-logs', requireAuth, async (req, res) => {
+app.get('/api/dashboard/forward-logs', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/forward-logs`, {
       headers: {
@@ -1142,7 +1189,7 @@ app.get('/api/dashboard/forward-logs', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/dashboard/forward-logs/:problemId', requireAuth, async (req, res) => {
+app.get('/api/dashboard/forward-logs/:problemId', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/forward-logs/${req.params.problemId}`, {
       headers: {
@@ -1156,6 +1203,99 @@ app.get('/api/dashboard/forward-logs/:problemId', requireAuth, async (req, res) 
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch forward logs for problem',
+      error: error.message 
+    });
+  }
+});
+
+// Ticketing Problem Routes - Proxy to Laravel backend
+app.post('/api/dashboard/ticketing', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/ticketing`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error creating ticketing:', error.message);
+    if (error.response) {
+      // Laravel returned an error response
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      // Network or other error
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to create ticketing',
+        error: error.message 
+      });
+    }
+  }
+});
+
+app.get('/api/dashboard/ticketing/problem/:problemId', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/problem/${req.params.problemId}`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching ticketing by problem:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch ticketing',
+        error: error.message 
+      });
+    }
+  }
+});
+
+app.get('/api/dashboard/ticketing/technicians', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/technicians`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching technicians:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch technicians',
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/ticketing', requireAuthAPI, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/data`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: {
+        start_date,
+        end_date
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching ticketing analytics:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch ticketing analytics',
       error: error.message 
     });
   }
