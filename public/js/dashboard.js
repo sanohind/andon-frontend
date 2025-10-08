@@ -1016,6 +1016,12 @@ class DashboardManager {
                 console.log(`✅ Line cocok, notifikasi akan ditampilkan untuk leader`);
                 break;
 
+            case 'manager':
+                // Manager tidak pernah melihat pop-up notifikasi problem baru
+                // Mereka hanya melihat notifikasi untuk problem ACTIVE > 15 menit
+                console.log(`🔔 Notifikasi untuk Manager disembunyikan. Mereka hanya melihat notifikasi untuk problem ACTIVE > 15 menit.`);
+                return;
+
             default:
                 console.log('🔔 Role tidak dikenali atau tidak ada filter khusus');
                 break;
@@ -1862,7 +1868,10 @@ class DashboardManager {
         const now = new Date();
         const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-        problems.forEach(problem => {
+        // Filter hanya problem dengan status 'ACTIVE'
+        const activeProblems = problems.filter(problem => problem.status === 'ACTIVE');
+
+        activeProblems.forEach(problem => {
             const problemId = problem.id;
             const problemTimestamp = new Date(problem.timestamp);
             
@@ -1881,7 +1890,7 @@ class DashboardManager {
         });
 
         // Clean up problem start times untuk problem yang sudah resolved
-        const currentProblemIds = new Set(problems.map(p => p.id));
+        const currentProblemIds = new Set(activeProblems.map(p => p.id));
         for (const [problemId, startTime] of this.problemStartTimes) {
             if (!currentProblemIds.has(problemId)) {
                 this.problemStartTimes.delete(problemId);
