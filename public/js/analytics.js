@@ -702,6 +702,48 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!table) return;
 
         const ws = XLSX.utils.table_to_sheet(table);
+        
+        // Set column widths untuk timestamp columns
+        const timestampColumns = ['I', 'J', 'K', 'L', 'M']; // Columns untuk timestamps
+        timestampColumns.forEach(col => {
+            if (ws[col + '1']) {
+                ws[col + '1'].z = 'yyyy-mm-dd hh:mm:ss'; // Set format untuk header
+            }
+        });
+        
+        // Set format dan width untuk semua timestamp cells
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            timestampColumns.forEach(col => {
+                const cell = ws[col + R];
+                if (cell && cell.v && typeof cell.v === 'string' && cell.v !== '-') {
+                    // Set format untuk timestamp cells
+                    cell.z = 'yyyy-mm-dd hh:mm:ss';
+                }
+            });
+        }
+        
+        // Set column widths - auto width untuk semua columns
+        const colWidths = [];
+        const numCols = range.e.c + 1;
+        for (let C = 0; C < numCols; ++C) {
+            let maxWidth = 10; // Default width
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
+                if (cell && cell.v) {
+                    const cellValue = String(cell.v);
+                    // Untuk timestamp columns, set width lebih besar
+                    if (timestampColumns.includes(XLSX.utils.encode_col(C))) {
+                        maxWidth = Math.max(maxWidth, 20);
+                    } else {
+                        maxWidth = Math.max(maxWidth, cellValue.length + 2);
+                    }
+                }
+            }
+            colWidths.push({wch: maxWidth});
+        }
+        ws['!cols'] = colWidths;
+        
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Ticketing Data');
 
@@ -715,6 +757,47 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!table) return;
 
         const ws = XLSX.utils.table_to_sheet(table);
+        
+        // Set format untuk timestamp columns di forward table
+        const timestampColumns = ['G', 'H']; // Columns untuk timestamps di forward table
+        timestampColumns.forEach(col => {
+            if (ws[col + '1']) {
+                ws[col + '1'].z = 'yyyy-mm-dd hh:mm:ss';
+            }
+        });
+        
+        // Set format dan width untuk semua timestamp cells
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            timestampColumns.forEach(col => {
+                const cell = ws[col + R];
+                if (cell && cell.v && typeof cell.v === 'string' && cell.v !== '-') {
+                    cell.z = 'yyyy-mm-dd hh:mm:ss';
+                }
+            });
+        }
+        
+        // Set column widths - auto width untuk semua columns
+        const colWidths = [];
+        const numCols = range.e.c + 1;
+        for (let C = 0; C < numCols; ++C) {
+            let maxWidth = 10; // Default width
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
+                if (cell && cell.v) {
+                    const cellValue = String(cell.v);
+                    // Untuk timestamp columns, set width lebih besar
+                    if (timestampColumns.includes(XLSX.utils.encode_col(C))) {
+                        maxWidth = Math.max(maxWidth, 20);
+                    } else {
+                        maxWidth = Math.max(maxWidth, cellValue.length + 2);
+                    }
+                }
+            }
+            colWidths.push({wch: maxWidth});
+        }
+        ws['!cols'] = colWidths;
+        
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Forward Problem Data');
 

@@ -63,13 +63,13 @@ io.use(async (socket, next) => {
     if (response.data.valid) {
       socket.user = {
         ...response.data.user,
-        line_number: response.data.user.line_number // PASTIKAN INI ADA
+        line_name: response.data.user.line_name // PASTIKAN INI ADA
       };
       
       console.log('🔐 Socket user authenticated:', {
         id: socket.user.id,
         role: socket.user.role,
-        line_number: socket.user.line_number
+        line_name: socket.user.line_name
       });
       
       next();
@@ -195,7 +195,7 @@ app.get('/', requireAuth, async (req, res) => {
 
 app.get('/analytics', requireAuth, (req, res) => {
   // Pastikan hanya admin yang bisa mengakses halaman ini
-  if (req.user.role !== 'admin') {
+  if (!['admin', 'manager'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak'); // atau redirect ke halaman utama
   }
 
@@ -447,7 +447,7 @@ app.get('/api/dashboard/stats', requireAuthAPI, async (req, res) => {
     
     let requestUrl = `${LARAVEL_API_BASE}/dashboard/stats`;
 
-    // Cek apakah ada query parameter yang dikirim oleh klien (misalnya, ?line_number=1)
+    // Cek apakah ada query parameter yang dikirim oleh klien (misalnya, ?line_name=Support)
     const queryParams = new URLSearchParams(req.query).toString();
     
     if (queryParams) {
@@ -582,9 +582,39 @@ app.post('/api/users', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Update user
+app.put('/api/users/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/users/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+// Delete user
+app.delete('/api/users/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/users/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
 // RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN)
 app.get('/inspect-tables', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -601,7 +631,7 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MANAJEMEN MEJA
 app.post('/api/inspect-tables', requireAuthAPI, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -613,7 +643,7 @@ app.post('/api/inspect-tables', requireAuthAPI, async (req, res) => {
 });
 
 app.put('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -625,7 +655,7 @@ app.put('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
 });
 
 app.delete('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -750,7 +780,7 @@ async function fetchAndEmitDashboardData(socket = null) {
                     machine_name: problem.tipe_mesin || problem.machine_name || 'Unknown Machine',
                     problem_type: problem.tipe_problem || problem.problem_type || 'Unknown Problem',
                     problemType: problem.tipe_problem || problem.problemType || 'Unknown Problem',
-                    line_number: problem.line_number || problem.line || 0,
+                    line_name: problem.line_name || problem.line || 'N/A',
                     severity: problem.severity || 'medium',
                     timestamp: formattedTimestamp,
                     description: problem.description || 'No description available',
@@ -809,20 +839,21 @@ function filterDataForUser(user, data) {
 
     switch (user.role) {
         case 'admin':
-            // Admin melihat semua data
+        case 'manager':
+            // Admin dan Manager melihat semua data
             return data;
 
         case 'leader':
             // Leader hanya melihat problem dari line mereka
-            if (user.line_number) {
+            if (user.line_name) {
                 filteredActiveProblems = filteredActiveProblems.filter(problem => 
-                    problem.line_number == user.line_number
+                    problem.line_name == user.line_name
                 );
                 
                 // Filter machine statuses untuk line yang sesuai
                 const filteredMachineStatusesByLine = {};
-                if (filteredMachineStatuses[user.line_number]) {
-                    filteredMachineStatusesByLine[user.line_number] = filteredMachineStatuses[user.line_number];
+                if (filteredMachineStatuses[user.line_name]) {
+                    filteredMachineStatusesByLine[user.line_name] = filteredMachineStatuses[user.line_name];
                 }
                 filteredMachineStatuses = filteredMachineStatusesByLine;
             }
@@ -830,7 +861,7 @@ function filterDataForUser(user, data) {
 
         case 'maintenance':
         case 'quality':
-        case 'warehouse':
+        case 'engineering':
             // Department users hanya melihat problem yang sudah di-forward ke mereka
             filteredActiveProblems = filteredActiveProblems.filter(problem => 
                 problem.is_forwarded && problem.forwarded_to_role === user.role
@@ -843,7 +874,7 @@ function filterDataForUser(user, data) {
                     // Cek apakah ada problem yang sudah di-forward ke user role ini untuk machine ini
                     const hasForwardedProblem = filteredActiveProblems.some(problem => 
                         problem.machine === machine.name && 
-                        problem.line_number == machine.line_number &&
+                        problem.line_name == machine.line_name &&
                         problem.is_forwarded && 
                         problem.forwarded_to_role === user.role
                     );
@@ -889,8 +920,8 @@ function shouldSendNotificationToUser(user, notification) {
 
     console.log(`🔍 Checking notification for user:`, {
         role: user.role,
-        line: user.line_number,
-        problemLine: notification.line_number,
+        line: user.line_name,
+        problemLine: notification.line_name,
         problemType: notification.problem_type,
         problemStatus: notification.problem_status
     });
@@ -907,8 +938,8 @@ function shouldSendNotificationToUser(user, notification) {
             case 'quality':
                 return notification.forwarded_to_role === 'quality';
 
-            case 'warehouse':
-                return notification.forwarded_to_role === 'warehouse';
+            case 'engineering':
+                return notification.forwarded_to_role === 'engineering';
 
             case 'leader':
                 // Leader tidak menerima notifikasi untuk problem yang sudah di-forward
@@ -926,20 +957,20 @@ function shouldSendNotificationToUser(user, notification) {
 
         case 'maintenance':
         case 'quality':
-        case 'warehouse':
+        case 'engineering':
             // Department users TIDAK PERNAH menerima notifikasi problem baru
             // Mereka hanya menerima notifikasi ketika problem di-forward ke mereka
             return false;
 
         case 'leader':
             // KUNCI: Filter berdasarkan line
-            if (!user.line_number || !notification.line_number) {
-                console.warn('⚠️ Missing line number data');
+            if (!user.line_name || !notification.line_name) {
+                console.warn('⚠️ Missing line name data');
                 return false;
             }
             
-            const userLine = String(user.line_number).trim();
-            const problemLine = String(notification.line_number).trim();
+            const userLine = String(user.line_name).trim();
+            const problemLine = String(notification.line_name).trim();
             
             console.log(`🔍 Leader line check: "${userLine}" vs "${problemLine}"`);
             return userLine === problemLine;
@@ -993,7 +1024,7 @@ app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, async (req, res) 
             machine_name: forwardData.machine_name || 'Unknown Machine',
             problem_type: forwardData.problem_type || 'Unknown Problem',
             problemType: forwardData.problem_type || 'Unknown Problem',
-            line_number: forwardData.line_number || 0,
+            line_name: forwardData.line_name || 'N/A',
             forwarded_by: forwardData.forwarded_by || 'Unknown User',
             message: forwardData.message || 'Problem has been forwarded',
             timestamp: forwardedTimestamp,

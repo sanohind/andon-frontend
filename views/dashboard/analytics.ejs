@@ -40,6 +40,15 @@
                                     <i class="fas fa-table"></i>
                                     <span>Manage Tables</span>
                                 </a>
+                            <% } else if (user.role === 'manager') { %>
+                                <a href="/" class="analytics-link" title="Dashboard Utama">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                                <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
+                                    <i class="fas fa-table"></i>
+                                    <span>Manage Tables</span>
+                                </a>
                             <% } %>
                         </div>
                         <form method="POST" action="/logout" style="display: inline; margin-left: 10px;">

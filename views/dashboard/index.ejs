@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="/css/ticketing.css">
 </head>
 <body>
-    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_number || '' %>" style="display: none;"></div>
+    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" style="display: none;"></div>
     
     <header class="dashboard-header">
         <div class="container">
@@ -39,6 +39,15 @@
                                 <a href="/users" class="analytics-link" title="User Management">
                                     <i class="fas fa-users-cog"></i>
                                     <span>Users</span>
+                                </a>
+                                <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
+                                    <i class="fas fa-table"></i>
+                                    <span>Manage Tables</span>
+                                </a>
+                            <% } else if (user.role === 'manager') { %>
+                                <a href="/analytics" class="analytics-link" title="Analytics Dashboard">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Analytics</span>
                                 </a>
                                 <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
                                     <i class="fas fa-table"></i>
@@ -116,10 +125,11 @@
             %>
                 <% 
                     const shouldDisplayLine = user.role === 'admin' || 
+                                              user.role === 'manager' ||
                                               user.role === 'maintenance' || 
                                               user.role === 'quality' || 
-                                              user.role === 'warehouse' || 
-                                              (user.role === 'leader' && user.line_number == lineNumber);
+                                              user.role === 'engineering' || 
+                                              (user.role === 'leader' && user.line_name == lineNumber);
                 %>
 
                 <% if (shouldDisplayLine) { %>
@@ -130,18 +140,18 @@
                                 <!-- PERBAIKAN: Ubah onclick parameter agar lebih eksplisit -->
                                 <div class="machine-card" 
                                     data-machine="<%= machine.name %>" 
-                                    data-line="<%= machine.line_number %>" 
-                                    onclick="showProblemDetail('<%= machine.name %>', null, '<%= machine.line_number %>')">                                   
+                                    data-line="<%= machine.line_name %>" 
+                                    onclick="showProblemDetail('<%= machine.name %>', null, '<%= machine.line_name %>')">                                   
                                     <div class="machine-header">
                                         <h3><%= machine.name %></h3>
                                         <div class="machine-indicator">
-                                            <div class="indicator-light <%= machine.status %>" id="light-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>">
+                                            <div class="indicator-light <%= machine.status %>" id="light-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>">
                                                 <div class="pulse-ring"></div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="machine-info">
-                                        <div class="status-text <%= machine.status %>" id="status-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>">
+                                        <div class="status-text <%= machine.status %>" id="status-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>">
                                             <% if (machine.status === 'problem') { %>
                                                 <i class="fas fa-exclamation-triangle"></i><span>Problem - <%= machine.problem_type || 'Unknown' %></span>
                                             <% } else { %>
@@ -152,7 +162,7 @@
                                         <div class="machine-details">
                                             <div class="detail-item quantity-info">
                                                 <span class="label"><i class="fas fa-box"></i> Quantity:</span>
-                                                <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_number %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
+                                                <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
                                             </div>
                                         </div>
                                     </div>

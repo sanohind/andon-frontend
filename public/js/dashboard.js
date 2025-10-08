@@ -12,11 +12,13 @@ class DashboardManager {
         this.fallbackActive = false;
         this.lastMachineStatuses = {}; // Menyimpan data machine status yang sudah difilter
         this.lastActiveProblems = []; // Menyimpan data active problems yang sudah difilter
+        this.problemStartTimes = new Map(); // Track when problems started for 15-minute notification
+        this.sentLongDurationNotifications = new Set(); // Track which problems already got 15-min notification
         
         const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
         this.userRole = userDataElement ? userDataElement.dataset.role : null;
-        this.userLineNumber = userDataElement ? userDataElement.dataset.line : null;
+        this.userLineName = userDataElement ? userDataElement.dataset.line : null;
         this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
 
         this.init();
@@ -241,12 +243,12 @@ class DashboardManager {
         let activeProblems = dashboardData.active_problems || [];
         
         // PERBAIKAN: Filter active problems berdasarkan role dan line
-        if (this.userRole === 'leader' && this.userLineNumber) {
+        if (this.userRole === 'leader' && this.userLineName) {
             activeProblems = activeProblems.filter(problem => {
-                return problem.line_number && problem.line_number.toString() === this.userLineNumber.toString();
+                return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
         }
-        // Untuk role lain (admin, maintenance, quality, warehouse) tidak difilter
+        // Untuk role lain (admin, maintenance, quality, engineering) tidak difilter
         
         const activeProblemsCount = activeProblems.length;
         const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
@@ -258,13 +260,13 @@ class DashboardManager {
 
     async loadStats() {
         const userRole = this.userRole;
-        const userLineNumber = this.userLineNumber;
+        const userLineName = this.userLineName;
 
         let apiUrl = '/api/dashboard/stats';
 
         // Jika pengguna adalah 'leader' dan memiliki nomor lini, tambahkan parameter ke URL
-        if (userRole === 'leader' && userLineNumber) {
-            apiUrl += `?line_number=${userLineNumber}`;
+        if (userRole === 'leader' && userLineName) {
+            apiUrl += `?line_name=${userLineName}`;
         }
 
         try {
@@ -336,16 +338,16 @@ class DashboardManager {
             // Sekarang, iterasi melalui setiap MEJA di dalam line tersebut
             machinesInLine.forEach(machineData => {
                 const machineName = machineData.name;
-                const machineLineNumber = machineData.line_number; // PERBAIKAN: Ambil line_number dari data
+                const machineLineName = machineData.line_name; // PERBAIKAN: Ambil line_name dari data
                 const machineId = machineName.replace(/ /g, '');
                 
-                // PERBAIKAN KRITIS: Gunakan kombinasi name + line_number untuk selector yang unik
-                const card = document.querySelector(`[data-machine="${machineName}"][data-line="${machineLineNumber}"]`);
-                const light = document.getElementById(`light-${machineId}-line-${machineLineNumber}`);
-                const statusText = document.getElementById(`status-${machineId}-line-${machineLineNumber}`);
+                // PERBAIKAN KRITIS: Gunakan kombinasi name + line_name untuk selector yang unik
+                const card = document.querySelector(`[data-machine="${machineName}"][data-line="${machineLineName}"]`);
+                const light = document.getElementById(`light-${machineId}-line-${machineLineName}`);
+                const statusText = document.getElementById(`status-${machineId}-line-${machineLineName}`);
 
                 if (!card || !light || !statusText) {
-                    console.warn(`Elements not found for ${machineName} line ${machineLineNumber}`);
+                    console.warn(`Elements not found for ${machineName} line ${machineLineName}`);
                     return;
                 }
 
@@ -364,20 +366,20 @@ class DashboardManager {
                         statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
                     }
                 } else {
-                    console.warn(`[${machineName} Line ${machineLineNumber}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
+                    console.warn(`[${machineName} Line ${machineLineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
                     card.classList.remove('problem'); 
                     light.className = 'indicator-light unknown';
                     statusText.className = 'status-text unknown';
                     statusText.innerHTML = `<i class="fas fa-question-circle"></i><span>No Data / Disconnected</span>`;
                 }
 
-                // PERBAIKAN: Update ID untuk quantity dan lastcheck dengan line_number
-                const quantityEl = document.getElementById(`quantity-${machineId}-line-${machineLineNumber}`);
+                // PERBAIKAN: Update ID untuk quantity dan lastcheck dengan line_name
+                const quantityEl = document.getElementById(`quantity-${machineId}-line-${machineLineName}`);
                 if (quantityEl) {
                     quantityEl.textContent = (machineData && machineData.quantity !== undefined) ? machineData.quantity : '0';
                 }
 
-                const lastCheckEl = document.getElementById(`lastcheck-${machineId}-line-${machineLineNumber}`);
+                const lastCheckEl = document.getElementById(`lastcheck-${machineId}-line-${machineLineName}`);
                 if (lastCheckEl && machineData && machineData.last_check) {
                     lastCheckEl.textContent = moment(machineData.last_check).format('HH:mm:ss');
                 }
@@ -401,13 +403,16 @@ class DashboardManager {
         // PERBAIKAN: Filter problems berdasarkan role user
         let filteredProblems = problems;
 
-        // Filter berdasarkan role dan line_number
-        if (this.userRole === 'leader' && this.userLineNumber) {
+        // Filter berdasarkan role dan line_name
+        if (this.userRole === 'leader' && this.userLineName) {
             // Leader hanya melihat problem dari line mereka sendiri
             filteredProblems = problems.filter(problem => {
-                return problem.line_number && problem.line_number.toString() === this.userLineNumber.toString();
+                return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
-        } else if (['maintenance', 'quality', 'warehouse'].includes(this.userRole)) {
+        } else if (['admin', 'manager'].includes(this.userRole)) {
+            // Admin dan Manager melihat semua problem
+            filteredProblems = problems;
+        } else if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
             // Department users hanya melihat problem yang sudah di-forward ke mereka
             filteredProblems = problems.filter(problem => {
                 return problem.is_forwarded && problem.forwarded_to_role === this.userRole;
@@ -417,6 +422,9 @@ class DashboardManager {
 
         // PERBAIKAN: Simpan data active problems yang sudah difilter untuk digunakan di loadDashboardData
         this.lastActiveProblems = filteredProblems;
+
+        // Cek problem yang sudah 15 menit untuk manager
+        this.checkLongDurationProblems(filteredProblems);
 
         // Tampilkan hasil filter
         if (filteredProblems.length === 0) {
@@ -572,7 +580,7 @@ class DashboardManager {
                         console.log('✅ Machine ditemukan di line yang tepat:', foundMachine);
                         return {
                             ...foundMachine,
-                            line_number: foundMachine.line_number || machineLine // Pastikan line_number benar
+                            line_name: foundMachine.line_name || machineLine // Pastikan line_name benar
                         };
                     }
                 }
@@ -591,7 +599,7 @@ class DashboardManager {
                     console.log('✅ Machine ditemukan via fallback:', foundMachine);
                     return {
                         ...foundMachine,
-                        line_number: foundMachine.line_number || lineNumber
+                        line_name: foundMachine.line_name || lineNumber
                     };
                 }
             }
@@ -603,7 +611,7 @@ class DashboardManager {
                 last_check: new Date().toISOString(),
                 name: machine,
                 problem_type: null,
-                line_number: machineLine || 'N/A'
+                line_name: machineLine || 'N/A'
             };
         } catch (error) {
             console.error('❌ Error saat mengambil status mesin:', error);
@@ -612,7 +620,7 @@ class DashboardManager {
                 last_check: new Date().toISOString(),
                 name: machine,
                 problem_type: null,
-                line_number: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
+                line_name: machineLine || 'N/A' // PERBAIKAN: Gunakan parameter machineLine
             };
         }
     }
@@ -627,7 +635,7 @@ class DashboardManager {
         const statusText = isProblem ? (machineStatus.problem_type || 'Problem') : 'Normal Operation';
 
         const lastCheck = machineStatus.last_check ? moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss') : 'N/A';
-        const lineNumber = machineStatus.line_number || 'N/A';
+        const lineName = machineStatus.line_name || 'N/A';
 
         let messageBoxHTML = '';
         if (isProblem) {
@@ -676,8 +684,8 @@ class DashboardManager {
                     </li>
                     <li>
                         <i class="fas fa-sitemap detail-icon"></i>
-                        <strong>Line Number:</strong>
-                        <span>${lineNumber}</span>
+                        <strong>Line Name:</strong>
+                        <span>${lineName}</span>
                     </li>
                 </ul>
 
@@ -688,7 +696,7 @@ class DashboardManager {
 
     async createProblemDetailHTML(problem) {
         const isLeader = this.userRole === 'leader';
-        const isDepartmentUser = ['maintenance', 'quality', 'warehouse'].includes(this.userRole);
+        const isDepartmentUser = ['maintenance', 'quality', 'engineering'].includes(this.userRole);
         
         // Tentukan target role berdasarkan problem type
         let targetRole = '';
@@ -700,7 +708,7 @@ class DashboardManager {
                 targetRole = 'Quality Control';
                 break;
             case 'material':
-                targetRole = 'Warehouse';
+                targetRole = 'Engineering';
                 break;
             default:
                 targetRole = 'Unknown';
@@ -862,7 +870,7 @@ class DashboardManager {
                     </div>
                     <div class="detail-item">
                         <span class="label">Line:</span>
-                        <span class="value">${problem.line_number || 'N/A'}</span>
+                        <span class="value">${problem.line_name || 'N/A'}</span>
                     </div>
                 </div>
 
@@ -949,14 +957,14 @@ class DashboardManager {
     showProblemNotification(problem) {
         const machineName = problem.machine || problem.machine_name;
         const problemType = problem.problem_type || problem.problemType;
-        const problemLineNumber = problem.line_number || problem.lineNumber || problem.line; // Multiple fallback
+        const problemLineName = problem.line_name || problem.lineName || problem.line; // Multiple fallback
         
         // DEBUG: Log semua data untuk debugging
         console.log('=== DEBUG NOTIFICATION DATA ===');
         console.log('Problem data:', problem);
         console.log('User role:', this.userRole);
-        console.log('User line number:', this.userLineNumber);
-        console.log('Problem line number:', problemLineNumber);
+        console.log('User line name:', this.userLineName);
+        console.log('Problem line name:', problemLineName);
         console.log('================================');
 
         // ==========================================================
@@ -971,7 +979,7 @@ class DashboardManager {
 
             case 'maintenance':
             case 'quality':
-            case 'warehouse':
+            case 'engineering':
                 // Department users TIDAK PERNAH melihat notifikasi problem baru
                 // Mereka hanya melihat notifikasi ketika problem di-forward ke mereka
                 console.log(`🔔 Notifikasi untuk Department User (${this.userRole}) disembunyikan. Mereka hanya melihat notifikasi forward.`);
@@ -981,21 +989,21 @@ class DashboardManager {
                 // PERBAIKAN: Validasi data dan filter berdasarkan line
                 console.log(`🔍 Checking leader notification filter...`);
                 
-                // Validasi apakah userLineNumber tersedia
-                if (!this.userLineNumber) {
-                    console.warn('⚠️ User line number tidak tersedia untuk leader, notifikasi akan ditampilkan');
-                    break; // Jika tidak ada line number user, tampilkan semua
+                // Validasi apakah userLineName tersedia
+                if (!this.userLineName) {
+                    console.warn('⚠️ User line name tidak tersedia untuk leader, notifikasi akan ditampilkan');
+                    break; // Jika tidak ada line name user, tampilkan semua
                 }
                 
-                // Validasi apakah problemLineNumber tersedia
-                if (!problemLineNumber) {
-                    console.warn('⚠️ Problem line number tidak tersedia, notifikasi akan ditampilkan');
-                    break; // Jika tidak ada line number problem, tampilkan
+                // Validasi apakah problemLineName tersedia
+                if (!problemLineName) {
+                    console.warn('⚠️ Problem line name tidak tersedia, notifikasi akan ditampilkan');
+                    break; // Jika tidak ada line name problem, tampilkan
                 }
                 
                 // Convert ke string untuk comparison yang lebih reliable
-                const userLine = String(this.userLineNumber).trim();
-                const problemLine = String(problemLineNumber).trim();
+                const userLine = String(this.userLineName).trim();
+                const problemLine = String(problemLineName).trim();
                 
                 console.log(`🔍 Comparing lines - User: "${userLine}" vs Problem: "${problemLine}"`);
                 
@@ -1033,7 +1041,7 @@ class DashboardManager {
         let icon = 'error';
         if (severity === 'warning') icon = 'warning';
 
-        console.log(`🔔 Menampilkan notifikasi untuk: ${machineName} - ${problemType} (Role: ${this.userRole}, Line: ${this.userLineNumber})`);
+        console.log(`🔔 Menampilkan notifikasi untuk: ${machineName} - ${problemType} (Role: ${this.userRole}, Line: ${this.userLineName})`);
 
         Swal.fire({
             title: `⚠️ Problem Detected!`,
@@ -1041,7 +1049,7 @@ class DashboardManager {
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Mesin:</strong> ${machineName}</p>
                     <p><strong>Problem Type:</strong> ${problemType}</p>
-                    <p><strong>Line:</strong> ${problemLineNumber || 'N/A'}</p>
+                    <p><strong>Line:</strong> ${problemLineName || 'N/A'}</p>
                     <p><strong>Severity:</strong> <span style="color: ${severity === 'critical' ? '#dc3545' : '#ffc107'}">${severity.toUpperCase()}</span></p>
                     <p><strong>Waktu:</strong> ${moment().format('DD/MM/YYYY HH:mm:ss')}</p>
                 </div>
@@ -1074,16 +1082,16 @@ class DashboardManager {
     verifyUserLineData() {
         console.log('=== USER LINE VERIFICATION ===');
         console.log('User role:', this.userRole);
-        console.log('User line number:', this.userLineNumber);
-        console.log('User line type:', typeof this.userLineNumber);
+        console.log('User line name:', this.userLineName);
+        console.log('User line type:', typeof this.userLineName);
         console.log('===============================');
         
-        if (this.userRole === 'leader' && !this.userLineNumber) {
-            console.error('⚠️ PERINGATAN: User dengan role leader tidak memiliki line number!');
+        if (this.userRole === 'leader' && !this.userLineName) {
+            console.error('⚠️ PERINGATAN: User dengan role leader tidak memiliki line name!');
             // Tampilkan peringatan ke user atau admin
             Swal.fire({
                 title: 'Konfigurasi Tidak Lengkap',
-                text: 'User leader tidak memiliki line number yang valid. Silakan hubungi administrator.',
+                text: 'User leader tidak memiliki line name yang valid. Silakan hubungi administrator.',
                 icon: 'warning'
             });
         }
@@ -1099,7 +1107,7 @@ class DashboardManager {
             targetRole = 'Quality Control Team';
             break;
         case 'material':
-            targetRole = 'Warehouse Team';
+            targetRole = 'Engineering Team';
             break;
         default:
             targetRole = 'Unknown Team';
@@ -1428,7 +1436,7 @@ class DashboardManager {
         console.log(`📧 Showing forwarded problem notification for role: ${this.userRole}`);
 
         // PERBAIKAN: Pastikan hanya department users yang sesuai yang melihat notifikasi ini
-        if (['maintenance', 'quality', 'warehouse'].includes(this.userRole)) {
+        if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
             // Cek apakah notifikasi ini untuk role user ini
             if (data.target_role !== this.userRole) {
                 console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole}, disembunyikan`);
@@ -1455,7 +1463,7 @@ class DashboardManager {
                 roleIcon = 'fas fa-clipboard-check';
                 roleColor = '#ffc107';
                 break;
-            case 'warehouse':
+            case 'engineering':
                 roleIcon = 'fas fa-boxes';
                 roleColor = '#28a745';
                 break;
@@ -1474,7 +1482,7 @@ class DashboardManager {
                     </div>
                     <p><strong>Mesin:</strong> ${data.machine_name}</p>
                     <p><strong>Problem Type:</strong> ${data.problem_type}</p>
-                    <p><strong>Line:</strong> ${data.line_number || 'N/A'}</p>
+                    <p><strong>Line:</strong> ${data.line_name || 'N/A'}</p>
                     <p><strong>Waktu Forward:</strong> ${moment(data.timestamp).format('DD/MM/YYYY HH:mm:ss')}</p>
                     ${data.message ? `<div style="margin-top: 15px; padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;"><strong>Pesan:</strong><br>"${data.message}"</div>` : ''}
                 </div>
@@ -1842,6 +1850,90 @@ class DashboardManager {
             }
         } catch (error) {
             console.error('Error refreshing problem detail:', error);
+        }
+    }
+
+    // Method untuk mengecek problem yang sudah 15 menit (hanya untuk manager)
+    checkLongDurationProblems(problems) {
+        if (this.userRole !== 'manager') {
+            return; // Hanya manager yang mendapat notifikasi 15 menit
+        }
+
+        const now = new Date();
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+        problems.forEach(problem => {
+            const problemId = problem.id;
+            const problemTimestamp = new Date(problem.timestamp);
+            
+            // Jika problem belum pernah dicatat start time, catat sekarang
+            if (!this.problemStartTimes.has(problemId)) {
+                this.problemStartTimes.set(problemId, problemTimestamp);
+            }
+
+            // Cek apakah problem sudah 15 menit dan belum pernah dikirim notifikasi
+            if (problemTimestamp <= fifteenMinutesAgo && 
+                !this.sentLongDurationNotifications.has(problemId)) {
+                
+                this.showLongDurationNotification(problem);
+                this.sentLongDurationNotifications.add(problemId);
+            }
+        });
+
+        // Clean up problem start times untuk problem yang sudah resolved
+        const currentProblemIds = new Set(problems.map(p => p.id));
+        for (const [problemId, startTime] of this.problemStartTimes) {
+            if (!currentProblemIds.has(problemId)) {
+                this.problemStartTimes.delete(problemId);
+                this.sentLongDurationNotifications.delete(problemId);
+            }
+        }
+    }
+
+    // Method untuk menampilkan notifikasi problem 15 menit
+    showLongDurationNotification(problem) {
+        const duration = this.calculateProblemDuration(problem.timestamp);
+        
+        Swal.fire({
+            title: '⚠️ Problem Tidak Ditangani',
+            html: `
+                <div style="text-align: left;">
+                    <p><strong>Machine:</strong> ${problem.machine || 'Unknown'}</p>
+                    <p><strong>Problem Type:</strong> ${problem.problem_type || 'Unknown'}</p>
+                    <p><strong>Line:</strong> ${problem.line_name || 'Unknown'}</p>
+                    <p><strong>Duration:</strong> ${duration}</p>
+                    <p style="color: #e74c3c; font-weight: bold;">Problem ini sudah aktif selama lebih dari 15 menit dan belum ditangani!</p>
+                </div>
+            `,
+            icon: 'warning',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#e74c3c',
+            allowOutsideClick: false,
+            allowEscapeKey: false
+        });
+
+        // Play alert sound
+        if (this.alertSound) {
+            this.alertSound.play().catch(e => console.log('Could not play alert sound:', e));
+        }
+    }
+
+    // Method untuk menghitung durasi problem
+    calculateProblemDuration(timestamp) {
+        const now = new Date();
+        const problemTime = new Date(timestamp);
+        const diffMs = now - problemTime;
+        
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+        
+        if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds}s`;
+        } else {
+            return `${seconds}s`;
         }
     }
 }
