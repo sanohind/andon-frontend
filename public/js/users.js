@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const roleSelect = document.getElementById('roleSelect');
+    const divisionInput = document.getElementById('divisionInput');
     const lineNameInput = document.getElementById('lineNameInput');
     const addUserForm = document.getElementById('addUserForm');
     const userTableBody = document.querySelector('#userTable tbody');
@@ -12,10 +13,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const editUserUsername = document.getElementById('editUserUsername');
     const editUserPassword = document.getElementById('editUserPassword');
     const editUserRole = document.getElementById('editUserRole');
+    const editUserDivision = document.getElementById('editUserDivision');
     const editUserLineName = document.getElementById('editUserLineName');
+    const editUserDivisionGroup = document.getElementById('editUserDivisionGroup');
     const editUserLineGroup = document.getElementById('editUserLineGroup');
     const cancelEditUserBtn = document.getElementById('cancelEditUser');
     const cancelEditUserFooterBtn = document.getElementById('cancelEditUserFooter');
+
+    // Mapping divisi ke line
+    const divisionLineMapping = {
+        'Bending': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+    };
+
+    function updateLineOptions(divisionSelect, lineSelect) {
+        const selectedDivision = divisionSelect.value;
+        lineSelect.innerHTML = '<option value="">Pilih Line</option>';
+        
+        if (selectedDivision && divisionLineMapping[selectedDivision]) {
+            divisionLineMapping[selectedDivision].forEach(line => {
+                const option = document.createElement('option');
+                option.value = line;
+                option.textContent = line;
+                lineSelect.appendChild(option);
+            });
+        }
+    }
 
     function openEditUserModal(user) {
         editUserId.value = user.id;
@@ -23,8 +47,19 @@ document.addEventListener('DOMContentLoaded', () => {
         editUserUsername.value = user.username || '';
         editUserPassword.value = '';
         editUserRole.value = user.role || '';
-        editUserLineName.value = user.line_name || '';
+        editUserDivision.value = user.division || '';
+        
+        // Show/hide division and line groups based on role
+        const showDivision = user.role === 'manager' || user.role === 'leader';
+        editUserDivisionGroup.style.display = showDivision ? 'block' : 'none';
         editUserLineGroup.style.display = (user.role === 'leader') ? 'block' : 'none';
+        
+        // Update line options based on division
+        if (showDivision) {
+            updateLineOptions(editUserDivision, editUserLineName);
+        }
+        
+        editUserLineName.value = user.line_name || '';
         editUserLineName.required = (user.role === 'leader');
         editUserModal.classList.add('show');
     }
@@ -39,14 +74,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === editUserModal) closeEditUserModal();
     });
 
+    // Role change handler for edit modal
     editUserRole.addEventListener('change', () => {
+        const showDivision = editUserRole.value === 'manager' || editUserRole.value === 'leader';
+        editUserDivisionGroup.style.display = showDivision ? 'block' : 'none';
         editUserLineGroup.style.display = (editUserRole.value === 'leader') ? 'block' : 'none';
         editUserLineName.required = (editUserRole.value === 'leader');
+        
+        if (showDivision) {
+            updateLineOptions(editUserDivision, editUserLineName);
+        }
     });
 
+    // Division change handler for edit modal
+    editUserDivision.addEventListener('change', () => {
+        updateLineOptions(editUserDivision, editUserLineName);
+    });
+
+    // Role change handler for add form
     roleSelect.addEventListener('change', () => {
+        const showDivision = roleSelect.value === 'manager' || roleSelect.value === 'leader';
+        divisionInput.style.display = showDivision ? 'block' : 'none';
         lineNameInput.style.display = (roleSelect.value === 'leader') ? 'block' : 'none';
+        divisionInput.required = showDivision;
         lineNameInput.required = (roleSelect.value === 'leader');
+        
+        if (showDivision) {
+            updateLineOptions(divisionInput, lineNameInput);
+        }
+    });
+
+    // Division change handler for add form
+    divisionInput.addEventListener('change', () => {
+        updateLineOptions(divisionInput, lineNameInput);
     });
 
     addUserForm.addEventListener('submit', async (e) => {
@@ -83,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: row.cells[0].textContent,
                 username: row.cells[1].textContent,
                 role: row.cells[2].textContent,
+                division: row.dataset.division || '',
                 line_name: row.dataset.line || ''
             };
             openEditUserModal(user);
@@ -110,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: editUserName.value,
             username: editUserUsername.value,
             role: editUserRole.value,
+            division: (editUserRole.value === 'manager' || editUserRole.value === 'leader') ? editUserDivision.value : null,
             line_name: editUserRole.value === 'leader' ? editUserLineName.value : null,
         };
         if (editUserPassword.value) payload.password = editUserPassword.value;

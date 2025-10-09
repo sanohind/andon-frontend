@@ -19,6 +19,7 @@ class DashboardManager {
         const userDataElement = document.getElementById('userData');
         this.userRole = userDataElement ? userDataElement.dataset.role : null;
         this.userLineName = userDataElement ? userDataElement.dataset.line : null;
+        this.userDivision = userDataElement ? userDataElement.dataset.division : null;
         this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
 
         this.init();
@@ -247,6 +248,10 @@ class DashboardManager {
             activeProblems = activeProblems.filter(problem => {
                 return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
+        } else if (this.userRole === 'manager' && this.userDivision) {
+            activeProblems = activeProblems.filter(problem => {
+                return problem.division && problem.division.toString() === this.userDivision.toString();
+            });
         }
         // Untuk role lain (admin, maintenance, quality, engineering) tidak difilter
         
@@ -261,12 +266,15 @@ class DashboardManager {
     async loadStats() {
         const userRole = this.userRole;
         const userLineName = this.userLineName;
+        const userDivision = this.userDivision;
 
         let apiUrl = '/api/dashboard/stats';
 
         // Jika pengguna adalah 'leader' dan memiliki nomor lini, tambahkan parameter ke URL
         if (userRole === 'leader' && userLineName) {
             apiUrl += `?line_name=${userLineName}`;
+        } else if (userRole === 'manager' && userDivision) {
+            apiUrl += `?division=${userDivision}`;
         }
 
         try {
@@ -409,8 +417,13 @@ class DashboardManager {
             filteredProblems = problems.filter(problem => {
                 return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
-        } else if (['admin', 'manager'].includes(this.userRole)) {
-            // Admin dan Manager melihat semua problem
+        } else if (this.userRole === 'manager' && this.userDivision) {
+            // Manager hanya melihat problem dari divisi mereka
+            filteredProblems = problems.filter(problem => {
+                return problem.division && problem.division.toString() === this.userDivision.toString();
+            });
+        } else if (this.userRole === 'admin') {
+            // Admin melihat semua problem
             filteredProblems = problems;
         } else if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
             // Department users hanya melihat problem yang sudah di-forward ke mereka
@@ -418,7 +431,6 @@ class DashboardManager {
                 return problem.is_forwarded && problem.forwarded_to_role === this.userRole;
             });
         }
-        // Admin melihat semua problem (tidak difilter)
 
         // PERBAIKAN: Simpan data active problems yang sudah difilter untuk digunakan di loadDashboardData
         this.lastActiveProblems = filteredProblems;
@@ -1880,10 +1892,14 @@ class DashboardManager {
                 this.problemStartTimes.set(problemId, problemTimestamp);
             }
 
-            // Cek apakah problem sudah 15 menit dan belum pernah dikirim notifikasi
-            if (problemTimestamp <= fifteenMinutesAgo && 
+            // Ambil waktu mulai problem dari tracking
+            const problemStartTime = this.problemStartTimes.get(problemId);
+            
+            // Cek apakah problem sudah 15 menit sejak menjadi ACTIVE dan belum pernah dikirim notifikasi
+            if (problemStartTime <= fifteenMinutesAgo && 
                 !this.sentLongDurationNotifications.has(problemId)) {
                 
+                console.log(`🚨 Manager notification: Problem ${problemId} has been ACTIVE for more than 15 minutes`);
                 this.showLongDurationNotification(problem);
                 this.sentLongDurationNotifications.add(problemId);
             }

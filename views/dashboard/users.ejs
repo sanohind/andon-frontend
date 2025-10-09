@@ -140,12 +140,15 @@
                     <option value="quality">Quality</option>
                     <option value="engineering">Engineering</option>
                 </select>
+                <select name="division" id="divisionInput" style="display:none;">
+                    <option value="">Pilih Divisi</option>
+                    <option value="Bending">Bending</option>
+                    <option value="Chassis">Chassis</option>
+                    <option value="Nylon">Nylon</option>
+                </select>
                 <select name="line_name" id="lineNameInput" style="display:none;">
                     <option value="">Pilih Line</option>
-                    <option value="Leak Test Inspection">Leak Test Inspection</option>
-                    <option value="Support">Support</option>
-                    <option value="Hand Bending">Hand Bending</option>
-                    <option value="Welding">Welding</option>
+                    <!-- Options akan diisi oleh JavaScript berdasarkan divisi -->
                 </select>
                 <button type="submit">Tambah User</button>
             </form>
@@ -154,14 +157,15 @@
             <h3>Daftar User</h3>
             <table id="userTable">
                 <thead>
-                    <tr><th>Nama</th><th>Username</th><th>Role</th><th>Line</th><th>Aksi</th></tr>
+                    <tr><th>Nama</th><th>Username</th><th>Role</th><th>Divisi</th><th>Line</th><th>Aksi</th></tr>
                 </thead>
                 <tbody>
                     <% userList.forEach(u => { %>
-                        <tr data-id="<%= u.id %>" data-role="<%= u.role %>" data-line="<%= u.line_name || '' %>">
+                        <tr data-id="<%= u.id %>" data-role="<%= u.role %>" data-division="<%= u.division || '' %>" data-line="<%= u.line_name || '' %>">
                             <td><%= u.name %></td>
                             <td><%= u.username %></td>
                             <td><%= u.role %></td>
+                            <td><%= u.division || 'N/A' %></td>
                             <td><%= u.line_name || 'N/A' %></td>
                             <td>
                                 <button class="btn-edit-user">Edit</button>
@@ -210,14 +214,20 @@
                             <option value="engineering">Engineering</option>
                         </select>
                     </div>
+                    <div class="form-group" id="editUserDivisionGroup" style="display:none;">
+                        <label for="editUserDivision">Divisi</label>
+                        <select name="division" id="editUserDivision">
+                            <option value="">Pilih Divisi</option>
+                            <option value="Bending">Bending</option>
+                            <option value="Chassis">Chassis</option>
+                            <option value="Nylon">Nylon</option>
+                        </select>
+                    </div>
                     <div class="form-group" id="editUserLineGroup" style="display:none;">
                         <label for="editUserLineName">Line</label>
                         <select name="line_name" id="editUserLineName">
                             <option value="">Pilih Line</option>
-                            <option value="Leak Test Inspection">Leak Test Inspection</option>
-                            <option value="Support">Support</option>
-                            <option value="Hand Bending">Hand Bending</option>
-                            <option value="Welding">Welding</option>
+                            <!-- Options akan diisi oleh JavaScript berdasarkan divisi -->
                         </select>
                     </div>
                 </div>

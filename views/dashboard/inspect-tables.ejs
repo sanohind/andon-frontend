@@ -147,12 +147,15 @@
             <h3>Tambah Meja Inspect Baru</h3>
             <form id="addTableForm">
                 <input type="text" name="name" placeholder="Nama Meja (e.g., Meja Inspect 1)" required>
-                <select name="line_name" required>
+                <select name="division" id="divisionSelect" required>
+                    <option value="">Pilih Divisi</option>
+                    <option value="Bending">Bending</option>
+                    <option value="Chassis">Chassis</option>
+                    <option value="Nylon">Nylon</option>
+                </select>
+                <select name="line_name" id="lineNameSelect" required>
                     <option value="">Pilih Line</option>
-                    <option value="Leak Test Inspection">Leak Test Inspection</option>
-                    <option value="Support">Support</option>
-                    <option value="Hand Bending">Hand Bending</option>
-                    <option value="Welding">Welding</option>
+                    <!-- Options akan diisi oleh JavaScript berdasarkan divisi -->
                 </select>
                 <button type="submit">Tambah Meja</button>
             </form>
@@ -163,14 +166,16 @@
                 <thead>
                     <tr>
                         <th>Nama</th>
+                        <th>Divisi</th>
                         <th>Line</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     <% tableList.forEach(table => { %>
-                        <tr data-id="<%= table.id %>" data-line="<%= table.line_name %>">
+                        <tr data-id="<%= table.id %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>">
                             <td><%= table.name %></td>
+                            <td><%= table.division || 'N/A' %></td>
                             <td><%= table.line_name %></td>
                             <td>
                                 <button class="btn-edit">Edit</button>
@@ -199,13 +204,19 @@
                     <input type="text" name="name" id="editTableName" required>
                 </div>
                 <div class="form-group">
+                    <label for="editDivision">Divisi</label>
+                    <select name="division" id="editDivision" required>
+                        <option value="">Pilih Divisi</option>
+                        <option value="Bending">Bending</option>
+                        <option value="Chassis">Chassis</option>
+                        <option value="Nylon">Nylon</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="editLineName">Line</label>
                     <select name="line_name" id="editLineName" required>
                         <option value="">Pilih Line</option>
-                        <option value="Leak Test Inspection">Leak Test Inspection</option>
-                        <option value="Support">Support</option>
-                        <option value="Hand Bending">Hand Bending</option>
-                        <option value="Welding">Welding</option>
+                        <!-- Options akan diisi oleh JavaScript berdasarkan divisi -->
                     </select>
                 </div>
             </form>
