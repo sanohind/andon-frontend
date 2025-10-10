@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mapping divisi ke line
     const divisionLineMapping = {
-        'Bending': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
         'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
         'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
     };
