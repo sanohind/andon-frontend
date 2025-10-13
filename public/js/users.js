@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addUserForm = document.getElementById('addUserForm');
     const userTableBody = document.querySelector('#userTable tbody');
 
+
     // Edit Modal Elements
     const editUserModal = document.getElementById('editUserModal');
     const editUserForm = document.getElementById('editUserForm');
@@ -153,7 +154,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
             try {
                 console.log('Deleting user with ID:', id);
-                const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                const response = await fetch(`/api/users/${id}`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
                 console.log('Delete response status:', response.status);
                 const result = await response.json();
                 console.log('Delete response data:', result);
@@ -185,7 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Update payload:', payload);
             const response = await fetch(`/api/users/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(payload),
             });
             console.log('Update response status:', response.status);

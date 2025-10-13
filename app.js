@@ -119,7 +119,7 @@ async function requireAuth(req, res, next) {
   }
 }
 
-// Auth Middleware untuk API endpoints - mengembalikan JSON response
+// Auth Middleware untuk API endpoints - menggunakan Sanctum token validation
 async function requireAuthAPI(req, res, next) {
   const token = req.session.token || req.cookies.auth_token || req.headers.authorization?.replace('Bearer ', '');
   
@@ -131,37 +131,29 @@ async function requireAuthAPI(req, res, next) {
   }
   
   try {
-    // Validate token dengan Laravel API
-    const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
-      token: token
-    }, {
+    // Validate token dengan Laravel API menggunakan Sanctum
+    const response = await axios.get(`${LARAVEL_API_BASE}/sanctum-user`, {
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
       }
     });
 
-    if (response.data.valid) {
+    if (response.data.success) {
       req.user = response.data.user;
       req.user.token = token;
       next();
     } else {
-      // Token tidak valid
-      req.session.destroy();
-      res.clearCookie('auth_token');
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token'
       });
     }
   } catch (error) {
-    console.error('Token validation error:', error.message);
-    // Jika ada error validasi, anggap tidak terautentikasi
-    req.session.destroy();
-    res.clearCookie('auth_token');
-    return res.status(500).json({
+    console.error('Token validation error:', error.response?.data || error.message);
+    return res.status(401).json({
       success: false,
-      message: 'Authentication service error'
+      message: 'Invalid or expired token'
     });
   }
 }
@@ -566,8 +558,24 @@ app.get('/users', requireAuth, async (req, res) => {
   }
 });
 
+// RUTE PROXY API UNTUK MENGAMBIL DAFTAR PENGGUNA
+app.get('/api/users', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/users`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Get users proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
 // RUTE PROXY API UNTUK MENAMBAH PENGGUNA BARU
-app.post('/api/users', requireAuthAPI, async (req, res) => {
+app.post('/api/users', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -583,19 +591,17 @@ app.post('/api/users', requireAuthAPI, async (req, res) => {
 });
 
 // Update user
-app.put('/api/users/:id', requireAuthAPI, async (req, res) => {
+app.put('/api/users/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
   try {
-    // Gunakan method override untuk menghindari blokir PUT oleh proxy/server
-    const response = await axios.post(
+    const response = await axios.put(
       `${LARAVEL_API_BASE}/users/${req.params.id}`,
       req.body,
       {
         headers: {
           'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
-          'X-HTTP-Method-Override': 'PUT',
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
@@ -609,19 +615,16 @@ app.put('/api/users/:id', requireAuthAPI, async (req, res) => {
 });
 
 // Delete user
-app.delete('/api/users/:id', requireAuthAPI, async (req, res) => {
+app.delete('/api/users/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
   try {
-    // Gunakan method override untuk menghindari blokir DELETE oleh proxy/server
-    const response = await axios.post(
+    const response = await axios.delete(
       `${LARAVEL_API_BASE}/users/${req.params.id}`,
-      {},
       {
         headers: {
           'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
-          'X-HTTP-Method-Override': 'DELETE',
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
