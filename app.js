@@ -588,11 +588,22 @@ app.put('/api/users/:id', requireAuthAPI, async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
   try {
-    const response = await axios.put(`${LARAVEL_API_BASE}/users/${req.params.id}`, req.body, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
-    });
+    // Gunakan method override untuk menghindari blokir PUT oleh proxy/server
+    const response = await axios.post(
+      `${LARAVEL_API_BASE}/users/${req.params.id}`,
+      req.body,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+          'X-HTTP-Method-Override': 'PUT',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     res.json(response.data);
   } catch (error) {
+    console.error('Update user proxy error:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
@@ -603,11 +614,22 @@ app.delete('/api/users/:id', requireAuthAPI, async (req, res) => {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
   try {
-    const response = await axios.delete(`${LARAVEL_API_BASE}/users/${req.params.id}`, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
-    });
+    // Gunakan method override untuk menghindari blokir DELETE oleh proxy/server
+    const response = await axios.post(
+      `${LARAVEL_API_BASE}/users/${req.params.id}`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+          'X-HTTP-Method-Override': 'DELETE',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     res.json(response.data);
   } catch (error) {
+    console.error('Delete user proxy error:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });

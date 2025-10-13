@@ -152,12 +152,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.classList.contains('btn-delete-user')) {
             if (!confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
             try {
+                console.log('Deleting user with ID:', id);
                 const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                console.log('Delete response status:', response.status);
                 const result = await response.json();
+                console.log('Delete response data:', result);
                 if (!response.ok) throw new Error(result.message || 'Gagal menghapus user.');
                 row.remove();
                 alert('User berhasil dihapus.');
             } catch (error) {
+                console.error('Delete error:', error);
                 alert(`Error: ${error.message}`);
             }
         }
@@ -177,16 +181,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (editUserPassword.value) payload.password = editUserPassword.value;
 
         try {
+            console.log('Updating user with ID:', id);
+            console.log('Update payload:', payload);
             const response = await fetch(`/api/users/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
+            console.log('Update response status:', response.status);
             const result = await response.json();
+            console.log('Update response data:', result);
             if (!response.ok) throw new Error(result.message || 'Gagal mengupdate user.');
             closeEditUserModal();
             location.reload();
         } catch (error) {
+            console.error('Update error:', error);
             alert(`Error: ${error.message}`);
         }
     });
