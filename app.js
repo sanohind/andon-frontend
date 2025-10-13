@@ -654,8 +654,21 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
   }
 });
 
+// RUTE PROXY API UNTUK MENGAMBIL DAFTAR MEJA INSPECT
+app.get('/api/inspect-tables', requireAuth, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
 // RUTE PROXY API UNTUK MANAJEMEN MEJA
-app.post('/api/inspect-tables', requireAuthAPI, async (req, res) => {
+app.post('/api/inspect-tables', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
@@ -667,7 +680,7 @@ app.post('/api/inspect-tables', requireAuthAPI, async (req, res) => {
   }
 });
 
-app.put('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
+app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
@@ -679,7 +692,7 @@ app.put('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
   }
 });
 
-app.delete('/api/inspect-tables/:id', requireAuthAPI, async (req, res) => {
+app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
