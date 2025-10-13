@@ -75,15 +75,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const lineName = editLine.value;
         if (!name || !division || !lineName) return;
         try {
+            console.log('Updating table with ID:', id);
+            console.log('Update payload:', { name, division, line_name: lineName });
             const response = await fetch(`/api/inspect-tables/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, division, line_name: lineName }),
             });
-            if (!response.ok) throw new Error('Gagal mengupdate meja.');
+            console.log('Update response status:', response.status);
+            const result = await response.json();
+            console.log('Update response data:', result);
+            if (!response.ok) throw new Error(result.message || 'Gagal mengupdate meja.');
             closeEditModal();
             location.reload();
         } catch (error) {
+            console.error('Update error:', error);
             alert(`Error: ${error.message}`);
         }
     });

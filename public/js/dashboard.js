@@ -258,7 +258,16 @@ class DashboardManager {
         const activeProblemsCount = activeProblems.length;
         const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
         
+        // Hitung total machines dari data yang ada
+        let totalMachines = 0;
+        if (dashboardData.machine_statuses_by_line) {
+            Object.values(dashboardData.machine_statuses_by_line).forEach(machines => {
+                totalMachines += machines.length;
+            });
+        }
+        
         // Update counters dengan data yang sudah difilter
+        document.getElementById('totalMachines').textContent = totalMachines;
         document.getElementById('activeProblems').textContent = activeProblemsCount;
         document.getElementById('criticalProblems').textContent = criticalProblemsCount;
     }
