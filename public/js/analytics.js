@@ -1,6 +1,24 @@
 // public/js/analytics.js
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Helper function to get authentication headers
+    function getAuthHeaders() {
+        const token = getCookieValue('auth_token');
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+    }
+
+    // Helper function to get cookie value
+    function getCookieValue(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
     // Konfigurasi awal untuk chart
     const chartConfigs = {
         frequency: { ctx: document.getElementById('frequencyChart').getContext('2d'), type: 'bar', chart: null },
@@ -35,7 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchAnalyticsData(startDate, endDate) {
         try {
             // Fetch basic analytics data (prioritas utama)
-            const analyticsResponse = await fetch(`/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`);
+            const analyticsResponse = await fetch(`/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`, {
+                headers: getAuthHeaders()
+            });
             if (!analyticsResponse.ok) {
                 throw new Error('Failed to fetch analytics data');
             }
@@ -47,7 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Coba fetch duration data (opsional)
                 try {
-                    const durationResponse = await fetch(`/api/dashboard/analytics/duration?start_date=${startDate}&end_date=${endDate}`);
+                    const durationResponse = await fetch(`/api/dashboard/analytics/duration?start_date=${startDate}&end_date=${endDate}`, {
+                        headers: getAuthHeaders()
+                    });
                     if (durationResponse.ok) {
                         const durationResult = await durationResponse.json();
                         if (durationResult.success && durationResult.data) {
@@ -69,7 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Fetch detailed forward analytics data untuk tabel
                 try {
-                    const forwardResp = await fetch(`/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`);
+                    const forwardResp = await fetch(`/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`, {
+                        headers: getAuthHeaders()
+                    });
                     if (forwardResp.ok) {
                         const forwardJson = await forwardResp.json();
                         if (forwardJson.success && forwardJson.data) {
@@ -635,7 +659,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fungsi untuk fetch data ticketing
     async function fetchTicketingData(startDate, endDate) {
         try {
-            const response = await fetch(`/api/dashboard/analytics/ticketing?start_date=${startDate}&end_date=${endDate}`);
+            const response = await fetch(`/api/dashboard/analytics/ticketing?start_date=${startDate}&end_date=${endDate}`, {
+                headers: getAuthHeaders()
+            });
             if (!response.ok) {
                 throw new Error('Failed to fetch ticketing data');
             }

@@ -1,9 +1,29 @@
 document.addEventListener('DOMContentLoaded', () => {
     const grid = document.getElementById('plc-monitoring-grid');
 
+    // Helper function to get authentication headers
+    function getAuthHeaders() {
+        const token = getCookieValue('auth_token');
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+    }
+
+    // Helper function to get cookie value
+    function getCookieValue(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
     async function fetchPlcStatus() {
         try {
-            const response = await fetch('/api/dashboard/plc-status');
+            const response = await fetch('/api/dashboard/plc-status', {
+                headers: getAuthHeaders()
+            });
             const result = await response.json();
 
             if (result.success) {

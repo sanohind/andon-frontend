@@ -32,6 +32,16 @@ class DashboardManager {
         return null;
     }
 
+    // Helper method to get authentication headers
+    getAuthHeaders() {
+        const token = this.getCookieValue('auth_token');
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+    }
+
     init() {
         this.initSocket();
         this.bindEvents();
@@ -532,7 +542,9 @@ class DashboardManager {
 
         try {
             if (problemId) {
-                const response = await fetch(`/api/dashboard/problem/${problemId}`);
+                const response = await fetch(`/api/dashboard/problem/${problemId}`, {
+                    headers: this.getAuthHeaders()
+                });
                 const data = await response.json();
 
                 if (data.success) {
@@ -943,9 +955,7 @@ class DashboardManager {
         try {
             const response = await fetch(`/api/dashboard/problem/${this.currentProblemId}/status`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({
                     status: 'OFF'
                 })
@@ -1175,9 +1185,7 @@ class DashboardManager {
         try {
             const response = await fetch(`/api/dashboard/problem/${problemId}/forward`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({
                     message: message || 'Problem telah diteruskan untuk penanganan.'
                 })
@@ -1252,9 +1260,11 @@ class DashboardManager {
     // Method untuk receive problem
     async receiveProblem(problemId) {
         try {
+            const token = this.getCookieValue('auth_token');
             const response = await fetch(`/api/dashboard/problem/${problemId}/receive`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({})
@@ -1271,7 +1281,14 @@ class DashboardManager {
                 if (this.userRole === 'maintenance') {
                     // Get problem detail untuk cek tipe problem
                     try {
-                        const problemResponse = await fetch(`http://localhost:8000/api/dashboard/problem/${problemId}`);
+                        const token = this.getCookieValue('auth_token');
+                        const problemResponse = await fetch(`http://localhost:8000/api/dashboard/problem/${problemId}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        });
                         const problemData = await problemResponse.json();
                         
                         if (problemData.success && problemData.data.problem_type && 
@@ -1329,9 +1346,11 @@ class DashboardManager {
     // Method untuk feedback resolved problem
     async feedbackResolvedProblem(problemId, message = '') {
         try {
+            const token = this.getCookieValue('auth_token');
             const response = await fetch(`/api/dashboard/problem/${problemId}/feedback-resolved`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -1381,9 +1400,11 @@ class DashboardManager {
     // Method untuk direct resolve problem
     async directResolveProblem(problemId) {
         try {
+            const token = this.getCookieValue('auth_token');
             const response = await fetch(`/api/dashboard/problem/${problemId}/final-resolved`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({})
@@ -1434,9 +1455,11 @@ class DashboardManager {
     // Method untuk final resolve problem
     async finalResolveProblem(problemId) {
         try {
+            const token = this.getCookieValue('auth_token');
             const response = await fetch(`/api/dashboard/problem/${problemId}/final-resolved`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({})
@@ -1841,7 +1864,14 @@ class DashboardManager {
         if (!this.currentProblemId) return;
         
         try {
-            const response = await fetch(`http://localhost:8000/api/dashboard/problem/${this.currentProblemId}`);
+            const token = this.getCookieValue('auth_token');
+            const response = await fetch(`http://localhost:8000/api/dashboard/problem/${this.currentProblemId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
             const data = await response.json();
             
             if (data.success) {
