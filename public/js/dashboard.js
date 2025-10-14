@@ -35,6 +35,10 @@ class DashboardManager {
     // Helper method to get authentication headers
     getAuthHeaders() {
         const token = this.getCookieValue('auth_token');
+        console.log('🔍 getAuthHeaders - Token:', token ? 'Present' : 'Missing');
+        if (!token) {
+            console.error('❌ No auth token found in cookies');
+        }
         return {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -417,10 +421,12 @@ class DashboardManager {
     }
 
     updateActiveProblems(problems) {
+        console.log('🔍 updateActiveProblems called with:', problems);
         const problemsList = document.getElementById('problemsList');
         const noProblems = document.getElementById('noProblems');
 
         if (!problems || problems.length === 0) {
+            console.log('🔍 No problems to display');
             noProblems.style.display = 'block';
             const existingProblems = problemsList.querySelectorAll('.problem-item');
             existingProblems.forEach(item => item.remove());
@@ -453,12 +459,14 @@ class DashboardManager {
 
         // PERBAIKAN: Simpan data active problems yang sudah difilter untuk digunakan di loadDashboardData
         this.lastActiveProblems = filteredProblems;
+        console.log('🔍 Filtered problems:', filteredProblems);
 
         // Cek problem yang sudah 15 menit untuk manager
         this.checkLongDurationProblems(filteredProblems);
 
         // Tampilkan hasil filter
         if (filteredProblems.length === 0) {
+            console.log('🔍 No filtered problems to display');
             noProblems.style.display = 'block';
             const existingProblems = problemsList.querySelectorAll('.problem-item');
             existingProblems.forEach(item => item.remove());
@@ -495,6 +503,7 @@ class DashboardManager {
         `;
 
         div.addEventListener('click', () => {
+            console.log('🔍 Problem item clicked:', { machine: problem.machine, id: problem.id });
             this.showProblemDetail(problem.machine, problem.id);
         });
 
@@ -524,12 +533,17 @@ class DashboardManager {
     }
 
     async showProblemDetail(machine, problemId = null, machineLine = null) {
+        console.log('🔍 showProblemDetail called with:', { machine, problemId, machineLine });
+        
         const modal = document.getElementById('problemModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalFooter = document.querySelector('.modal-footer');
         
-        if (!modal || !modalTitle || !modalBody) return;
+        if (!modal || !modalTitle || !modalBody) {
+            console.error('❌ Modal elements not found');
+            return;
+        }
 
         modalTitle.textContent = `Detail - ${machine}`;
         modalBody.innerHTML = '<div class="loading">Loading...</div>';
@@ -542,10 +556,17 @@ class DashboardManager {
 
         try {
             if (problemId) {
+                console.log('🔍 Fetching problem detail for ID:', problemId);
+                const token = this.getCookieValue('auth_token');
+                console.log('🔍 Token:', token ? 'Present' : 'Missing');
+                
                 const response = await fetch(`/api/dashboard/problem/${problemId}`, {
                     headers: this.getAuthHeaders()
                 });
+                
+                console.log('🔍 Response status:', response.status);
                 const data = await response.json();
+                console.log('🔍 Response data:', data);
 
                 if (data.success) {
                     this.currentProblemId = problemId;
@@ -588,7 +609,14 @@ class DashboardManager {
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
             }
         } catch (error) {
-            console.error('Error loading problem detail:', error);
+            console.error('❌ Error loading problem detail:', error);
+            console.error('❌ Error details:', {
+                message: error.message,
+                stack: error.stack,
+                machine,
+                problemId,
+                machineLine
+            });
             modalBody.innerHTML = `<div class="error">Failed to load problem details: ${error.message}</div>`;
         }
     }
@@ -2005,9 +2033,12 @@ class DashboardManager {
 // Global functions (called from HTML)
 let dashboardManager;
 
-function showProblemDetail(machine) {
-    dashboardManager.showProblemDetail(machine);
-    dashboardManager.resolveProblem(machine);
+function showProblemDetail(machine, problemId = null, machineLine = null) {
+    if (dashboardManager) {
+        dashboardManager.showProblemDetail(machine, problemId, machineLine);
+    } else {
+        console.error('DashboardManager not initialized');
+    }
 }
 
 function closeModal() {
