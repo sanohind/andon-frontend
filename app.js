@@ -26,8 +26,14 @@ const io = socketIo(server, {
 
 // Configuration
 const PORT = process.env.PORT || 3001;
-const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://localhost:8000/api';
-// const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
+const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
+// const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://localhost:8000/api';
+
+console.log('🔍 Configuration:', {
+  PORT,
+  LARAVEL_API_BASE,
+  NODE_ENV: process.env.NODE_ENV
+});
 
 // Middleware
 app.use(cors());
@@ -131,26 +137,44 @@ async function requireAuthAPI(req, res, next) {
   }
   
   try {
-    // Validate token dengan Laravel API menggunakan Sanctum
-    const response = await axios.get(`${LARAVEL_API_BASE}/sanctum-user`, {
+    console.log('🔍 Validating token:', token ? 'Present' : 'Missing');
+    console.log('🔍 API Base URL:', LARAVEL_API_BASE);
+    
+    // Validate token dengan Laravel API menggunakan custom validation
+    const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
+      token: token
+    }, {
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
     });
 
-    if (response.data.success) {
+    console.log('🔍 Token validation response:', response.data);
+
+    if (response.data.valid) {
       req.user = response.data.user;
       req.user.token = token;
       next();
     } else {
+      console.error('❌ Token validation failed:', response.data);
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token'
       });
     }
   } catch (error) {
-    console.error('Token validation error:', error.response?.data || error.message);
+    console.error('❌ Token validation error:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers
+      }
+    });
     return res.status(401).json({
       success: false,
       message: 'Invalid or expired token'
