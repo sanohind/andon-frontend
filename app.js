@@ -182,6 +182,7 @@ app.get('/', requireAuth, async (req, res) => {
         'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
       };
       const allowedLines = divisionToLines[req.user.division] || [];
+      
       const filtered = {};
       Object.keys(machinesGroupedByLine).forEach((lineName) => {
         if (allowedLines.includes(lineName)) filtered[lineName] = machinesGroupedByLine[lineName];
@@ -403,13 +404,17 @@ app.get('/health-check', (req, res) => {
 // API Routes - Proxy to Laravel backend dengan Authorization header
 app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
+    const userRole = (req.user && req.user.role) || req.headers['x-user-role'] || '';
+    const userDivision = (req.user && req.user.division) || req.headers['x-user-division'] || '';
+    
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
-        'X-User-Role': (req.user && req.user.role) || req.headers['x-user-role'] || '',
-        'X-User-Division': (req.user && req.user.division) || req.headers['x-user-division'] || ''
+        'X-User-Role': userRole,
+        'X-User-Division': userDivision
       }
     });
+    
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching dashboard status:', error.message);
