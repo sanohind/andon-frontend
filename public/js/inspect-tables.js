@@ -35,8 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openEditModal(id, name, division, lineName) {
+    function openEditModal(id, address, name, division, lineName) {
         editId.value = id;
+        editId.setAttribute('data-address', address);
         editName.value = name;
         editDivision.value = division || '';
         editLine.value = lineName || '';
@@ -70,17 +71,18 @@ document.addEventListener('DOMContentLoaded', () => {
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = editId.value;
+        const address = editId.getAttribute('data-address');
         const name = editName.value.trim();
         const division = editDivision.value;
         const lineName = editLine.value;
         if (!name || !division || !lineName) return;
         try {
-            console.log('Updating table with ID:', id);
-            console.log('Update payload:', { name, division, line_name: lineName });
-            const response = await fetch(`/api/inspect-tables/${id}`, {
+            console.log('Updating table with address:', address);
+            console.log('Update payload:', { name });
+            const response = await fetch(`/api/inspection-tables/address/${address}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, division, line_name: lineName }),
+                body: JSON.stringify({ name }),
             });
             console.log('Update response status:', response.status);
             const result = await response.json();
@@ -124,7 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentName = row.cells[0].textContent;
             const currentDivision = row.dataset.division;
             const currentLine = row.dataset.line;
-            openEditModal(id, currentName, currentDivision, currentLine);
+            const currentAddress = row.dataset.address;
+            openEditModal(id, currentAddress, currentName, currentDivision, currentLine);
         }
 
         if (target.classList.contains('btn-delete')) {

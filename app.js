@@ -26,14 +26,8 @@ const io = socketIo(server, {
 
 // Configuration
 const PORT = process.env.PORT || 3001;
-const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
-// const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://localhost:8000/api';
-
-console.log('🔍 Configuration:', {
-  PORT,
-  LARAVEL_API_BASE,
-  NODE_ENV: process.env.NODE_ENV
-});
+// Force IPv4 address to avoid IPv6 connection issues
+const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://127.0.0.1:8000/api';
 
 // Middleware
 app.use(cors());
@@ -137,9 +131,6 @@ async function requireAuthAPI(req, res, next) {
   }
   
   try {
-    console.log('🔍 Validating token:', token ? 'Present' : 'Missing');
-    console.log('🔍 API Base URL:', LARAVEL_API_BASE);
-    
     // Validate token dengan Laravel API menggunakan custom validation
     const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
       token: token
@@ -150,31 +141,18 @@ async function requireAuthAPI(req, res, next) {
       }
     });
 
-    console.log('🔍 Token validation response:', response.data);
-
     if (response.data.valid) {
       req.user = response.data.user;
       req.user.token = token;
       next();
     } else {
-      console.error('❌ Token validation failed:', response.data);
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token'
       });
     }
   } catch (error) {
-    console.error('❌ Token validation error:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      config: {
-        url: error.config?.url,
-        method: error.config?.method,
-        headers: error.config?.headers
-      }
-    });
+    console.error('Token validation error:', error.response?.data || error.message);
     return res.status(401).json({
       success: false,
       message: 'Invalid or expired token'
@@ -185,26 +163,45 @@ async function requireAuthAPI(req, res, next) {
 // Routes
 app.get('/', requireAuth, async (req, res) => {
   try {
-    // Panggil endpoint baru yang sudah terfilter
+    // Ambil data dashboard dari Laravel dengan konteks role/division
     const dashboardDataResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
-        headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'X-User-Role': req.user?.role || '',
+        'X-User-Division': req.user?.division || ''
+      }
     });
 
-    const machinesGroupedByLine = dashboardDataResponse.data.data.machine_statuses_by_line;
+    let machinesGroupedByLine = dashboardDataResponse.data?.data?.machine_statuses_by_line || {};
+
+    // Safety filter (render-time) untuk manager agar hanya melihat line sesuai divisi
+    if (req.user && req.user.role === 'manager') {
+      const divisionToLines = {
+        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+      };
+      const allowedLines = divisionToLines[req.user.division] || [];
+      const filtered = {};
+      Object.keys(machinesGroupedByLine).forEach((lineName) => {
+        if (allowedLines.includes(lineName)) filtered[lineName] = machinesGroupedByLine[lineName];
+      });
+      machinesGroupedByLine = filtered;
+    }
 
     res.render('dashboard/index', {
-        title: 'IoT Monitoring Dashboard',
-        machinesByLine: machinesGroupedByLine, // <-- Kirim data terkelompok ke EJS
-        user: req.user, // <-- Kirim objek user lengkap untuk filtering di EJS
-        globalStats: { /* Nanti bisa diisi dari data dashboardDataResponse jika ada */ },
-        moment: moment
+      title: 'IoT Monitoring Dashboard',
+      machinesByLine: machinesGroupedByLine,
+      user: req.user,
+      globalStats: {},
+      moment: moment
     });
   } catch (error) {
     console.error('Error fetching dashboard data on initial load:', error.message);
     res.status(500).render('error', {
-        title: 'Error', // <-- TAMBAHKAN INI
-        message: 'Failed to load dashboard data. Please try again later.',
-        user: req.user || { name: 'Guest' } // Menambahkan user agar header tidak error
+      title: 'Error',
+      message: 'Failed to load dashboard data. Please try again later.',
+      user: req.user || { name: 'Guest' }
     });
   }
 });
@@ -247,6 +244,9 @@ app.post('/auth/login', async (req, res) => {
     }
     
     try {
+        console.log('Attempting login to:', `${LARAVEL_API_BASE}/login`);
+        console.log('Login data:', { username, password: '***' });
+        
         // Perbaikan: sesuaikan dengan route Laravel
         const response = await axios.post(`${LARAVEL_API_BASE}/login`, {
             username: username,
@@ -255,8 +255,11 @@ app.post('/auth/login', async (req, res) => {
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
-            }
+            },
+            timeout: 10000 // 10 second timeout
         });
+        
+        console.log('Login response:', response.data);
         
         if (response.data.success) {
             // Simpan token di session dan cookie
@@ -281,13 +284,18 @@ app.post('/auth/login', async (req, res) => {
         }
     } catch (error) {
         console.error('Login error:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Error stack:', error.stack);
         
         // Log detail error untuk debugging
         if (error.response) {
             console.error('Error status:', error.response.status);
             console.error('Error data:', error.response.data);
-            console.error('Trying URL:', `${LARAVEL_API_BASE}/auth/login`);
+            console.error('Error headers:', error.response.headers);
+        } else if (error.request) {
+            console.error('No response received:', error.request);
         }
+        console.error('Trying URL:', `${LARAVEL_API_BASE}/login`);
         
         if (error.response && error.response.status === 401) {
             res.status(401).json({
@@ -396,7 +404,11 @@ app.get('/health-check', (req, res) => {
 app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'X-User-Role': (req.user && req.user.role) || req.headers['x-user-role'] || '',
+        'X-User-Division': (req.user && req.user.division) || req.headers['x-user-division'] || ''
+      }
     });
     res.json(response.data);
   } catch (error) {
@@ -405,6 +417,62 @@ app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
       success: false, 
       message: 'Failed to fetch dashboard status',
       error: error.message 
+    });
+  }
+});
+
+// New endpoint for active problems with JOIN logic
+app.get('/api/problems/active', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/problems/active`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'X-User-Role': (req.user && req.user.role) || req.headers['x-user-role'] || '',
+        'X-User-Division': (req.user && req.user.division) || req.headers['x-user-division'] || ''
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Problems active error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Add new problem endpoint with duplicate prevention
+app.post('/api/problems/add', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/problems/add`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Add problem error:', error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Manager unresolved problems endpoint
+app.get('/api/problems/unresolved-manager', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/problems/unresolved-manager`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'X-User-Role': (req.user && req.user.role) || req.headers['x-user-role'] || '',
+        'X-User-Division': (req.user && req.user.division) || req.headers['x-user-division'] || ''
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Manager unresolved problems error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
@@ -471,11 +539,13 @@ app.get('/api/dashboard/stats', requireAuthAPI, async (req, res) => {
       requestUrl += `?${queryParams}`;
     }
 
-    // Gunakan URL yang sudah lengkap
+    // Gunakan URL yang sudah lengkap dan teruskan konteks role/division untuk konsistensi
     const response = await axios.get(requestUrl, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`, 
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-User-Role': (req.user && req.user.role) || req.headers['x-user-role'] || '',
+        'X-User-Division': (req.user && req.user.division) || req.headers['x-user-division'] || ''
       }
     });
     // === AKHIR DARI PERBAIKAN ===
@@ -901,9 +971,39 @@ function filterDataForUser(user, data) {
 
     switch (user.role) {
         case 'admin':
+            // Admin melihat semua data tanpa filter
+            return {
+                machine_statuses_by_line: filteredMachineStatuses,
+                active_problems: filteredActiveProblems,
+                new_problems: []
+            };
         case 'manager':
-            // Admin dan Manager melihat semua data
-            return data;
+            // Manager: batasi data hanya pada line yang sesuai divisinya
+            const divisionToLines = {
+                'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+                'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+                'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+            };
+
+            const allowedLines = divisionToLines[user.division] || [];
+
+            // Filter machine statuses by allowed lines
+            const ms = data.machine_statuses_by_line || {};
+            const filteredMs = {};
+            Object.keys(ms).forEach(lineName => {
+                if (allowedLines.includes(lineName)) {
+                    filteredMs[lineName] = ms[lineName];
+                }
+            });
+
+            // Filter active problems by allowed lines
+            const ap = (data.active_problems || []).filter(p => allowedLines.includes(p.line_name));
+
+            return {
+                machine_statuses_by_line: filteredMs,
+                active_problems: ap,
+                new_problems: []
+            };
 
         case 'leader':
             // Leader hanya melihat problem dari line mereka

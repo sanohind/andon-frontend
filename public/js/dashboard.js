@@ -8,6 +8,7 @@ class DashboardManager {
         this.lastNotificationTime = 0;
         this.processedNotifications = new Set();
         this.lastKnownProblems = new Set(); // Track problems for fallback detection
+        this.lastKnownUnresolvedProblems = new Set(); // Track unresolved problems for manager
         this.socketConnected = false;
         this.fallbackActive = false;
         this.lastMachineStatuses = {}; // Menyimpan data machine status yang sudah difilter
@@ -35,10 +36,6 @@ class DashboardManager {
     // Helper method to get authentication headers
     getAuthHeaders() {
         const token = this.getCookieValue('auth_token');
-        console.log('🔍 getAuthHeaders - Token:', token ? 'Present' : 'Missing');
-        if (!token) {
-            console.error('❌ No auth token found in cookies');
-        }
         return {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -202,27 +199,89 @@ class DashboardManager {
         }
     }
 
+    // Method to load active problems using new endpoint
+    async loadActiveProblems() {
+        try {
+            const token = this.getCookieValue('auth_token');
+            const response = await fetch('/api/problems/active', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'X-User-Role': this.userRole || '',
+                    'X-User-Division': this.userDivision || ''
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                return data.data;
+            } else {
+                console.error('Failed to load active problems:', data.message);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error loading active problems:', error);
+            return [];
+        }
+    }
+
+    async loadUnresolvedProblemsForManager() {
+        try {
+            const token = this.getCookieValue('auth_token');
+            const response = await fetch('/api/problems/unresolved-manager', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'X-User-Division': this.userDivision || ''
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                return data.data;
+            } else {
+                console.error('Failed to load unresolved problems for manager:', data.message);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error loading unresolved problems for manager:', error);
+            return [];
+        }
+    }
+
     // Special method for fallback with problem detection
     async loadDashboardDataWithFallbackDetection() {
         try {
+            // Load dashboard status for machine statuses
             const token = this.getCookieValue('auth_token');
             const response = await fetch('/api/dashboard/status', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-User-Role': this.userRole || '',
+                    'X-User-Division': this.userDivision || ''
                 }
             });
             const data = await response.json();
             
             if (data.success) {
+                // Load active problems using new endpoint
+                const activeProblems = await this.loadActiveProblems();
+                
+                // Load unresolved problems for manager if user is manager
+                let unresolvedProblems = [];
+                if (this.userRole === 'manager') {
+                    unresolvedProblems = await this.loadUnresolvedProblemsForManager();
+                }
+                
                 // Detect new problems in fallback mode
-                const currentProblems = data.data.active_problems || [];
+                const currentProblems = activeProblems || [];
                 const newProblems = [];
 
                 // Create problem keys for current problems
                 const currentProblemKeys = new Set();
                 currentProblems.forEach(problem => {
-                    const problemKey = `${problem.machine}-${problem.problem_type}-${problem.id}`;
+                    const problemKey = `${problem.machine_name}-${problem.tipe_problem}-${problem.id}`;
                     currentProblemKeys.add(problemKey);
                     
                     // If this problem wasn't known before, it's new
@@ -231,6 +290,22 @@ class DashboardManager {
                         console.log('🚨 New problem detected via fallback:', problem);
                     }
                 });
+
+                // Check for new unresolved problems for manager
+                if (this.userRole === 'manager') {
+                    const currentUnresolvedKeys = new Set();
+                    unresolvedProblems.forEach(problem => {
+                        const problemKey = `unresolved-${problem.machine_name}-${problem.tipe_problem}-${problem.id}`;
+                        currentUnresolvedKeys.add(problemKey);
+
+                        // If this unresolved problem wasn't known before, it's new
+                        if (!this.lastKnownUnresolvedProblems.has(problemKey)) {
+                            newProblems.push(problem);
+                            console.log('🚨 New unresolved problem detected for manager:', problem);
+                        }
+                    });
+                    this.lastKnownUnresolvedProblems = currentUnresolvedKeys;
+                }
 
                 // Update tracking
                 this.lastKnownProblems = currentProblemKeys;
@@ -242,8 +317,8 @@ class DashboardManager {
 
                 // Update UI
                 this.updateMachineStatuses(data.data.machine_statuses_by_line);
-                this.updateActiveProblems(data.data.active_problems);
-                this.updateStatsFromDashboardData(data.data);
+                this.updateActiveProblems(activeProblems);
+                this.updateStatsFromDashboardData({...data.data, active_problems: activeProblems});
                 this.updateLastUpdateTime();
                 this.loadStats(); // Refresh stats too
             } else {
@@ -279,9 +354,15 @@ class DashboardManager {
                 totalMachines += machines.length;
             });
         }
-        
+
+        // Jangan turunkan angka valid ke 0 jika data sementara kosong
+        const currentShown = Number(document.getElementById('totalMachines').textContent || 0);
+        const safeTotal = (Number.isFinite(totalMachines) && totalMachines > 0)
+            ? totalMachines
+            : (currentShown > 0 ? currentShown : totalMachines);
+
         // Update counters dengan data yang sudah difilter
-        document.getElementById('totalMachines').textContent = totalMachines;
+        document.getElementById('totalMachines').textContent = safeTotal;
         document.getElementById('activeProblems').textContent = activeProblemsCount;
         document.getElementById('criticalProblems').textContent = criticalProblemsCount;
     }
@@ -421,12 +502,10 @@ class DashboardManager {
     }
 
     updateActiveProblems(problems) {
-        console.log('🔍 updateActiveProblems called with:', problems);
         const problemsList = document.getElementById('problemsList');
         const noProblems = document.getElementById('noProblems');
 
         if (!problems || problems.length === 0) {
-            console.log('🔍 No problems to display');
             noProblems.style.display = 'block';
             const existingProblems = problemsList.querySelectorAll('.problem-item');
             existingProblems.forEach(item => item.remove());
@@ -459,14 +538,12 @@ class DashboardManager {
 
         // PERBAIKAN: Simpan data active problems yang sudah difilter untuk digunakan di loadDashboardData
         this.lastActiveProblems = filteredProblems;
-        console.log('🔍 Filtered problems:', filteredProblems);
 
         // Cek problem yang sudah 15 menit untuk manager
         this.checkLongDurationProblems(filteredProblems);
 
         // Tampilkan hasil filter
         if (filteredProblems.length === 0) {
-            console.log('🔍 No filtered problems to display');
             noProblems.style.display = 'block';
             const existingProblems = problemsList.querySelectorAll('.problem-item');
             existingProblems.forEach(item => item.remove());
@@ -493,8 +570,8 @@ class DashboardManager {
         }
         div.innerHTML = `
             <div class="problem-info">
-                <div class="problem-machine">${problem.machine}</div>
-                <div class="problem-type">${problem.problem_type}</div>
+                <div class="problem-machine">${problem.machine_name || problem.machine}</div>
+                <div class="problem-type">${problem.tipe_problem || problem.problem_type}</div>
                 <div class="problem-time">${durationText}</div>
             </div>
             <div class="problem-severity">
@@ -503,18 +580,41 @@ class DashboardManager {
         `;
 
         div.addEventListener('click', () => {
-            console.log('🔍 Problem item clicked:', { machine: problem.machine, id: problem.id });
-            this.showProblemDetail(problem.machine, problem.id);
+            this.showProblemDetail(problem.machine_name || problem.machine, problem.id);
         });
 
         return div;
     }
 
     updateStats(stats) {
-        document.getElementById('totalMachines').textContent = stats.total_machines || 5;
+        // Jangan pernah menimpa angka valid dengan 0 akibat refresh cepat
+        const backendTotal = Number(stats.total_machines);
+        const currentShown = Number(document.getElementById('totalMachines').textContent || 0);
+
+        let totalMachines;
+        if (Number.isFinite(backendTotal) && backendTotal > 0) {
+            totalMachines = backendTotal;
+        } else if (currentShown > 0) {
+            // Pertahankan angka yang sudah valid di layar
+            totalMachines = currentShown;
+        } else {
+            // Fallback ke kalkulasi dari lastMachineStatuses
+            totalMachines = this.computeTotalMachinesFromLastStatuses();
+        }
+
+        document.getElementById('totalMachines').textContent = Number.isFinite(totalMachines) ? totalMachines : 0;
         document.getElementById('activeProblems').textContent = stats.active_problems || 0;
         document.getElementById('resolvedToday').textContent = stats.resolved_today || 0;
         document.getElementById('criticalProblems').textContent = stats.critical_problems || 0;
+    }
+
+    computeTotalMachinesFromLastStatuses() {
+        let total = 0;
+        const grouped = this.lastMachineStatuses || {};
+        Object.values(grouped).forEach(machines => {
+            if (Array.isArray(machines)) total += machines.length;
+        });
+        return total;
     }
 
     updateConnectionStatus(connected) {
@@ -533,17 +633,12 @@ class DashboardManager {
     }
 
     async showProblemDetail(machine, problemId = null, machineLine = null) {
-        console.log('🔍 showProblemDetail called with:', { machine, problemId, machineLine });
-        
         const modal = document.getElementById('problemModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalFooter = document.querySelector('.modal-footer');
         
-        if (!modal || !modalTitle || !modalBody) {
-            console.error('❌ Modal elements not found');
-            return;
-        }
+        if (!modal || !modalTitle || !modalBody) return;
 
         modalTitle.textContent = `Detail - ${machine}`;
         modalBody.innerHTML = '<div class="loading">Loading...</div>';
@@ -556,17 +651,10 @@ class DashboardManager {
 
         try {
             if (problemId) {
-                console.log('🔍 Fetching problem detail for ID:', problemId);
-                const token = this.getCookieValue('auth_token');
-                console.log('🔍 Token:', token ? 'Present' : 'Missing');
-                
                 const response = await fetch(`/api/dashboard/problem/${problemId}`, {
                     headers: this.getAuthHeaders()
                 });
-                
-                console.log('🔍 Response status:', response.status);
                 const data = await response.json();
-                console.log('🔍 Response data:', data);
 
                 if (data.success) {
                     this.currentProblemId = problemId;
@@ -609,14 +697,7 @@ class DashboardManager {
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
             }
         } catch (error) {
-            console.error('❌ Error loading problem detail:', error);
-            console.error('❌ Error details:', {
-                message: error.message,
-                stack: error.stack,
-                machine,
-                problemId,
-                machineLine
-            });
+            console.error('Error loading problem detail:', error);
             modalBody.innerHTML = `<div class="error">Failed to load problem details: ${error.message}</div>`;
         }
     }
@@ -834,7 +915,9 @@ class DashboardManager {
             let ticketingButton = '';
             let resolvedButton = '';
             
-            if (this.userRole === 'maintenance' && problem.problem_type.toLowerCase() === 'machine') {
+            if ((this.userRole === 'maintenance' && problem.problem_type.toLowerCase() === 'machine') ||
+                (this.userRole === 'quality' && problem.problem_type.toLowerCase() === 'quality') ||
+                (this.userRole === 'engineering' && (problem.problem_type.toLowerCase() === 'engineering' || problem.problem_type.toLowerCase() === 'material'))) {
                 // Cek apakah sudah ada ticketing untuk problem ini
                 const hasTicketing = await this.checkTicketingExists(problem.id);
                 
@@ -857,7 +940,7 @@ class DashboardManager {
                     `;
                 }
             } else {
-                // Bukan maintenance atau bukan machine problem, langsung tampilkan resolved button
+                // Bukan maintenance/quality atau bukan machine/quality problem, langsung tampilkan resolved button
                 resolvedButton = `
                     <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
                         <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
@@ -1076,10 +1159,14 @@ class DashboardManager {
                 break;
 
             case 'manager':
-                // Manager tidak pernah melihat pop-up notifikasi problem baru
-                // Mereka hanya melihat notifikasi untuk problem ACTIVE > 15 menit
-                console.log(`🔔 Notifikasi untuk Manager disembunyikan. Mereka hanya melihat notifikasi untuk problem ACTIVE > 15 menit.`);
-                return;
+                // Manager hanya melihat notifikasi untuk problem ACTIVE > 15 menit
+                if (problem.is_manager_notification) {
+                    console.log(`🔔 Notifikasi Manager untuk problem yang tidak di-resolve > 15 menit`);
+                    break; // Lanjutkan ke notifikasi
+                } else {
+                    console.log(`🔔 Notifikasi untuk Manager disembunyikan. Mereka hanya melihat notifikasi untuk problem ACTIVE > 15 menit.`);
+                    return;
+                }
 
             default:
                 console.log('🔔 Role tidak dikenali atau tidak ada filter khusus');
@@ -1174,8 +1261,13 @@ class DashboardManager {
         case 'material':
             targetRole = 'Engineering Team';
             break;
+        case 'engineering':
+            targetRole = 'Engineering Team';
+            break;
         default:
-            targetRole = 'Unknown Team';
+            // Log untuk debugging jika ada tipe problem yang tidak dikenali
+            console.warn('Unknown problem type:', problemData.problem_type);
+            targetRole = 'Engineering Team'; // Default ke Engineering Team
     }
 
     Swal.fire({
@@ -1752,10 +1844,20 @@ class DashboardManager {
             // Show modal
             document.getElementById('ticketingModal').style.display = 'flex';
             
-            // Set current time as default for received time
+            // Set current time as default for diagnosis and repair start time
             const now = new Date();
             const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-            document.getElementById('problemReceivedAt').value = localDateTime;
+            
+            // Set default values for diagnosis and repair start time
+            const diagnosisElement = document.getElementById('diagnosisStartedAt');
+            const repairElement = document.getElementById('repairStartedAt');
+            
+            if (diagnosisElement) {
+                diagnosisElement.value = localDateTime;
+            }
+            if (repairElement) {
+                repairElement.value = localDateTime;
+            }
             
         } catch (error) {
             console.error('Error opening ticketing form:', error);
@@ -1823,6 +1925,8 @@ class DashboardManager {
             // Convert form data to JSON
             const data = {};
             for (let [key, value] of formData.entries()) {
+                // Abaikan field waktu manual yang kini diatur otomatis oleh sistem
+                if (key === 'problem_received_at' || key === 'repair_completed_at') continue;
                 data[key] = value;
             }
             
