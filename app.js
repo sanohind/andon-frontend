@@ -28,6 +28,7 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 3001;
 // Force IPv4 address to avoid IPv6 connection issues
 const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://127.0.0.1:8000/api';
+//const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
 
 // Middleware
 app.use(cors());

@@ -15,6 +15,7 @@ class DashboardManager {
         this.lastActiveProblems = []; // Menyimpan data active problems yang sudah difilter
         this.problemStartTimes = new Map(); // Track when problems started for 15-minute notification
         this.sentLongDurationNotifications = new Set(); // Track which problems already got 15-min notification
+		this.nodeRedOnline = true; // Track Node-RED core connectivity
         
         const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
@@ -44,10 +45,15 @@ class DashboardManager {
     }
 
     init() {
-        this.initSocket();
+		this.initSocket();
         this.bindEvents();
         this.loadDashboardData();
         this.loadStats();
+		// Check Node-RED core status immediately and on interval
+		this.checkNodeRedStatus();
+		setInterval(() => {
+			this.checkNodeRedStatus();
+		}, 10000);
         
         // Auto refresh every 30 seconds sebagai fallback HANYA jika socket tidak terhubung
         setInterval(() => {
@@ -75,19 +81,19 @@ class DashboardManager {
             }
         }); 
         
-        this.socket.on('connect', () => {
+		this.socket.on('connect', () => {
             console.log('✅ Connected to server');
             this.socketConnected = true;
             this.fallbackActive = false;
-            this.updateConnectionStatus(true);
+			this.refreshCompositeConnectionStatus();
             this.loadDashboardData();
             this.loadStats(); 
         });
 
-        this.socket.on('disconnect', () => {
+		this.socket.on('disconnect', () => {
             console.log('❌ Disconnected from server');
             this.socketConnected = false;
-            this.updateConnectionStatus(false);
+			this.refreshCompositeConnectionStatus();
         });
 
         this.socket.on('authError', (error) => {
@@ -627,6 +633,43 @@ class DashboardManager {
             statusElement.innerHTML = '<i class="fas fa-wifi"></i><span>Disconnected</span>';
         }
     }
+
+	// Combine socket status with Node-RED core status
+	refreshCompositeConnectionStatus() {
+		this.updateConnectionStatus(this.socketConnected && this.nodeRedOnline);
+	}
+
+	// Poll Node-RED status from device_status table via backend API
+	async checkNodeRedStatus() {
+		try {
+			const token = this.getCookieValue('auth_token');
+			const response = await fetch('http://127.0.0.1:8000/api/plc-status', {
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Accept': 'application/json',
+					'Content-Type': 'application/json'
+				}
+			});
+			const result = await response.json();
+			if (result && result.success && Array.isArray(result.data)) {
+				const node = result.data.find(d => d.device_id === 'NODE_RED_PI');
+				let online = true;
+				if (node) {
+					const lastSeen = node.last_seen ? new Date(node.last_seen) : null;
+					const now = new Date();
+					const over2min = lastSeen ? (now - lastSeen) > (2 * 60 * 1000) : true;
+					const offlineByStatus = (node.status || '').toUpperCase() === 'OFFLINE';
+					if (over2min || offlineByStatus) {
+						online = false;
+					}
+				}
+				this.nodeRedOnline = online;
+				this.refreshCompositeConnectionStatus();
+			}
+		} catch (e) {
+			console.warn('checkNodeRedStatus failed:', e);
+		}
+	}
 
     updateLastUpdateTime() {
         document.getElementById('lastUpdate').textContent = moment().format('HH:mm:ss');
