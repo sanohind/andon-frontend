@@ -16,6 +16,8 @@ class DashboardManager {
         this.problemStartTimes = new Map(); // Track when problems started for 15-minute notification
         this.sentLongDurationNotifications = new Set(); // Track which problems already got 15-min notification
 		this.nodeRedOnline = true; // Track Node-RED core connectivity
+		this.nodeRedStatus = 'unknown'; // Track Node-RED status: 'all_online', 'partial_offline', 'all_offline', 'unknown'
+		this.plcDevices = []; // Track PLC devices and their controlled tables
         
         const dashboardDataElement = document.getElementById('dashboardData');
         const userDataElement = document.getElementById('userData');
@@ -469,7 +471,16 @@ class DashboardManager {
                     return;
                 }
 
-                if (machineData) {
+                // Check if this machine is controlled by an offline PLC first
+                const isPlcOffline = this.isMachineControlledByOfflinePlc(machineName);
+                
+                if (isPlcOffline) {
+                    // PLC is offline - override any other status
+                    card.classList.remove('problem'); 
+                    light.className = 'indicator-light offline';
+                    statusText.className = 'status-text offline';
+                    statusText.innerHTML = '<i class="fas fa-power-off"></i><span>PLC Offline</span>';
+                } else if (machineData) {
                     card.classList.remove('problem'); 
 
                     // PERBAIKAN: Backend sudah melakukan role filtering, jadi kita langsung gunakan status dari backend
@@ -623,20 +634,61 @@ class DashboardManager {
         return total;
     }
 
-    updateConnectionStatus(connected) {
+    updateConnectionStatus(connected, statusClass = null, statusText = null, statusIcon = null) {
         const statusElement = document.getElementById('connectionStatus');
-        if (connected) {
-            statusElement.className = 'connection-status';
-            statusElement.innerHTML = '<i class="fas fa-wifi"></i><span>Connected</span>';
+        
+        if (statusClass && statusText && statusIcon) {
+            // Use custom status
+            statusElement.className = statusClass;
+            statusElement.innerHTML = `<i class="${statusIcon}"></i><span>${statusText}</span>`;
         } else {
-            statusElement.className = 'connection-status disconnected';
-            statusElement.innerHTML = '<i class="fas fa-wifi"></i><span>Disconnected</span>';
+            // Use default behavior
+            if (connected) {
+                statusElement.className = 'connection-status';
+                statusElement.innerHTML = '<i class="fas fa-wifi"></i><span>Connected</span>';
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                statusElement.innerHTML = '<i class="fas fa-wifi"></i><span>Disconnected</span>';
+            }
         }
     }
 
 	// Combine socket status with Node-RED core status
 	refreshCompositeConnectionStatus() {
-		this.updateConnectionStatus(this.socketConnected && this.nodeRedOnline);
+		let connectionStatus = false;
+		let statusClass = 'connection-status';
+		let statusText = 'Disconnected';
+		let statusIcon = 'fas fa-wifi';
+		
+		if (this.socketConnected) {
+			switch (this.nodeRedStatus) {
+				case 'all_online':
+					connectionStatus = true;
+					statusClass = 'connection-status';
+					statusText = 'Connected';
+					statusIcon = 'fas fa-wifi';
+					break;
+				case 'partial_offline':
+					connectionStatus = false;
+					statusClass = 'connection-status warning';
+					statusText = 'Warning - Some Node-RED Offline';
+					statusIcon = 'fas fa-exclamation-triangle';
+					break;
+				case 'all_offline':
+					connectionStatus = false;
+					statusClass = 'connection-status disconnected';
+					statusText = 'Disconnected - All Node-RED Offline';
+					statusIcon = 'fas fa-wifi';
+					break;
+				default:
+					connectionStatus = false;
+					statusClass = 'connection-status disconnected';
+					statusText = 'Disconnected';
+					statusIcon = 'fas fa-wifi';
+			}
+		}
+		
+		this.updateConnectionStatus(connectionStatus, statusClass, statusText, statusIcon);
 	}
 
 	// Poll Node-RED status from device_status table via backend API
@@ -652,23 +704,78 @@ class DashboardManager {
 			});
 			const result = await response.json();
 			if (result && result.success && Array.isArray(result.data)) {
-				const node = result.data.find(d => d.device_id === 'NODE_RED_PI');
-				let online = true;
-				if (node) {
-					const lastSeen = node.last_seen ? new Date(node.last_seen) : null;
+				// Find all NODE_RED_PI devices
+				const nodeRedDevices = result.data.filter(d => d.device_id.includes('NODE_RED_PI'));
+				
+				// Store all PLC devices for inspect table status checking
+				this.plcDevices = result.data.filter(d => d.device_id.startsWith('PLC'));
+				
+				if (nodeRedDevices.length === 0) {
+					this.nodeRedStatus = 'unknown';
+				} else {
 					const now = new Date();
-					const over2min = lastSeen ? (now - lastSeen) > (2 * 60 * 1000) : true;
-					const offlineByStatus = (node.status || '').toUpperCase() === 'OFFLINE';
-					if (over2min || offlineByStatus) {
-						online = false;
+					let onlineCount = 0;
+					let offlineCount = 0;
+					
+					nodeRedDevices.forEach(node => {
+						const lastSeen = node.last_seen ? new Date(node.last_seen) : null;
+						const over1min = lastSeen ? (now - lastSeen) > (1 * 60 * 1000) : true;
+						const offlineByStatus = (node.status || '').toUpperCase() === 'OFFLINE';
+						
+						if (over1min || offlineByStatus) {
+							offlineCount++;
+						} else {
+							onlineCount++;
+						}
+					});
+					
+					// Determine overall status
+					if (offlineCount === 0) {
+						this.nodeRedStatus = 'all_online';
+					} else if (onlineCount === 0) {
+						this.nodeRedStatus = 'all_offline';
+					} else {
+						this.nodeRedStatus = 'partial_offline';
 					}
 				}
-				this.nodeRedOnline = online;
+				
 				this.refreshCompositeConnectionStatus();
 			}
 		} catch (e) {
 			console.warn('checkNodeRedStatus failed:', e);
 		}
+	}
+
+	// Check if a machine is controlled by an offline PLC
+	isMachineControlledByOfflinePlc(machineName) {
+		if (!this.plcDevices || this.plcDevices.length === 0) return false;
+		
+		const now = new Date();
+		
+		for (const plc of this.plcDevices) {
+			const lastSeen = plc.last_seen ? new Date(plc.last_seen) : null;
+			const over1min = lastSeen ? (now - lastSeen) > (1 * 60 * 1000) : true;
+			const offlineByStatus = (plc.status || '').toUpperCase() === 'OFFLINE';
+			const isOffline = over1min || offlineByStatus;
+			
+			if (isOffline && plc.controlled_tables) {
+				let controlledTables = [];
+				try {
+					controlledTables = typeof plc.controlled_tables === 'string' 
+						? JSON.parse(plc.controlled_tables) 
+						: plc.controlled_tables;
+				} catch (e) {
+					console.warn('Failed to parse controlled_tables for PLC:', plc.device_id);
+					continue;
+				}
+				
+				if (controlledTables.includes(machineName)) {
+					return true;
+				}
+			}
+		}
+		
+		return false;
 	}
 
     updateLastUpdateTime() {
@@ -814,16 +921,37 @@ class DashboardManager {
     createMachineDetailHTML(machine, machineStatus) {
         console.log('Creating new detail HTML for:', machine, machineStatus);
         
-        const isProblem = machineStatus.status === 'problem';
-        const statusClass = isProblem ? 'status-problem' : 'status-normal';
-        const statusIcon = isProblem ? 'fa-exclamation-triangle' : 'fa-check-circle';
-        const statusText = isProblem ? (machineStatus.problem_type || 'Problem') : 'Normal Operation';
+        // Check if this machine is controlled by an offline PLC first
+        const isPlcOffline = this.isMachineControlledByOfflinePlc(machine);
+        
+        let isProblem, statusClass, statusIcon, statusText;
+        
+        if (isPlcOffline) {
+            // PLC is offline - override any other status
+            isProblem = false;
+            statusClass = 'status-offline';
+            statusIcon = 'fa-power-off';
+            statusText = 'PLC Offline';
+        } else {
+            // Normal logic for problem/normal status
+            isProblem = machineStatus.status === 'problem';
+            statusClass = isProblem ? 'status-problem' : 'status-normal';
+            statusIcon = isProblem ? 'fa-exclamation-triangle' : 'fa-check-circle';
+            statusText = isProblem ? (machineStatus.problem_type || 'Problem') : 'Normal Operation';
+        }
 
         const lastCheck = machineStatus.last_check ? moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss') : 'N/A';
         const lineName = machineStatus.line_name || 'N/A';
 
         let messageBoxHTML = '';
-        if (isProblem) {
+        if (isPlcOffline) {
+            messageBoxHTML = `
+                <div class="system-message system-offline">
+                    <h4><i class="fas fa-power-off"></i> PLC Offline</h4>
+                    <p>Machine ${machine} is offline because its controlling PLC is not responding.</p>
+                </div>
+            `;
+        } else if (isProblem) {
             messageBoxHTML = `
                 <div class="system-message system-problem">
                     <h4><i class="fas fa-exclamation-triangle"></i> Problem Detected!</h4>

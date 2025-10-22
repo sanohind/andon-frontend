@@ -134,6 +134,10 @@ body {
     color: var(--danger-color);
 }
 
+.connection-status.warning {
+    color: var(--warning-color);
+}
+
 .last-update {
     font-size: 0.9rem;
     color: var(--dark-color);
@@ -290,6 +294,11 @@ body {
     animation: pulse-red 1.5s infinite;
 }
 
+.indicator-light.offline {
+    background: #6c757d;
+    box-shadow: 0 0 10px rgba(108, 117, 125, 0.5);
+}
+
 @keyframes pulse-red {
     0%, 100% { 
         transform: scale(1);
@@ -347,6 +356,10 @@ body {
 
 .status-text.problem {
     color: var(--danger-color);
+}
+
+.status-text.offline {
+    color: #6c757d;
 }
 
 .machine-details {
@@ -1158,6 +1171,11 @@ body {
     color: #721c24;
 }
 
+.status-badge.status-offline {
+    background-color: #e2e3e5;
+    color: #6c757d;
+}
+
 .modal-description {
     font-size: 0.95em;
     color: #666;
@@ -1210,6 +1228,11 @@ body {
     color: #721c24;
 }
 
+.detail-list .status-value.status-offline {
+    font-weight: bold;
+    color: #6c757d;
+}
+
 .system-message {
     padding: 15px;
     border-radius: 5px;
@@ -1238,6 +1261,12 @@ body {
     background-color: #f8d7da;
     border-color: #f5c6cb;
     color: #721c24;
+}
+
+.system-message.system-offline {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
 }
 
 /* Forward Problem Status Badges */

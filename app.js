@@ -683,6 +683,16 @@ app.delete('/api/plc-status/:id', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Inspection tables proxy route - no auth required
+app.get('/api/inspection-tables', async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`);
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Failed to fetch inspection tables' });
+  }
+});
+
 app.get('/users', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).send('Akses Ditolak');

@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const lastSeen = new Date(device.last_seen);
         const timeDiff = (now - lastSeen) / 1000 / 60; // difference in minutes
 
-        // Check if device is NODE_RED_PI and last_seen > 2 minutes
-        if (device.device_id === 'NODE_RED_PI' && timeDiff > 2) {
+        // Check if device is NODE_RED_PI and last_seen > 1 minute
+        if (device.device_id === 'NODE_RED_PI' && timeDiff > 1) {
             return {
                 status: 'OFFLINE',
                 class: 'offline',
@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchPlcStatus();
 
         // Set up interval for every 10 seconds
-        refreshInterval = setInterval(fetchPlcStatus, 10000);
+        refreshInterval = setInterval(fetchPlcStatus, 5000);
     }
 
     // Function to stop auto-refresh
@@ -281,6 +281,12 @@ function openAddDeviceModal() {
     document.getElementById('modalTitle').textContent = 'Add New Device';
     document.getElementById('deviceForm').reset();
     document.getElementById('deviceId').value = '';
+    
+    // Load inspection tables and reset selection
+    selectedTableNames = [];
+    loadInspectionTables();
+    renderSelectedTables();
+    
     document.getElementById('deviceModal').style.display = 'flex';
 }
 
@@ -297,6 +303,11 @@ function editDevice(deviceId) {
     document.getElementById('deviceNameInput').value = device.device_name || '';
     document.getElementById('statusSelect').value = device.status;
     document.getElementById('detailsInput').value = device.details || '';
+    
+    // Load inspection tables and initialize selection
+    loadInspectionTables();
+    initializeSelectedTables(device.controlled_tables || '');
+    
     document.getElementById('deviceModal').style.display = 'flex';
 }
 
@@ -335,6 +346,9 @@ async function saveDevice() {
             : '/api/plc-status';
         
         const method = isEdit ? 'PUT' : 'POST';
+        
+        // Add controlled_tables from selectedTableNames
+        data.controlled_tables = JSON.stringify(selectedTableNames);
         
         const response = await fetch(url, {
             method: method,
@@ -431,4 +445,137 @@ function updateSortIcon() {
         sortIcon.parentElement.classList.remove('asc');
         sortIcon.parentElement.classList.add('desc');
     }
+}
+
+// Global variables for multi-select
+let allInspectionTables = [];
+let selectedTableNames = [];
+
+// Load inspection tables when modal opens
+async function loadInspectionTables() {
+    console.log('Loading inspection tables...');
+    try {
+        const response = await fetch('/api/inspection-tables');
+        console.log('Response status:', response.status);
+        const result = await response.json();
+        console.log('API result:', result);
+        
+        if (result.success) {
+            allInspectionTables = result.data;
+            console.log('Loaded tables:', allInspectionTables);
+            renderTableOptions();
+        } else {
+            console.error('Failed to load inspection tables:', result.message);
+            document.getElementById('tableOptions').innerHTML = '<div class="loading-tables">Failed to load tables: ' + result.message + '</div>';
+        }
+    } catch (error) {
+        console.error('Error loading inspection tables:', error);
+        document.getElementById('tableOptions').innerHTML = '<div class="loading-tables">Error loading tables: ' + error.message + '</div>';
+    }
+}
+
+// Render table options
+function renderTableOptions() {
+    console.log('Rendering table options...');
+    const container = document.getElementById('tableOptions');
+    if (!container) {
+        console.error('tableOptions container not found');
+        return;
+    }
+    
+    const searchTerm = document.getElementById('tableSearchInput').value.toLowerCase();
+    console.log('Search term:', searchTerm);
+    console.log('All tables:', allInspectionTables);
+    
+    const filteredTables = allInspectionTables.filter(table => 
+        table.name.toLowerCase().includes(searchTerm) ||
+        (table.line_name && table.line_name.toLowerCase().includes(searchTerm))
+    );
+    
+    console.log('Filtered tables:', filteredTables);
+    
+    if (filteredTables.length === 0) {
+        container.innerHTML = '<div class="loading-tables">No tables found</div>';
+        return;
+    }
+    
+    container.innerHTML = filteredTables.map(table => `
+        <div class="table-option ${selectedTableNames.includes(table.name) ? 'selected' : ''}" 
+             onclick="toggleTableSelection('${table.name}')">
+            <input type="checkbox" ${selectedTableNames.includes(table.name) ? 'checked' : ''} 
+                   onchange="toggleTableSelection('${table.name}')">
+            <div class="table-option-info">
+                <div class="table-option-name">${table.name}</div>
+                <div class="table-option-details">Line: ${table.line_name || 'N/A'} | Division: ${table.division || 'N/A'}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Toggle table selection
+function toggleTableSelection(tableName) {
+    const index = selectedTableNames.indexOf(tableName);
+    if (index > -1) {
+        selectedTableNames.splice(index, 1);
+    } else {
+        selectedTableNames.push(tableName);
+    }
+    renderTableOptions();
+    renderSelectedTables();
+}
+
+// Render selected tables
+function renderSelectedTables() {
+    const container = document.getElementById('selectedList');
+    if (selectedTableNames.length === 0) {
+        container.innerHTML = '<span style="color: #999; font-style: italic;">No tables selected</span>';
+        return;
+    }
+    
+    container.innerHTML = selectedTableNames.map(tableName => `
+        <div class="selected-item">
+            ${tableName}
+            <button type="button" class="remove-btn" onclick="removeTableSelection('${tableName}')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+// Remove table selection
+function removeTableSelection(tableName) {
+    const index = selectedTableNames.indexOf(tableName);
+    if (index > -1) {
+        selectedTableNames.splice(index, 1);
+        renderTableOptions();
+        renderSelectedTables();
+    }
+}
+
+// Filter tables based on search
+function filterTables() {
+    renderTableOptions();
+}
+
+// Clear table search
+function clearTableSearch() {
+    document.getElementById('tableSearchInput').value = '';
+    renderTableOptions();
+}
+
+// Initialize selected tables from JSON
+function initializeSelectedTables(jsonString) {
+    selectedTableNames = [];
+    if (jsonString) {
+        try {
+            const parsed = JSON.parse(jsonString);
+            if (Array.isArray(parsed)) {
+                selectedTableNames = parsed;
+            }
+        } catch (e) {
+            console.warn('Failed to parse controlled_tables JSON:', e);
+        }
+    }
+    renderTableOptions();
+    renderSelectedTables();
 }
