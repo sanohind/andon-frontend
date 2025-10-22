@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to fetch PLC status from API
     async function fetchPlcStatus() {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/plc-status', {
+            const response = await fetch('/api/plc-status', {
                 headers: getAuthHeaders()
             });
             
@@ -331,8 +331,8 @@ async function saveDevice() {
     try {
         const isEdit = data.id && data.id !== '';
         const url = isEdit 
-            ? `http://127.0.0.1:8000/api/plc-status/${data.id}`
-            : 'http://127.0.0.1:8000/api/plc-status';
+            ? `/api/plc-status/${data.id}`
+            : '/api/plc-status';
         
         const method = isEdit ? 'PUT' : 'POST';
         
@@ -361,7 +361,7 @@ async function confirmDelete() {
     if (!deviceToDelete) return;
 
     try {
-        const response = await fetch(`http://127.0.0.1:8000/api/plc-status/${deviceToDelete}`, {
+        const response = await fetch(`/api/plc-status/${deviceToDelete}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });

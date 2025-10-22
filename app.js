@@ -638,6 +638,51 @@ app.get('/api/dashboard/plc-status', requireAuthAPI, async (req, res) => {
   }
 });
 
+// PLC Status CRUD Proxy Routes
+app.get('/api/plc-status', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/plc-status`, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch PLC status' });
+  }
+});
+
+app.post('/api/plc-status', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/plc-status`, req.body, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Failed to create PLC device' });
+  }
+});
+
+app.put('/api/plc-status/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/plc-status/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Failed to update PLC device' });
+  }
+});
+
+app.delete('/api/plc-status/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/plc-status/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session.token}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Failed to delete PLC device' });
+  }
+});
+
 app.get('/users', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).send('Akses Ditolak');

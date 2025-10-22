@@ -643,7 +643,7 @@ class DashboardManager {
 	async checkNodeRedStatus() {
 		try {
 			const token = this.getCookieValue('auth_token');
-			const response = await fetch('http://127.0.0.1:8000/api/plc-status', {
+			const response = await fetch('/api/plc-status', {
 				headers: {
 					'Authorization': `Bearer ${token}`,
 					'Accept': 'application/json',
@@ -1445,7 +1445,7 @@ class DashboardManager {
                     // Get problem detail untuk cek tipe problem
                     try {
                         const token = this.getCookieValue('auth_token');
-                        const problemResponse = await fetch(`http://localhost:8000/api/dashboard/problem/${problemId}`, {
+                        const problemResponse = await fetch(`/api/dashboard/problem/${problemId}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Accept': 'application/json',
@@ -2040,7 +2040,7 @@ class DashboardManager {
         
         try {
             const token = this.getCookieValue('auth_token');
-            const response = await fetch(`http://localhost:8000/api/dashboard/problem/${this.currentProblemId}`, {
+            const response = await fetch(`/api/dashboard/problem/${this.currentProblemId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json',
