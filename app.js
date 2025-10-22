@@ -30,6 +30,15 @@ const PORT = process.env.PORT || 3001;
 const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://127.0.0.1:8000/api';
 //const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
 
+// Debug environment variables (can be removed in production)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('=== ENVIRONMENT DEBUG ===');
+  console.log('PORT:', PORT);
+  console.log('LARAVEL_API_BASE:', LARAVEL_API_BASE);
+  console.log('LARAVEL_API_TOKEN exists:', !!process.env.LARAVEL_API_TOKEN);
+  console.log('=== END ENVIRONMENT DEBUG ===');
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -796,16 +805,48 @@ app.delete('/api/users/:id', requireAuth, async (req, res) => {
 app.get('/inspect-tables', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
   try {
-    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
-    });
+    console.log('Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
+    
+    // Prepare headers
+    const headers = {};
+    if (process.env.LARAVEL_API_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.LARAVEL_API_TOKEN}`;
+    }
+    
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, { headers });
+    
+    console.log('Response status:', response.status);
+    console.log('Response data:', response.data);
+    
+    // Handle the response format: {"success":true,"data":[...]}
+    let tableList = [];
+    if (response.data && response.data.success && response.data.data) {
+      tableList = response.data.data;
+      console.log('Extracted tableList:', tableList.length, 'items');
+    } else if (Array.isArray(response.data)) {
+      tableList = response.data;
+      console.log('Using response.data directly:', tableList.length, 'items');
+    } else {
+      console.log('Unknown response format, using empty array');
+      tableList = [];
+    }
+    
     res.render('dashboard/inspect-tables', {
       title: 'Manage Inspect Tables',
       user: req.user,
-      tableList: response.data
+      tableList: tableList
     });
   } catch (error) {
-    res.status(500).send('Gagal mengambil data meja inspect.');
+    console.error('Error fetching inspection tables:', error.message);
+    console.error('Error response:', error.response?.data);
+    console.error('Error status:', error.response?.status);
+    
+    // If API fails, render with empty table list for debugging
+    res.render('dashboard/inspect-tables', {
+      title: 'Manage Inspect Tables',
+      user: req.user,
+      tableList: []
+    });
   }
 });
 
@@ -813,11 +854,25 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
 app.get('/api/inspect-tables', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
-    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
-    });
-    res.json(response.data);
+    console.log('API: Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
+    
+    // Prepare headers
+    const headers = {};
+    if (process.env.LARAVEL_API_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.LARAVEL_API_TOKEN}`;
+    }
+    
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, { headers });
+    console.log('API: Response status:', response.status);
+    console.log('API: Response data:', response.data);
+    
+    // Handle the response format: {"success":true,"data":[...]}
+    const tableList = response.data && response.data.data ? response.data.data : (response.data || []);
+    res.json(tableList);
   } catch (error) {
+    console.error('API: Error fetching inspection tables:', error.message);
+    console.error('API: Error response:', error.response?.data);
+    console.error('API: Error status:', error.response?.status);
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
@@ -851,6 +906,19 @@ app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+// RUTE PROXY API UNTUK UPDATE MEJA BY ADDRESS
+app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
     });
     res.json(response.data);

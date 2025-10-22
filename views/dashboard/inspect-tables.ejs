@@ -173,18 +173,27 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <% tableList.forEach(table => { %>
-                        <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>">
-                            <td><%= table.name %></td>
-                            <td><%= table.division || 'N/A' %></td>
-                            <td><%= table.line_name %></td>
-                            <td><%= table.address %></td>
-                            <td>
-                                <button class="btn-edit">Edit</button>
-                                <button class="btn-delete">Hapus</button>
+                    <% if (tableList && tableList.length > 0) { %>
+                        <% tableList.forEach(table => { %>
+                            <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>">
+                                <td><%= table.name %></td>
+                                <td><%= table.division || 'N/A' %></td>
+                                <td><%= table.line_name %></td>
+                                <td><%= table.address %></td>
+                                <td>
+                                    <button class="btn-edit">Edit</button>
+                                    <button class="btn-delete">Hapus</button>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } else { %>
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 20px; color: #666;">
+                                Tidak ada data meja inspect. 
+                                <br><small>Debug: tableList = <%= JSON.stringify(tableList) %></small>
                             </td>
                         </tr>
-                    <% }) %>
+                    <% } %>
                 </tbody>
             </table>
         </div>
