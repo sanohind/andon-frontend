@@ -183,6 +183,8 @@
                                 <td>
                                     <button class="btn-edit">Edit</button>
                                     <button class="btn-delete">Hapus</button>
+                                    <button class="btn-set-target">Set Target</button>
+                                    <button class="btn-set-cycle">Set Cycle</button>
                                 </td>
                             </tr>
                         <% }) %>
@@ -235,6 +237,55 @@
         <div class="modal-footer">
             <button type="button" id="cancelEditTableFooter" class="btn btn-secondary">Batal</button>
             <button type="submit" form="editTableForm" class="btn btn-primary">Simpan</button>
+        </div>
+    </div>
+</div>
+
+<!-- Set Target Modal -->
+<div class="modal" id="setTargetModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Set Target Quantity</h3>
+            <button type="button" class="modal-close" id="cancelSetTarget">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="setTargetForm">
+                <input type="hidden" id="setTargetAddress">
+                <div class="form-group">
+                    <label for="targetQuantityInput">Target Quantity</label>
+                    <input type="number" id="targetQuantityInput" min="0" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelSetTargetFooter" class="btn btn-secondary">Batal</button>
+            <button type="submit" form="setTargetForm" class="btn btn-primary">Simpan</button>
+        </div>
+    </div>
+    
+<!-- Set Cycle Modal -->
+    <div class="modal-content" id="setCycleModalContent" style="display:none;"></div>
+</div>
+
+<!-- Set Cycle Modal (separate) -->
+<div class="modal" id="setCycleModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Set Cycle Time</h3>
+            <button type="button" class="modal-close" id="cancelSetCycle">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="setCycleForm">
+                <input type="hidden" id="setCycleAddress">
+                <div class="form-group">
+                    <label for="cycleTimeInput">Cycle Time (detik)</label>
+                    <input type="number" id="cycleTimeInput" min="0" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelSetCycleFooter" class="btn btn-secondary">Batal</button>
+            <button type="submit" form="setCycleForm" class="btn btn-primary">Simpan</button>
         </div>
     </div>
 </div>

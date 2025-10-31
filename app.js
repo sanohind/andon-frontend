@@ -927,6 +927,55 @@ app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res)
   }
 });
 
+// Tambahan proxy untuk Set Target & Set Cycle & Metrics
+app.put('/api/inspection-tables/address/:address/target', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/target`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+app.put('/api/inspection-tables/address/:address/cycle', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/cycle`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+app.get('/api/inspection-tables/metrics', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables/metrics`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
+// Tambahkan proxy konsisten untuk POST inspection-tables
+app.post('/api/inspection-tables', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data);
+  }
+});
+
 app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
     try {
         const machineName = req.params.name;

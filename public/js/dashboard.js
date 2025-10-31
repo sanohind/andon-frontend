@@ -26,6 +26,7 @@ class DashboardManager {
         this.userDivision = userDataElement ? userDataElement.dataset.division : null;
         this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
 
+        this.metricsByAddress = new Map();
         this.init();
     }
 
@@ -51,6 +52,10 @@ class DashboardManager {
         this.bindEvents();
         this.loadDashboardData();
         this.loadStats();
+
+        // Load table metrics (target, cycle, oee) and refresh periodically
+        this.loadTableMetrics();
+        setInterval(() => this.loadTableMetrics(), 60000);
 		// Check Node-RED core status immediately and on interval
 		this.checkNodeRedStatus();
 		setInterval(() => {
@@ -69,6 +74,38 @@ class DashboardManager {
         }, 30000); // 30 detik untuk fallback
         
         console.log('🚀 Dashboard Manager initialized');
+    }
+
+    async loadTableMetrics() {
+        try {
+            const res = await fetch('/api/inspection-tables/metrics', { headers: this.getAuthHeaders() });
+            const json = await res.json();
+            if (!res.ok || !json.success) return;
+            this.metricsByAddress.clear();
+            // Build maps by address and by name for robust lookup
+            this.metricsByName = new Map();
+            json.data.forEach(item => {
+                if (item.address) this.metricsByAddress.set(item.address, item);
+                if (item.name) this.metricsByName.set(item.name, item);
+            });
+
+            // Update UI for all cards using current metrics
+            document.querySelectorAll('.machine-card').forEach(card => {
+                const machineName = card.getAttribute('data-machine');
+                const lineName = card.getAttribute('data-line');
+                const machineId = (machineName || '').replace(/ /g, '');
+                // Try lookup by address, then by display name
+                let metrics = this.metricsByAddress.get(machineName);
+                if (!metrics) metrics = this.metricsByName?.get(machineName);
+                if (!metrics) return;
+                const targetEl = document.getElementById(`target-${machineId}-line-${lineName}`);
+                const oeeEl = document.getElementById(`oee-${machineId}-line-${lineName}`);
+                if (targetEl) targetEl.textContent = metrics.target_quantity ?? '-';
+                if (oeeEl) oeeEl.textContent = (metrics.oee != null) ? `${Number(metrics.oee).toFixed(2)}%` : '-';
+            });
+        } catch (e) {
+            console.warn('Unable to load table metrics', e);
+        }
     }
 
     initSocket() {
@@ -507,6 +544,27 @@ class DashboardManager {
                 if (quantityEl) {
                     quantityEl.textContent = (machineData && machineData.quantity !== undefined) ? machineData.quantity : '0';
                 }
+
+                // Update target and OEE if metrics are available
+                try {
+                    let metrics = this.metricsByAddress?.get(machineName);
+                    if (!metrics) metrics = this.metricsByName?.get(machineName);
+                    const targetEl = document.getElementById(`target-${machineId}-line-${machineLineName}`);
+                    const oeeEl = document.getElementById(`oee-${machineId}-line-${machineLineName}`);
+                    if (metrics && targetEl) targetEl.textContent = metrics.target_quantity ?? '-';
+
+                    // Real-time OEE: compute from current actual quantity and cached cycle_time
+                    if (metrics && oeeEl) {
+                        const cycle = Number(metrics.cycle_time);
+                        const actual = Number((machineData && machineData.quantity !== undefined) ? machineData.quantity : 0);
+                        if (cycle > 0) {
+                            const oee = ((actual * cycle) / (8 * 3600)) * 100;
+                            oeeEl.textContent = `${oee.toFixed(2)}%`;
+                        } else {
+                            oeeEl.textContent = '-';
+                        }
+                    }
+                } catch (_) {}
 
                 const lastCheckEl = document.getElementById(`lastcheck-${machineId}-line-${machineLineName}`);
                 if (lastCheckEl && machineData && machineData.last_check) {
@@ -1019,6 +1077,9 @@ class DashboardManager {
                 break;
             case 'quality':
                 targetRole = 'Quality Control';
+                break;
+            case 'engineering':
+                targetRole = 'Engineering';
                 break;
             case 'material':
                 targetRole = 'Engineering';
