@@ -56,10 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
         editId.setAttribute('data-address', address);
         editName.value = name;
         editDivision.value = division || '';
-        editLine.value = lineName || '';
         
         // Update line options based on division
         updateLineOptions(editDivision, editLine);
+        
+        // Set the line value after options are updated
+        editLine.value = lineName || '';
         
         editModal.classList.add('show');
     }
@@ -96,11 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!name || !division || !lineName) return;
         try {
             console.log('Updating table with address:', address);
-            console.log('Update payload:', { name });
+            console.log('Update payload:', { name, division, line_name: lineName });
             const response = await fetch(`/api/inspection-tables/address/${address}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name }),
+                body: JSON.stringify({ name, division, line_name: lineName }),
             });
             console.log('Update response status:', response.status);
             const result = await response.json();
