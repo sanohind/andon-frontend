@@ -134,11 +134,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle edit/delete buttons
     userTableBody.addEventListener('click', async (e) => {
         const target = e.target;
-        const row = target.closest('tr');
+        // Get the button element if clicked on icon
+        const button = target.closest('.btn-edit-user, .btn-delete-user') || target;
+        const row = button.closest('tr');
         if (!row) return;
         const id = row.dataset.id;
 
-        if (target.classList.contains('btn-edit-user')) {
+        if (button.classList.contains('btn-edit-user')) {
             const user = {
                 id,
                 name: row.cells[0].textContent,
@@ -150,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             openEditUserModal(user);
         }
 
-        if (target.classList.contains('btn-delete-user')) {
+        if (button.classList.contains('btn-delete-user')) {
             if (!confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
             try {
                 console.log('Deleting user with ID:', id);

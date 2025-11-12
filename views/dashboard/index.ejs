@@ -138,7 +138,7 @@
                         <div class="machines-grid" id="line-<%= lineNumber %>-machines">
                             <% machinesByLine[lineNumber].forEach(machine => { %>
                                 <!-- PERBAIKAN: Ubah onclick parameter agar lebih eksplisit -->
-                                <div class="machine-card compact<%= machine.status === 'problem' ? ' problem' : '' %>" 
+                                <div class="machine-card compact<%= machine.status === 'problem' ? ' problem' : (machine.status === 'warning' ? ' warning' : '') %>" 
                                     data-machine="<%= machine.name %>" 
                                     data-line="<%= machine.line_name %>" 
                                     onclick="showProblemDetail('<%= machine.name %>', null, '<%= machine.line_name %>')">                                   

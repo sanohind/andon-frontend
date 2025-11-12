@@ -288,9 +288,19 @@ body {
     animation: pulse-border 2s infinite;
 }
 
+.machine-card.warning {
+    border-left: 5px solid var(--warning-color);
+    animation: pulse-border-yellow 2s infinite;
+}
+
 @keyframes pulse-border {
     0%, 100% { border-left-color: var(--danger-color); }
     50% { border-left-color: #ff6b6b; }
+}
+
+@keyframes pulse-border-yellow {
+    0%, 100% { border-left-color: var(--warning-color); }
+    50% { border-left-color: #ffc107; }
 }
 
 .machine-header {
@@ -329,6 +339,12 @@ body {
     animation: pulse-red 1.5s infinite;
 }
 
+.indicator-light.warning {
+    background: var(--warning-color);
+    box-shadow: 0 0 20px rgba(233, 150, 18, 0.8);
+    animation: pulse-yellow 1.5s infinite;
+}
+
 .indicator-light.offline {
     background: #6c757d;
     box-shadow: 0 0 10px rgba(108, 117, 125, 0.5);
@@ -342,6 +358,17 @@ body {
     50% { 
         transform: scale(1.1);
         box-shadow: 0 0 30px rgba(231, 76, 60, 1);
+    }
+}
+
+@keyframes pulse-yellow {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 20px rgba(233, 150, 18, 0.8);
+    }
+    50% { 
+        transform: scale(1.1);
+        box-shadow: 0 0 30px rgba(233, 150, 18, 1);
     }
 }
 
@@ -391,6 +418,10 @@ body {
 
 .status-text.problem {
     color: var(--danger-color);
+}
+
+.status-text.warning {
+    color: var(--warning-color);
 }
 
 .status-text.offline {
@@ -1184,6 +1215,11 @@ body {
     font-weight: 600;
 }
 
+.status-text.warning {
+    color: var(--warning-color, #e99612); /* Warna kuning */
+    font-weight: 600;
+}
+
 .hidden {
     display: none !important; /* Gunakan !important untuk memastikan aturan ini menang */
 }
@@ -1232,6 +1268,11 @@ body {
 .status-badge.status-normal {
     background-color: #d4edda;
     color: #155724;
+}
+
+.status-badge.status-warning {
+    background-color: #fff3cd;
+    color: #856404;
 }
 
 .status-badge.status-problem {
@@ -1291,6 +1332,11 @@ body {
     color: #155724;
 }
 
+.detail-list .status-value.status-warning {
+    font-weight: bold;
+    color: #856404;
+}
+
 .detail-list .status-value.status-problem {
     font-weight: bold;
     color: #721c24;
@@ -1323,6 +1369,12 @@ body {
     background-color: #e2f0e5;
     border-color: #c3e6cb;
     color: #155724;
+}
+
+.system-message.system-warning {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
 }
 
 .system-message.system-problem {

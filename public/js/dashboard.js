@@ -389,7 +389,27 @@ class DashboardManager {
         }
         // Untuk role lain (admin, maintenance, quality, engineering) tidak difilter
         
-        const activeProblemsCount = activeProblems.length;
+        // Count cycle-based problems from machine statuses
+        // Only count machines where the problem is caused by cycle threshold (not from log)
+        let cycleBasedProblemsCount = 0;
+        if (dashboardData.machine_statuses_by_line) {
+            Object.values(dashboardData.machine_statuses_by_line).forEach(machines => {
+                machines.forEach(machine => {
+                    // Check if machine has cycle-based problem status
+                    // Status must be 'problem' AND cycle_based_status must also be 'problem'
+                    // AND problem_type should be 'Cycle Time' (to distinguish from log problems)
+                    if (machine.status === 'problem' && 
+                        machine.cycle_based_status && 
+                        machine.cycle_based_status.status === 'problem' &&
+                        machine.problem_type === 'Cycle Time') {
+                        cycleBasedProblemsCount++;
+                    }
+                });
+            });
+        }
+        
+        // Total active problems = log problems + cycle-based problems
+        const activeProblemsCount = activeProblems.length + cycleBasedProblemsCount;
         const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
         
         // Hitung total machines dari data yang ada
@@ -513,27 +533,53 @@ class DashboardManager {
                 
                 if (isPlcOffline) {
                     // PLC is offline - override any other status
-                    card.classList.remove('problem'); 
+                    card.classList.remove('problem', 'warning'); 
                     light.className = 'indicator-light offline';
                     statusText.className = 'status-text offline';
                     statusText.innerHTML = '<i class="fas fa-power-off"></i><span>PLC Offline</span>';
                 } else if (machineData) {
-                    card.classList.remove('problem'); 
+                    card.classList.remove('problem', 'warning'); 
 
                     // PERBAIKAN: Backend sudah melakukan role filtering, jadi kita langsung gunakan status dari backend
+                    // Debug logging for cycle-based status
+                    if (machineData.cycle_based_status && machineData.cycle_based_status.status !== 'normal') {
+                        console.log(`[${machineName}] Cycle-based status:`, {
+                            status: machineData.status,
+                            cycle_status: machineData.cycle_based_status.status,
+                            cycles_elapsed: machineData.cycle_based_status.cycles_elapsed,
+                            warning_threshold: machineData.cycle_based_status.warning_threshold,
+                            problem_threshold: machineData.cycle_based_status.problem_threshold
+                        });
+                    }
+                    
                     if (machineData.status === 'problem') {
                         card.classList.add('problem');
                         light.className = 'indicator-light problem';
                         statusText.className = 'status-text problem'; 
-                        statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${machineData.problem_type || 'Unknown'}</span>`;
+                        statusText.style.display = '';
+                        const problemType = machineData.problem_type || 'Unknown';
+                        const cycleInfo = machineData.cycle_based_status?.status === 'problem' 
+                            ? ` (${machineData.cycle_based_status.cycles_without_increase} cycles)` 
+                            : '';
+                        statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${problemType}${cycleInfo}</span>`;
+                    } else if (machineData.status === 'warning') {
+                        card.classList.add('warning');
+                        light.className = 'indicator-light warning';
+                        statusText.className = 'status-text warning';
+                        statusText.style.display = '';
+                        const cycleInfo = machineData.cycle_based_status 
+                            ? ` (${machineData.cycle_based_status.cycles_without_increase} cycles)` 
+                            : '';
+                        statusText.innerHTML = `<i class="fas fa-exclamation-circle"></i><span>Warning - Quantity tidak bertambah${cycleInfo}</span>`;
                     } else {
                         light.className = 'indicator-light normal';
                         statusText.className = 'status-text normal'; 
+                        statusText.style.display = '';
                         statusText.innerHTML = `<i class="fas fa-check-circle"></i><span>Normal Operation</span>`;
                     }
                 } else {
                     console.warn(`[${machineName} Line ${machineLineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
-                    card.classList.remove('problem'); 
+                    card.classList.remove('problem', 'warning'); 
                     light.className = 'indicator-light unknown';
                     statusText.className = 'status-text unknown';
                     statusText.innerHTML = `<i class="fas fa-question-circle"></i><span>No Data / Disconnected</span>`;
@@ -557,8 +603,9 @@ class DashboardManager {
                     if (metrics && oeeEl) {
                         const cycle = Number(metrics.cycle_time);
                         const actual = Number((machineData && machineData.quantity !== undefined) ? machineData.quantity : 0);
+                        const runningHour = Number(metrics.running_hour) || 8; // Default 8 hours if not set
                         if (cycle > 0) {
-                            const oee = ((actual * cycle) / (8 * 3600)) * 100;
+                            const oee = ((actual * cycle) / (runningHour * 3600)) * 100;
                             oeeEl.textContent = `${oee.toFixed(2)}%`;
                         } else {
                             oeeEl.textContent = '-';
@@ -991,11 +1038,23 @@ class DashboardManager {
             statusIcon = 'fa-power-off';
             statusText = 'PLC Offline';
         } else {
-            // Normal logic for problem/normal status
-            isProblem = machineStatus.status === 'problem';
-            statusClass = isProblem ? 'status-problem' : 'status-normal';
-            statusIcon = isProblem ? 'fa-exclamation-triangle' : 'fa-check-circle';
-            statusText = isProblem ? (machineStatus.problem_type || 'Problem') : 'Normal Operation';
+            // Normal logic for problem/warning/normal status
+            if (machineStatus.status === 'problem') {
+                isProblem = true;
+                statusClass = 'status-problem';
+                statusIcon = 'fa-exclamation-triangle';
+                statusText = machineStatus.problem_type || 'Problem';
+            } else if (machineStatus.status === 'warning') {
+                isProblem = false;
+                statusClass = 'status-warning';
+                statusIcon = 'fa-exclamation-circle';
+                statusText = 'Warning';
+            } else {
+                isProblem = false;
+                statusClass = 'status-normal';
+                statusIcon = 'fa-check-circle';
+                statusText = 'Normal Operation';
+            }
         }
 
         const lastCheck = machineStatus.last_check ? moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss') : 'N/A';
@@ -1010,10 +1069,24 @@ class DashboardManager {
                 </div>
             `;
         } else if (isProblem) {
+            const problemType = machineStatus.problem_type || 'Unknown';
+            const cycleInfo = machineStatus.cycle_based_status?.status === 'problem' 
+                ? `<br><small>Quantity tidak bertambah selama ${machineStatus.cycle_based_status.cycles_without_increase} cycle times</small>` 
+                : '';
             messageBoxHTML = `
                 <div class="system-message system-problem">
                     <h4><i class="fas fa-exclamation-triangle"></i> Problem Detected!</h4>
-                    <p>Machine ${machine} is experiencing a <strong>${machineStatus.problem_type || 'Unknown'}</strong> issue.</p>
+                    <p>Machine ${machine} is experiencing a <strong>${problemType}</strong> issue.${cycleInfo}</p>
+                </div>
+            `;
+        } else if (machineStatus.status === 'warning') {
+            const cycleInfo = machineStatus.cycle_based_status 
+                ? `Quantity tidak bertambah selama ${machineStatus.cycle_based_status.cycles_without_increase} cycle times` 
+                : 'Quantity tidak bertambah';
+            messageBoxHTML = `
+                <div class="system-message system-warning">
+                    <h4><i class="fas fa-exclamation-circle"></i> Warning!</h4>
+                    <p>${cycleInfo}. Threshold warning: ${machineStatus.cycle_based_status?.warning_threshold || 'N/A'} cycles.</p>
                 </div>
             `;
         } else {

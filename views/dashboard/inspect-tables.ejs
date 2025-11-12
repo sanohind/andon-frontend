@@ -51,6 +51,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            table-layout: fixed;
         }
 
         #tablesTable thead th {
@@ -61,27 +62,166 @@
             color: var(--primary-color);
             border-bottom: 2px solid #eef2f7;
         }
+        #tablesTable thead th:nth-child(1) { width: 20%; }
+        #tablesTable thead th:nth-child(2) { width: 15%; }
+        #tablesTable thead th:nth-child(3) { width: 20%; }
+        #tablesTable thead th:nth-child(4) { width: 15%; }
+        #tablesTable thead th:nth-child(5) { width: 30%; }
 
         #tablesTable tbody td {
             padding: 12px 15px;
             border-bottom: 1px solid #eef2f7;
             color: var(--dark-color);
+            vertical-align: middle;
+        }
+        #tablesTable tbody td:last-child {
+            width: 30%;
         }
         
-        .btn-edit, .btn-delete {
-            padding: 6px 12px;
+        .action-buttons-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        
+        .btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold {
+            padding: 8px 10px;
             border: none;
             border-radius: var(--border-radius);
             cursor: pointer;
             font-size: 0.9em;
-            margin-right: 5px;
             color: white;
             transition: var(--transition);
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+        }
+        .btn-edit i, .btn-delete i, .btn-set-target i, .btn-set-cycle i, .btn-set-cycle-threshold i {
+            font-size: 1em;
         }
         .btn-edit { background-color: #17a2b8; } /* Warna biru info */
         .btn-delete { background-color: var(--danger-color); }
-        .btn-edit:hover { opacity: 0.8; }
-        .btn-delete:hover { opacity: 0.8; }
+        .btn-set-target { background-color: #28a745; } /* Hijau */
+        .btn-set-cycle { background-color: #0d6efd; } /* Biru */
+        .btn-set-cycle-threshold { background-color: #ff9800; } /* Oranye, beda dengan Set Cycle */
+        .btn-edit:hover, .btn-delete:hover, .btn-set-target:hover, .btn-set-cycle:hover, .btn-set-cycle-threshold:hover {
+            opacity: 0.8;
+        }
+
+        /* Styling untuk nama meja yang bisa diklik */
+        .table-name-clickable {
+            cursor: pointer;
+            color: var(--primary-color);
+            font-weight: 600;
+            user-select: none;
+            padding: 8px;
+            display: inline-block;
+            transition: var(--transition);
+        }
+        .table-name-clickable:hover {
+            text-decoration: underline;
+        }
+
+        /* Styling untuk dropdown part configurations */
+        .part-config-row {
+            display: none;
+        }
+        .part-config-row.show {
+            display: table-row;
+        }
+        .part-config-dropdown {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-top: 2px solid #e0e0e0;
+        }
+        .part-config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            min-width: 800px;
+        }
+        .part-config-table th {
+            background-color: #eef2f7;
+            padding: 10px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--primary-color);
+            border-bottom: 1px solid #ddd;
+            white-space: nowrap;
+        }
+        .part-config-table th:nth-child(1) { width: 8%; }
+        .part-config-table th:nth-child(2) { width: 20%; }
+        .part-config-table th:nth-child(3) { width: 12%; }
+        .part-config-table th:nth-child(4) { width: 15%; }
+        .part-config-table th:nth-child(5) { width: 10%; }
+        .part-config-table th:nth-child(6) { width: 35%; }
+        .part-config-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eef2f7;
+        }
+        .part-config-table tr:last-child td {
+            border-bottom: none;
+        }
+        .part-config-actions {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        .btn-part-add, .btn-part-edit, .btn-part-delete, .btn-part-export, .btn-part-import {
+            padding: 8px 10px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 0.9em;
+            color: white;
+            transition: var(--transition);
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+        }
+        .btn-part-add i, .btn-part-edit i, .btn-part-delete i, .btn-part-export i, .btn-part-import i {
+            font-size: 1em;
+        }
+        .btn-part-add {
+            background-color: #28a745;
+        }
+        .btn-part-edit {
+            background-color: #17a2b8;
+            margin-right: 5px;
+        }
+        .btn-part-delete {
+            background-color: var(--danger-color);
+        }
+        .btn-part-export {
+            background-color: #007bff;
+        }
+        .btn-part-import {
+            background-color: #6f42c1;
+        }
+        .btn-part-add:hover, .btn-part-edit:hover, .btn-part-delete:hover, .btn-part-export:hover, .btn-part-import:hover {
+            opacity: 0.8;
+        }
+        .empty-config-message {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
+        }
+        .part-config-actions-cell {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
 
     </style>
 </head>
@@ -176,15 +316,67 @@
                     <% if (tableList && tableList.length > 0) { %>
                         <% tableList.forEach(table => { %>
                             <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>">
-                                <td><%= table.name %></td>
+                                <td>
+                                    <span class="table-name-clickable" data-address="<%= table.address %>">
+                                        <%= table.name %>
+                                    </span>
+                                </td>
                                 <td><%= table.division || 'N/A' %></td>
                                 <td><%= table.line_name %></td>
                                 <td><%= table.address %></td>
                                 <td>
-                                    <button class="btn-edit">Edit</button>
-                                    <button class="btn-delete">Hapus</button>
-                                    <button class="btn-set-target">Set Target</button>
-                                    <button class="btn-set-cycle">Set Cycle</button>
+                                    <div class="action-buttons-container">
+                                        <button class="btn-edit" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-delete" title="Hapus">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                        <button class="btn-set-target" title="Set Target">
+                                            <i class="fas fa-bullseye"></i>
+                                        </button>
+                                        <button class="btn-set-cycle" title="Set Cycle">
+                                            <i class="fas fa-clock"></i>
+                                        </button>
+                                        <button class="btn-set-cycle-threshold" title="Set Cycle Threshold">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="part-config-row" data-address="<%= table.address %>">
+                                <td colspan="5" class="part-config-dropdown" data-address="<%= table.address %>">
+                                    <div class="part-config-actions">
+                                        <button class="btn-part-add" data-address="<%= table.address %>" title="Tambah Part Configuration">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn-part-export" data-address="<%= table.address %>" title="Export ke Excel">
+                                            <i class="fas fa-file-excel"></i>
+                                        </button>
+                                        <button class="btn-part-import" data-address="<%= table.address %>" title="Import dari Excel">
+                                            <i class="fas fa-file-upload"></i>
+                                        </button>
+                                        <input type="file" accept=".xlsx,.xls" style="display: none;" data-address="<%= table.address %>">
+                                    </div>
+                                    <div style="overflow-x: auto;">
+                                        <table class="part-config-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>CH</th>
+                                                    <th>Part Number</th>
+                                                    <th>Cycle Time</th>
+                                                    <th>Jumlah Bending</th>
+                                                    <th>Cavity</th>
+                                                    <th>Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="part-config-tbody" data-address="<%= table.address %>">
+                                                <tr>
+                                                    <td colspan="6" class="empty-config-message">Loading...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </td>
                             </tr>
                         <% }) %>
@@ -290,7 +482,77 @@
     </div>
 </div>
 
+<!-- Set Cycle Threshold Modal -->
+<div class="modal" id="setCycleThresholdModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Set Cycle Threshold</h3>
+            <button type="button" class="modal-close" id="cancelSetCycleThreshold">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="setCycleThresholdForm">
+                <input type="hidden" id="setCycleThresholdAddress">
+                <div class="form-group">
+                    <label for="warningCycleCountInput">Warning Cycle Count</label>
+                    <input type="number" id="warningCycleCountInput" min="1" required>
+                    <small style="color: #666; display: block; margin-top: 5px;">Jumlah cycle time sebelum status menjadi warning (kuning)</small>
+                </div>
+                <div class="form-group">
+                    <label for="problemCycleCountInput">Problem Cycle Count</label>
+                    <input type="number" id="problemCycleCountInput" min="1" required>
+                    <small style="color: #666; display: block; margin-top: 5px;">Jumlah cycle time sebelum status menjadi problem (merah). Harus >= Warning Cycle Count</small>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelSetCycleThresholdFooter" class="btn btn-secondary">Batal</button>
+            <button type="submit" form="setCycleThresholdForm" class="btn btn-primary">Simpan</button>
+        </div>
+    </div>
+</div>
+
+<!-- Part Configuration Modal -->
+<div class="modal" id="partConfigModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="partConfigModalTitle">Tambah Part Configuration</h3>
+            <button type="button" class="modal-close" id="cancelPartConfig">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="partConfigForm">
+                <input type="hidden" id="partConfigId">
+                <input type="hidden" id="partConfigAddress">
+                <div class="form-group">
+                    <label for="partConfigChannel">CH (Channel)</label>
+                    <input type="number" id="partConfigChannel" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="partConfigPartNumber">Part Number</label>
+                    <input type="text" id="partConfigPartNumber" required>
+                </div>
+                <div class="form-group">
+                    <label for="partConfigCycleTime">Cycle Time</label>
+                    <input type="number" id="partConfigCycleTime" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="partConfigJumlahBending">Jumlah Bending</label>
+                    <input type="number" id="partConfigJumlahBending" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="partConfigCavity">Cavity</label>
+                    <input type="number" id="partConfigCavity" min="0" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" id="cancelPartConfigFooter" class="btn btn-secondary">Batal</button>
+            <button type="submit" form="partConfigForm" class="btn btn-primary">Simpan</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="/js/inspect-tables.js"></script>
 </body>
 </html>

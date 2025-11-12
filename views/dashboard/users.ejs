@@ -74,6 +74,42 @@
         #userTable tbody tr:nth-child(even) {
             background-color: #fdfdff;
         }
+
+        .action-buttons-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .btn-edit-user, .btn-delete-user {
+            padding: 8px 10px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 0.9em;
+            color: white;
+            transition: var(--transition);
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+        }
+        .btn-edit-user i, .btn-delete-user i {
+            font-size: 1em;
+        }
+        .btn-edit-user {
+            background-color: #17a2b8;
+        }
+        .btn-delete-user {
+            background-color: var(--danger-color);
+        }
+        .btn-edit-user:hover, .btn-delete-user:hover {
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -168,8 +204,14 @@
                             <td><%= u.division || 'N/A' %></td>
                             <td><%= u.line_name || 'N/A' %></td>
                             <td>
-                                <button class="btn-edit-user">Edit</button>
-                                <button class="btn-delete-user">Hapus</button>
+                                <div class="action-buttons-container">
+                                    <button class="btn-edit-user" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-delete-user" title="Hapus">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     <% }) %>

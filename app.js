@@ -96,6 +96,10 @@ async function requireAuth(req, res, next) {
   const token = req.session.token || req.cookies.auth_token;
   
   if (!token) {
+    // Check if this is an API request (starts with /api/)
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     return res.redirect('/login');
   }
   
@@ -115,9 +119,13 @@ async function requireAuth(req, res, next) {
       req.user.token = token;
       next();
     } else {
-      // Token tidak valid, hapus session dan redirect ke login
+      // Token tidak valid
       req.session.destroy();
       res.clearCookie('auth_token');
+      // Check if this is an API request
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
       return res.redirect('/login');
     }
   } catch (error) {
@@ -125,6 +133,10 @@ async function requireAuth(req, res, next) {
     // Jika ada error validasi, anggap tidak terautentikasi
     req.session.destroy();
     res.clearCookie('auth_token');
+    // Check if this is an API request
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     return res.redirect('/login');
   }
 }
@@ -702,6 +714,39 @@ app.get('/api/inspection-tables', async (req, res) => {
   }
 });
 
+// Route DELETE untuk /api/inspection-tables/:id - HARUS ditempatkan SEBELUM route yang lebih umum
+app.delete('/api/inspection-tables/:id', requireAuth, async (req, res) => {
+  console.log('DELETE route hit:', req.path, 'id:', req.params.id, 'user:', req.user?.role);
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  if (!['admin', 'manager'].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    console.log('DELETE /api/inspection-tables/:id called with id:', req.params.id);
+    const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
+      headers: { 
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    console.log('Laravel API response:', response.status, response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Delete inspection table error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    res.status(error.response?.status || 500).json(error.response?.data || { 
+      success: false, 
+      message: 'Failed to delete inspection table: ' + (error.message || 'Unknown error')
+    });
+  }
+});
+
 app.get('/users', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).send('Akses Ditolak');
@@ -915,40 +960,66 @@ app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
 });
 
 // RUTE PROXY API UNTUK UPDATE MEJA BY ADDRESS
-app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
-  try {
-    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}`, req.body, {
-      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    res.status(error.response?.status || 500).json(error.response?.data);
-  }
-});
-
-// Tambahan proxy untuk Set Target & Set Cycle & Metrics
+// Tambahan proxy untuk Set Target & Set Cycle & Running Hour & Cycle Threshold
+// PENTING: Route yang lebih spesifik harus ditempatkan SEBELUM route yang lebih umum
 app.put('/api/inspection-tables/address/:address/target', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/target`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
     });
     res.json(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).json(error.response?.data);
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
   }
 });
 
 app.put('/api/inspection-tables/address/:address/cycle', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/cycle`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
     });
     res.json(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).json(error.response?.data);
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+app.put('/api/inspection-tables/address/:address/cycle-threshold', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/cycle-threshold`, req.body, {
+      headers: { 
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error updating cycle threshold:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data || { success: false, message: 'Server error' });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update cycle threshold',
+        error: error.message 
+      });
+    }
+  }
+});
+
+app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
   }
 });
 
@@ -989,6 +1060,84 @@ app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
         console.error(`Error fetching status for machine ${req.params.name}:`, error.message);
         res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to fetch machine status' });
     }
+});
+
+// Part Configurations proxy routes
+app.get('/api/part-configurations', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const headers = {};
+    if (process.env.LARAVEL_API_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.LARAVEL_API_TOKEN}`;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/part-configurations`, {
+      params: req.query,
+      headers
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to fetch part configurations' });
+  }
+});
+
+app.post('/api/part-configurations', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to create part configuration' });
+  }
+});
+
+app.post('/api/part-configurations/bulk-import', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations/bulk-import`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to bulk import part configurations' });
+  }
+});
+
+app.get('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to fetch part configuration' });
+  }
+});
+
+app.put('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to update part configuration' });
+  }
+});
+
+app.delete('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to delete part configuration' });
+  }
 });
 
 // Socket.IO connection handling
@@ -1202,45 +1351,17 @@ function filterDataForUser(user, data) {
         case 'maintenance':
         case 'quality':
         case 'engineering':
-            // Department users hanya melihat problem yang sudah di-forward ke mereka
+            // Department users: filter daftar problem hanya yang di-forward ke role mereka.
+            // Machine statuses tidak diubah agar warning/problem dari cycle count tetap terlihat.
             filteredActiveProblems = filteredActiveProblems.filter(problem => 
                 problem.is_forwarded && problem.forwarded_to_role === user.role
             );
-            
-            // PERBAIKAN: Department users bisa melihat machine status problem jika ada problem yang sudah di-forward ke mereka
-            filteredMachineStatuses = {};
-            for (const lineNumber in data.machine_statuses_by_line) {
-                filteredMachineStatuses[lineNumber] = data.machine_statuses_by_line[lineNumber].map(machine => {
-                    // Cek apakah ada problem yang sudah di-forward ke user role ini untuk machine ini
-                    const hasForwardedProblem = filteredActiveProblems.some(problem => 
-                        problem.machine === machine.name && 
-                        problem.line_name == machine.line_name &&
-                        problem.is_forwarded && 
-                        problem.forwarded_to_role === user.role
-                    );
-                    
-                    if (hasForwardedProblem) {
-                        // Jika ada problem yang sudah di-forward, tampilkan sebagai problem
-                        return {
-                            ...machine,
-                            status: 'problem',
-                            color: 'red',
-                            problem_type: machine.problem_type,
-                            timestamp: machine.timestamp
-                        };
-                    } else {
-                        // Jika tidak ada problem yang di-forward, tampilkan sebagai normal
-                        return {
-                            ...machine,
-                            status: 'normal',
-                            color: 'green',
-                            problem_type: null,
-                            timestamp: null
-                        };
-                    }
-                });
-            }
-            break;
+            // Biarkan filteredMachineStatuses apa adanya
+            return {
+                machine_statuses_by_line: filteredMachineStatuses,
+                active_problems: filteredActiveProblems,
+                new_problems: []
+            };
 
         default:
             // Role tidak dikenal, tidak ada data
@@ -1691,6 +1812,15 @@ app.use((error, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  // Check if this is an API request
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      message: 'API endpoint not found',
+      path: req.path,
+      method: req.method
+    });
+  }
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The requested page could not be found.',
