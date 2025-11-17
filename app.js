@@ -183,8 +183,16 @@ async function requireAuthAPI(req, res, next) {
 }
 
 // Routes
+// Helper function to check if value is in array
+function in_array(needle, haystack) {
+    return haystack.includes(needle);
+}
+
 app.get('/', requireAuth, async (req, res) => {
   try {
+    // Get line filter from query parameter
+    const lineFilter = req.query.line;
+    
     // Ambil data dashboard dari Laravel dengan konteks role/division
     const dashboardDataResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
       headers: {
@@ -211,13 +219,25 @@ app.get('/', requireAuth, async (req, res) => {
       });
       machinesGroupedByLine = filtered;
     }
+    
+    // Apply line filter if provided
+    if (lineFilter) {
+      const filtered = {};
+      Object.keys(machinesGroupedByLine).forEach((lineName) => {
+        if (lineName === lineFilter) {
+          filtered[lineName] = machinesGroupedByLine[lineName];
+        }
+      });
+      machinesGroupedByLine = filtered;
+    }
 
     res.render('dashboard/index', {
       title: 'IoT Monitoring Dashboard',
       machinesByLine: machinesGroupedByLine,
       user: req.user,
       globalStats: {},
-      moment: moment
+      moment: moment,
+      lineFilter: lineFilter || null
     });
   } catch (error) {
     console.error('Error fetching dashboard data on initial load:', error.message);
@@ -227,6 +247,19 @@ app.get('/', requireAuth, async (req, res) => {
       user: req.user || { name: 'Guest' }
     });
   }
+});
+
+// Divisions page route
+app.get('/divisions', requireAuth, async (req, res) => {
+  // Only allow admin, maintenance, quality, engineering, and manager
+  if (!['admin', 'maintenance', 'quality', 'engineering', 'manager'].includes(req.user.role)) {
+    return res.redirect('/');
+  }
+  
+  res.render('dashboard/divisions', {
+    title: 'Divisions & Lines - Andon Dashboard',
+    user: req.user
+  });
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
@@ -340,7 +373,7 @@ app.post('/auth/login', async (req, res) => {
 });
 
 // Auth Routes - Token dari Laravel (untuk redirect)
-app.get('/auth', (req, res) => {
+app.get('/auth', async (req, res) => {
     const { token } = req.query;
     
     if (!token) {
@@ -354,7 +387,39 @@ app.get('/auth', (req, res) => {
         httpOnly: false 
     });
     
-    res.redirect('/');
+    // Validate token and get user info to determine redirect
+    try {
+        const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
+            token: token
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.data.valid && response.data.user) {
+            const user = response.data.user;
+            // Redirect based on role
+            const rolesForDivisions = ['admin', 'maintenance', 'quality', 'engineering', 'manager'];
+            if (rolesForDivisions.includes(user.role)) {
+                // Redirect to divisions page for these roles
+                res.redirect('/divisions');
+            } else if (user.role === 'leader') {
+                // Leader goes directly to dashboard
+                res.redirect('/');
+            } else {
+                // Default to dashboard
+                res.redirect('/');
+            }
+        } else {
+            res.redirect('/');
+        }
+    } catch (error) {
+        console.error('Token validation error in /auth:', error.message);
+        // Default to dashboard if validation fails
+        res.redirect('/');
+    }
 });
 
 // Logout Route
@@ -463,6 +528,31 @@ app.get('/api/problems/active', requireAuthAPI, async (req, res) => {
     console.error('Problems active error:', error.message);
     res.status(500).json({ 
       success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Divisions and lines API route
+app.get('/api/divisions-lines', requireAuthAPI, async (req, res) => {
+  try {
+    const userRole = (req.user && req.user.role) || req.headers['x-user-role'] || '';
+    const userDivision = (req.user && req.user.division) || req.headers['x-user-division'] || '';
+    
+    const response = await axios.get(`${LARAVEL_API_BASE}/divisions-lines`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'X-User-Role': userRole,
+        'X-User-Division': userDivision
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching divisions and lines:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch divisions and lines',
       error: error.message 
     });
   }
@@ -867,13 +957,25 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
     let tableList = [];
     if (response.data && response.data.success && response.data.data) {
       tableList = response.data.data;
-      console.log('Extracted tableList:', tableList.length, 'items');
     } else if (Array.isArray(response.data)) {
       tableList = response.data;
-      console.log('Using response.data directly:', tableList.length, 'items');
     } else {
-      console.log('Unknown response format, using empty array');
       tableList = [];
+    }
+
+    // Filter for manager: only tables in their division/lines
+    if (req.user.role === 'manager') {
+      const divisionToLines = {
+        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+      };
+      const allowedLines = divisionToLines[req.user.division] || [];
+      tableList = tableList.filter((t) => {
+        const line = t.line_name || t.lineName || t.line;
+        const division = t.division || null;
+        return (division && division === req.user.division) || (line && allowedLines.includes(line));
+      });
     }
     
     res.render('dashboard/inspect-tables', {
@@ -883,10 +985,6 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching inspection tables:', error.message);
-    console.error('Error response:', error.response?.data);
-    console.error('Error status:', error.response?.status);
-    
-    // If API fails, render with empty table list for debugging
     res.render('dashboard/inspect-tables', {
       title: 'Manage Inspect Tables',
       user: req.user,
@@ -908,16 +1006,28 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
     }
     
     const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, { headers });
-    console.log('API: Response status:', response.status);
-    console.log('API: Response data:', response.data);
     
-    // Handle the response format: {"success":true,"data":[...]}
-    const tableList = response.data && response.data.data ? response.data.data : (response.data || []);
+    // Handle the response format: { success:true, data:[...] } or array
+    let tableList = response.data && response.data.data ? response.data.data : (response.data || []);
+
+    // Filter for manager
+    if (req.user.role === 'manager') {
+      const divisionToLines = {
+        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+      };
+      const allowedLines = divisionToLines[req.user.division] || [];
+      tableList = tableList.filter((t) => {
+        const line = t.line_name || t.lineName || t.line;
+        const division = t.division || null;
+        return (division && division === req.user.division) || (line && allowedLines.includes(line));
+      });
+    }
+
     res.json(tableList);
   } catch (error) {
     console.error('API: Error fetching inspection tables:', error.message);
-    console.error('API: Error response:', error.response?.data);
-    console.error('API: Error status:', error.response?.status);
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
@@ -1507,6 +1617,111 @@ app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, async (req, res) 
   }
 });
 
+// Notify Leader Route (for manager to send reminder notification to leader)
+app.post('/api/dashboard/problem/:id/notify-leader', requireAuthAPI, async (req, res) => {
+  console.log(`📤 Notify leader endpoint called: POST /api/dashboard/problem/${req.params.id}/notify-leader`);
+  console.log(`User role: ${req.user?.role}`);
+  
+  try {
+    // Validasi bahwa user adalah manager
+    if (!req.user || req.user.role !== 'manager') {
+      console.log('❌ Access denied: User is not a manager');
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya manager yang dapat mengirim notifikasi ke leader.'
+      });
+    }
+
+    // Get problem detail from Laravel API
+    const problemResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!problemResponse.data.success) {
+      return res.status(404).json({
+        success: false,
+        message: 'Problem not found'
+      });
+    }
+
+    const problemData = problemResponse.data.data;
+    const lineName = problemData.line_name;
+
+    if (!lineName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Line name not found for this problem'
+      });
+    }
+
+    // Broadcast notification to leader who handles this line
+    console.log(`📤 Broadcasting notification to leader for line: ${lineName}`);
+    console.log(`Problem ID: ${problemData.id}, Machine: ${problemData.machine || problemData.machine_name}`);
+    
+    let notificationSent = false;
+    let leaderCount = 0;
+    let totalSockets = 0;
+    
+    io.sockets.sockets.forEach((clientSocket) => {
+      totalSockets++;
+      if (clientSocket.user) {
+        leaderCount++;
+        const userLine = String(clientSocket.user.line_name || '').trim();
+        const targetLine = String(lineName || '').trim();
+        console.log(`Checking socket user: role=${clientSocket.user.role}, line="${userLine}", target_line="${targetLine}"`);
+        
+        if (clientSocket.user.role === 'leader' && userLine === targetLine) {
+          console.log(`✅ Sending notification to leader: ${clientSocket.user.name} (Line: ${lineName})`);
+          
+          const notificationTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+          
+          clientSocket.emit('newProblem', {
+            id: problemData.id,
+            machine: problemData.machine || problemData.machine_name || 'Unknown Machine',
+            machine_name: problemData.machine || problemData.machine_name || 'Unknown Machine',
+            problem_type: problemData.problem_type || 'Unknown Problem',
+            problemType: problemData.problem_type || 'Unknown Problem',
+            line_name: lineName,
+            lineName: lineName,
+            timestamp: notificationTimestamp,
+            severity: 'critical',
+            description: problemData.description || 'Problem belum ditangani selama lebih dari 15 menit',
+            recommended_action: 'Segera tangani problem ini. Manager telah mengirim pengingat.',
+            is_manager_reminder: true
+          });
+          
+          notificationSent = true;
+        }
+      }
+    });
+
+    console.log(`Total connected sockets: ${totalSockets}, Users with data: ${leaderCount}, Notification sent: ${notificationSent}`);
+
+    if (notificationSent) {
+      res.json({
+        success: true,
+        message: 'Notifikasi telah dikirim ke leader yang menangani line ini.'
+      });
+    } else {
+      res.json({
+        success: false,
+        message: `Tidak ada leader yang sedang online untuk line "${lineName}". Total connected users: ${leaderCount}`
+      });
+    }
+  } catch (error) {
+    console.error('Error notifying leader:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to notify leader',
+      error: error.message 
+    });
+  }
+});
+
 app.post('/api/dashboard/problem/:id/receive', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/receive`, req.body, {
@@ -1810,10 +2025,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST be last route
 app.use((req, res) => {
   // Check if this is an API request
   if (req.path.startsWith('/api/')) {
+    console.log(`❌ 404 - API endpoint not found: ${req.method} ${req.path}`);
     return res.status(404).json({
       success: false,
       message: 'API endpoint not found',

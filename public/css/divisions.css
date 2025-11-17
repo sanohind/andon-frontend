@@ -1,0 +1,326 @@
+/* Divisions & Lines Selection Page Styles */
+
+.divisions-container {
+    padding: 0.25rem 0 0.25rem 0;
+    min-height: calc(100vh - 150px);
+}
+
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+}
+
+.loading-spinner i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.divisions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.division-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 0.5rem 0.5rem 1rem 0.5rem;
+    transition: var(--transition);
+}
+
+.division-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.division-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1.5px solid var(--light-color);
+}
+
+.division-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+/* Tambahan: indikator agregat per divisi */
+.division-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    margin-right: 0.25rem;
+    padding-left: 0.5rem;
+}
+
+.division-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #ffffff;
+    border: 1px solid var(--light-color);
+    border-radius: 999px;
+    padding: 0.2rem 0.4rem;
+    box-shadow: var(--box-shadow);
+}
+
+.division-stat-label {
+    font-size: 0.6rem;
+    color: var(--dark-color);
+    opacity: 0.75;
+    text-transform: uppercase;
+    letter-spacing: 0.1px;
+}
+
+.division-stat-value {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.division-stat-value.problems {
+    color: var(--danger-color);
+}
+
+.division-icon {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    opacity: 0.7;
+}
+
+.lines-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+    min-height: fit-content;
+}
+
+.line-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 1.5px solid var(--light-color);
+    border-radius: var(--border-radius);
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.line-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--primary-color);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.line-card:hover {
+    border-color: var(--primary-color);
+    transform: translateX(5px);
+    box-shadow: 0 2px 15px rgba(10, 40, 86, 0.2);
+}
+
+.line-card:hover::before {
+    transform: scaleY(1);
+}
+
+.line-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.line-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Stat indicator untuk Total Mesin dan Problem Aktif */
+.stat-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.stat-indicator.green {
+    background-color: #28a745;
+    box-shadow: 0 0 6px rgba(40, 167, 69, 0.5);
+}
+
+.stat-indicator.red {
+    background-color: #dc3545;
+    box-shadow: 0 0 6px rgba(220, 53, 69, 0.6);
+    animation: redIndicatorPulse 1.5s infinite;
+}
+
+.stat-indicator.gray {
+    background-color: #6c757d;
+    box-shadow: 0 0 4px rgba(108, 117, 125, 0.4);
+}
+
+@keyframes redIndicatorPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 6px rgba(220, 53, 69, 0.6);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+        box-shadow: 0 0 10px rgba(220, 53, 69, 0.8);
+    }
+}
+
+.line-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.line-arrow {
+    color: var(--primary-color);
+    opacity: 0.5;
+    transition: var(--transition);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.line-card:hover .line-arrow {
+    opacity: 1;
+    transform: translateX(5px);
+}
+
+.line-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3rem 0.4rem;
+    background: white;
+    border-radius: calc(var(--border-radius) - 2px);
+    border: 1px solid var(--light-color);
+    transition: var(--transition);
+}
+
+.stat-item.has-problem-highlight {
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+    border: 2px solid #ff4444;
+    box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
+    animation: problemPulse 2s infinite;
+}
+
+@keyframes problemPulse {
+    0%, 100% {
+        box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
+    }
+    50% {
+        box-shadow: 0 2px 15px rgba(255, 68, 68, 0.5);
+    }
+}
+
+.stat-label-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.stat-label {
+    font-size: 0.6rem;
+    color: var(--dark-color);
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.1px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.stat-value {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-value.problems {
+    color: var(--danger-color);
+}
+
+.stat-value.problems.has-problems {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--dark-color);
+    opacity: 0.6;
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+}
+
+.empty-state p {
+    font-size: 1.1rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .divisions-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .division-card {
+        padding: 0.5rem;
+    }
+    
+    .lines-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .line-stats {
+        grid-template-columns: 1fr;
+    }
+}
+

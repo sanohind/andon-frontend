@@ -14,6 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelEditBtn = document.getElementById('cancelEditTable');
     const cancelEditFooterBtn = document.getElementById('cancelEditTableFooter');
 
+    // Ambil role & division user
+    const userData = document.getElementById('userData');
+    const userRole = userData ? userData.dataset.role : null;
+    const userDivision = userData ? userData.dataset.division : null;
+
     // Elements for Set Target Modal
     const setTargetModal = document.getElementById('setTargetModal');
     const setTargetForm = document.getElementById('setTargetForm');
@@ -29,8 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cycleTimeInput = document.getElementById('cycleTimeInput');
     const cancelSetCycleBtn = document.getElementById('cancelSetCycle');
     const cancelSetCycleFooterBtn = document.getElementById('cancelSetCycleFooter');
-
-    // Elements for Set Running Hour Modal - removed
 
     // Elements for Set Cycle Threshold Modal
     const setCycleThresholdModal = document.getElementById('setCycleThresholdModal');
@@ -62,6 +65,34 @@ document.addEventListener('DOMContentLoaded', () => {
         'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
     };
 
+    // Pembatasan untuk role manager
+    if (userRole === 'manager') {
+        // Add form: kunci division ke divisi manager dan nonaktifkan
+        if (divisionSelect) {
+            divisionSelect.value = userDivision || '';
+            divisionSelect.disabled = true;
+        }
+        // Batasi pilihan line hanya ke line divisinya
+        if (lineNameSelect) {
+            lineNameSelect.innerHTML = '<option value="">Pilih Line</option>';
+            const allowed = divisionLineMapping[userDivision] || [];
+            allowed.forEach(line => {
+                const opt = document.createElement('option');
+                opt.value = line;
+                opt.textContent = line;
+                lineNameSelect.appendChild(opt);
+            });
+        }
+
+        // Edit modal: nonaktifkan perubahan division & line
+        if (editDivision) {
+            editDivision.disabled = true;
+        }
+        if (editLine) {
+            editLine.disabled = true;
+        }
+    }
+
     function updateLineOptions(divisionSelect, lineSelect) {
         const selectedDivision = divisionSelect.value;
         lineSelect.innerHTML = '<option value="">Pilih Line</option>';
@@ -87,6 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Set the line value after options are updated
         editLine.value = lineName || '';
+
+        // Jika manager, pastikan tetap terkunci
+        if (userRole === 'manager') {
+            editDivision.disabled = true;
+            editLine.disabled = true;
+        }
         
         editModal.classList.add('show');
     }
@@ -121,6 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = editId.value;
         const address = editId.getAttribute('data-address');
         const name = editName.value.trim();
+        // Jika manager, gunakan nilai asli division/line dari field yang terkunci
         const division = editDivision.value;
         const lineName = editLine.value;
         if (!name || !division || !lineName) return;
@@ -148,8 +186,12 @@ document.addEventListener('DOMContentLoaded', () => {
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = addForm.querySelector('[name="name"]').value;
-        const division = addForm.querySelector('[name="division"]').value;
+        let division = addForm.querySelector('[name="division"]').value;
         const lineName = addForm.querySelector('[name="line_name"]').value;
+        // Paksa division ke divisi manager jika manager
+        if (userRole === 'manager') {
+            division = userDivision || division;
+        }
         try {
             const response = await fetch('/api/inspection-tables', {
                 method: 'POST',

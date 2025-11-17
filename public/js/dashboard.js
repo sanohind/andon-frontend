@@ -25,6 +25,10 @@ class DashboardManager {
         this.userLineName = userDataElement ? userDataElement.dataset.line : null;
         this.userDivision = userDataElement ? userDataElement.dataset.division : null;
         this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
+        
+        // Get line filter from URL query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        this.lineFilter = urlParams.get('line') || null;
 
         this.metricsByAddress = new Map();
         this.init();
@@ -155,10 +159,13 @@ class DashboardManager {
         });
 
         // TAMBAHAN BARU: Handler untuk problem forwarded
+        // PERBAIKAN: Notifikasi forwarded problem untuk maintenance, quality, engineering sekarang dipindahkan ke halaman divisi
+        // Hanya leader yang masih mendapat notifikasi di dashboard utama (jika diperlukan)
         this.socket.on('problemForwarded', (data) => {
             console.log('📧 Received problemForwarded via socket:', data);
-            this.showForwardedProblemNotification(data);
-            // PERBAIKAN: Refresh data setelah forward untuk update machine status dan problem list
+            // Notifikasi forwarded problem untuk maintenance, quality, engineering dipindahkan ke halaman divisi
+            // Leader tidak menerima notifikasi forwarded problem (sesuai logic sebelumnya)
+            // Refresh data setelah forward untuk update machine status dan problem list
             this.loadDashboardData();
         });
 
@@ -377,6 +384,13 @@ class DashboardManager {
     updateStatsFromDashboardData(dashboardData) {
         let activeProblems = dashboardData.active_problems || [];
         
+        // Priority: Apply line filter from URL if exists
+        if (this.lineFilter) {
+            activeProblems = activeProblems.filter(problem => 
+                problem.line_name === this.lineFilter
+            );
+        }
+        
         // PERBAIKAN: Filter active problems berdasarkan role dan line
         if (this.userRole === 'leader' && this.userLineName) {
             activeProblems = activeProblems.filter(problem => {
@@ -391,9 +405,15 @@ class DashboardManager {
         
         // Count cycle-based problems from machine statuses
         // Only count machines where the problem is caused by cycle threshold (not from log)
+        // Filter by line if lineFilter exists
         let cycleBasedProblemsCount = 0;
         if (dashboardData.machine_statuses_by_line) {
-            Object.values(dashboardData.machine_statuses_by_line).forEach(machines => {
+            Object.entries(dashboardData.machine_statuses_by_line).forEach(([lineName, machines]) => {
+                // Skip if line filter is set and doesn't match
+                if (this.lineFilter && lineName !== this.lineFilter) {
+                    return;
+                }
+                
                 machines.forEach(machine => {
                     // Check if machine has cycle-based problem status
                     // Status must be 'problem' AND cycle_based_status must also be 'problem'
@@ -412,10 +432,14 @@ class DashboardManager {
         const activeProblemsCount = activeProblems.length + cycleBasedProblemsCount;
         const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
         
-        // Hitung total machines dari data yang ada
+        // Hitung total machines dari data yang ada - filter by line if lineFilter exists
         let totalMachines = 0;
         if (dashboardData.machine_statuses_by_line) {
-            Object.values(dashboardData.machine_statuses_by_line).forEach(machines => {
+            Object.entries(dashboardData.machine_statuses_by_line).forEach(([lineName, machines]) => {
+                // Skip if line filter is set and doesn't match
+                if (this.lineFilter && lineName !== this.lineFilter) {
+                    return;
+                }
                 totalMachines += machines.length;
             });
         }
@@ -438,12 +462,19 @@ class DashboardManager {
         const userDivision = this.userDivision;
 
         let apiUrl = '/api/dashboard/stats';
+        const params = [];
 
-        // Jika pengguna adalah 'leader' dan memiliki nomor lini, tambahkan parameter ke URL
-        if (userRole === 'leader' && userLineName) {
-            apiUrl += `?line_name=${userLineName}`;
+        // Priority: line filter from URL > user role-based filter
+        if (this.lineFilter) {
+            params.push(`line_name=${encodeURIComponent(this.lineFilter)}`);
+        } else if (userRole === 'leader' && userLineName) {
+            params.push(`line_name=${encodeURIComponent(userLineName)}`);
         } else if (userRole === 'manager' && userDivision) {
-            apiUrl += `?division=${userDivision}`;
+            params.push(`division=${encodeURIComponent(userDivision)}`);
+        }
+
+        if (params.length > 0) {
+            apiUrl += '?' + params.join('&');
         }
 
         try {
@@ -645,8 +676,16 @@ class DashboardManager {
             });
         } else if (this.userRole === 'manager' && this.userDivision) {
             // Manager hanya melihat problem dari divisi mereka
+            // Filter berdasarkan line_name karena data dari API tidak memiliki field division
+            const divisionLineMapping = {
+                'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+                'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+                'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+            };
+            const allowedLines = divisionLineMapping[this.userDivision] || [];
             filteredProblems = problems.filter(problem => {
-                return problem.division && problem.division.toString() === this.userDivision.toString();
+                // Filter by line_name yang sesuai dengan divisi manager
+                return problem.line_name && allowedLines.includes(problem.line_name);
             });
         } else if (this.userRole === 'admin') {
             // Admin melihat semua problem
@@ -662,7 +701,12 @@ class DashboardManager {
         this.lastActiveProblems = filteredProblems;
 
         // Cek problem yang sudah 15 menit untuk manager
-        this.checkLongDurationProblems(filteredProblems);
+        // PERBAIKAN: Notifikasi 15 menit untuk manager sekarang dipindahkan ke halaman divisi
+        // Hanya leader yang masih mendapat notifikasi di dashboard utama
+        if (this.userRole === 'leader') {
+            // Leader tetap mendapat notifikasi di dashboard utama (tidak diubah)
+            // Note: checkLongDurationProblems hanya untuk manager, jadi tidak dipanggil untuk leader
+        }
 
         // Tampilkan hasil filter
         if (filteredProblems.length === 0) {
@@ -1140,6 +1184,7 @@ class DashboardManager {
 
     async createProblemDetailHTML(problem) {
         const isLeader = this.userRole === 'leader';
+        const isManager = this.userRole === 'manager';
         const isDepartmentUser = ['maintenance', 'quality', 'engineering'].includes(this.userRole);
         
         // Tentukan target role berdasarkan problem type
@@ -1267,6 +1312,16 @@ class DashboardManager {
                     <button class="btn btn-final-resolve" id="finalResolveBtn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
                         <i class="fas fa-check-double" style="margin-right: 5px;"></i>
                         Final Resolve
+                    </button>
+                </div>
+            `;
+        } else if (actualStatus === 'active' && isManager) {
+            // Manager bisa kirim notifikasi ulang ke leader
+            actionButtons = `
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button class="btn btn-notify-leader" id="notifyLeaderBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                        <i class="fas fa-bell" style="margin-right: 5px;"></i>
+                        Kirim Notifikasi Ulang ke Leader
                     </button>
                 </div>
             `;
@@ -1680,6 +1735,89 @@ class DashboardManager {
                 this.openTicketingForm(problemId);
             });
         }
+
+        // Notify leader button (for manager)
+        const notifyLeaderBtn = document.getElementById('notifyLeaderBtn');
+        if (notifyLeaderBtn) {
+            notifyLeaderBtn.addEventListener('click', () => {
+                this.sendNotificationToLeader(problemId, problemData);
+            });
+        }
+    }
+
+    // Method untuk kirim notifikasi ulang ke leader (untuk manager)
+    async sendNotificationToLeader(problemId, problemData) {
+        try {
+            Swal.fire({
+                title: 'Kirim Notifikasi ke Leader?',
+                html: `
+                    <div style="text-align: left; margin: 15px 0;">
+                        <p><strong>Mesin:</strong> ${problemData.machine || problemData.machine_name}</p>
+                        <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                        <p><strong>Line:</strong> ${problemData.line_name || 'N/A'}</p>
+                        <p style="color: #ff9800; font-weight: bold; margin-top: 10px;">Notifikasi akan dikirim ke leader yang menangani line ini sebagai pengingat bahwa ada problem yang belum ditangani.</p>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Kirim Notifikasi',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#ff9800',
+                cancelButtonColor: '#6c757d'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        console.log(`📤 Sending notification request to: /api/dashboard/problem/${problemId}/notify-leader`);
+                        console.log(`Problem ID: ${problemId}`);
+                        console.log(`User role: ${this.userRole}`);
+                        
+                        const response = await fetch(`/api/dashboard/problem/${problemId}/notify-leader`, {
+                            method: 'POST',
+                            headers: this.getAuthHeaders(),
+                            body: JSON.stringify({})
+                        });
+                        
+                        console.log(`Response status: ${response.status}, OK: ${response.ok}`);
+
+                        // Check if response is ok
+                        if (!response.ok) {
+                            // Try to get error message from response
+                            let errorMessage = 'Failed to send notification';
+                            try {
+                                const errorData = await response.json();
+                                errorMessage = errorData.message || errorData.error || errorMessage;
+                            } catch (e) {
+                                // If response is not JSON, use status text
+                                if (response.status === 404) {
+                                    errorMessage = 'API endpoint not found. Please check server configuration.';
+                                } else if (response.status === 401) {
+                                    errorMessage = 'Unauthorized. Please login again.';
+                                } else if (response.status === 403) {
+                                    errorMessage = 'Access denied. Only manager can send notifications.';
+                                } else {
+                                    errorMessage = response.statusText || errorMessage;
+                                }
+                            }
+                            throw new Error(errorMessage);
+                        }
+
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            this.showSweetAlert('success', 'Notifikasi Terkirim', data.message || 'Notifikasi telah dikirim ke leader yang menangani line ini.');
+                        } else {
+                            throw new Error(data.message || 'Failed to send notification');
+                        }
+                    } catch (error) {
+                        console.error('Error sending notification to leader:', error);
+                        this.showSweetAlert('error', 'Error', 'Gagal mengirim notifikasi: ' + error.message);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error in sendNotificationToLeader:', error);
+            this.showSweetAlert('error', 'Error', 'Gagal mengirim notifikasi: ' + error.message);
+        }
     }
 
     // Method untuk receive problem
@@ -1907,20 +2045,22 @@ class DashboardManager {
     }
 
     // 6. METHOD BARU: showForwardedProblemNotification
+    // PERBAIKAN: Method ini sekarang dipindahkan ke halaman divisi
+    // Notifikasi forwarded problem untuk maintenance, quality, engineering tidak lagi muncul di dashboard utama
     showForwardedProblemNotification(data) {
         console.log(`📧 Showing forwarded problem notification for role: ${this.userRole}`);
 
-        // PERBAIKAN: Pastikan hanya department users yang sesuai yang melihat notifikasi ini
+        // Notifikasi forwarded problem untuk maintenance, quality, engineering sekarang dipindahkan ke halaman divisi
+        // Method ini tidak lagi digunakan di dashboard utama untuk role tersebut
         if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
-            // Cek apakah notifikasi ini untuk role user ini
-            if (data.target_role !== this.userRole) {
-                console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole}, disembunyikan`);
-                return;
-            }
-        } else {
-            console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole}, disembunyikan`);
+            // Return early karena notifikasi sudah dipindahkan ke halaman divisi
             return;
         }
+        
+        // Untuk role lain (jika ada), tetap bisa menggunakan logic lama
+        // Tapi saat ini tidak ada role lain yang menggunakan notifikasi forwarded problem di dashboard utama
+        console.log(`📧 Notifikasi forward tidak untuk role ${this.userRole} di dashboard utama, disembunyikan`);
+        return;
 
         // Play alert sound
         this.playAlertSound();
@@ -2146,8 +2286,11 @@ class DashboardManager {
             // Set problem ID
             document.getElementById('ticketingProblemId').value = problemId;
             
-            // Show modal
-            document.getElementById('ticketingModal').style.display = 'flex';
+            // Show modal with proper centering
+            const modal = document.getElementById('ticketingModal');
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
             
             // Set current time as default for diagnosis and repair start time
             const now = new Date();
@@ -2171,7 +2314,8 @@ class DashboardManager {
     }
 
     closeTicketingModal() {
-        document.getElementById('ticketingModal').style.display = 'none';
+        const modal = document.getElementById('ticketingModal');
+        modal.style.display = 'none';
         document.getElementById('ticketingForm').reset();
     }
 
@@ -2263,23 +2407,30 @@ class DashboardManager {
             const result = await response.json();
             
             if (result.success) {
+                // Cek apakah modal problem detail masih terbuka sebelum close ticketing modal
+                const problemModal = document.getElementById('problemModal');
+                const shouldRefreshProblemDetail = problemModal && 
+                    (problemModal.classList.contains('show') || problemModal.style.display !== 'none') && 
+                    this.currentProblemId;
+                
                 Swal.fire({
                     title: 'Berhasil!',
                     text: 'Ticketing problem berhasil disimpan',
                     icon: 'success',
-                    confirmButtonText: 'OK'
-                }).then(() => {
+                    confirmButtonText: 'OK',
+                    timer: 1500,
+                    timerProgressBar: true
+                }).then(async () => {
                     this.closeTicketingModal();
-                    this.loadDashboardData(); // Refresh dashboard
                     
-                    // Jika modal problem detail masih terbuka, refresh detail untuk update tombol
-                    const problemModal = document.getElementById('problemModal');
-                    if (problemModal && problemModal.classList.contains('show') && this.currentProblemId) {
-                        // Refresh problem detail untuk update tombol
-                        setTimeout(() => {
-                            this.refreshCurrentProblemDetail();
-                        }, 500);
+                    // Refresh problem detail jika modal masih terbuka - lakukan SEBELUM loadDashboardData
+                    if (shouldRefreshProblemDetail) {
+                        console.log('Refreshing problem detail after ticketing save...');
+                        await this.refreshCurrentProblemDetail();
                     }
+                    
+                    // Refresh dashboard data
+                    this.loadDashboardData();
                 });
             } else {
                 throw new Error(result.message || 'Failed to save ticketing');
@@ -2348,10 +2499,16 @@ class DashboardManager {
     }
 
     // Method untuk mengecek problem yang sudah 15 menit (hanya untuk manager)
+    // PERBAIKAN: Method ini sekarang dipindahkan ke halaman divisi
+    // Notifikasi 15 menit untuk manager tidak lagi muncul di dashboard utama
     checkLongDurationProblems(problems) {
+        // Notifikasi 15 menit untuk manager sekarang dipindahkan ke halaman divisi
+        // Method ini tidak lagi digunakan di dashboard utama
         if (this.userRole !== 'manager') {
-            return; // Hanya manager yang mendapat notifikasi 15 menit
+            return;
         }
+        // Return early untuk manager karena notifikasi sudah dipindahkan ke halaman divisi
+        return;
 
         const now = new Date();
         const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);

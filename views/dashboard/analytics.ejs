@@ -24,7 +24,7 @@
                         </div>
                         <div class="nav-links"> 
                             <% if (user.role === 'admin') { %>
-                                <a href="/" class="analytics-link" title="Dashboard Utama">
+                                <a href="/divisions" class="analytics-link" title="Dashboard Utama">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
                                 </a>
@@ -41,7 +41,7 @@
                                     <span>Manage Tables</span>
                                 </a>
                             <% } else if (user.role === 'manager') { %>
-                                <a href="/" class="analytics-link" title="Dashboard Utama">
+                                <a href="/divisions" class="analytics-link" title="Dashboard Utama">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
                                 </a>
