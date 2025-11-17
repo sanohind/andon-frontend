@@ -6,7 +6,7 @@
     <title><%= title %></title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/css/dashboard.css">
-    <link rel="stylesheet" href="/css/duration-analytics.css">
+    <link rel="stylesheet" href="/css/analytics-tables.css">
 </head>
 <body>
     <header class="dashboard-header">
@@ -101,65 +101,6 @@
                 </div>
             </div>
 
-            <!-- Duration Analytics Section (Optional) -->
-            <div class="duration-analytics-section" id="duration-analytics-section" style="display: none;">
-                <h3>Analisis Durasi Problem</h3>
-                <div class="duration-stats-grid">
-                    <div class="duration-stat-card">
-                        <div class="duration-stat-header">
-                            <i class="fas fa-play-circle"></i>
-                            <span>Active → Receive</span>
-                        </div>
-                        <div class="duration-stat-content">
-                            <div class="duration-stat-value" id="active-to-receive-avg">N/A</div>
-                            <div class="duration-stat-label">Rata-rata Durasi</div>
-                            <div class="duration-stat-details">
-                                <span id="active-to-receive-count">0</span> problem
-                            </div>
-                        </div>
-                    </div>
-                    <div class="duration-stat-card">
-                        <div class="duration-stat-header">
-                            <i class="fas fa-handshake"></i>
-                            <span>Receive → Feedback</span>
-                        </div>
-                        <div class="duration-stat-content">
-                            <div class="duration-stat-value" id="receive-to-feedback-avg">N/A</div>
-                            <div class="duration-stat-label">Rata-rata Durasi</div>
-                            <div class="duration-stat-details">
-                                <span id="receive-to-feedback-count">0</span> problem
-                            </div>
-                        </div>
-                    </div>
-                    <div class="duration-stat-card">
-                        <div class="duration-stat-header">
-                            <i class="fas fa-check-circle"></i>
-                            <span>Feedback → Final</span>
-                        </div>
-                        <div class="duration-stat-content">
-                            <div class="duration-stat-value" id="feedback-to-final-avg">N/A</div>
-                            <div class="duration-stat-label">Rata-rata Durasi</div>
-                            <div class="duration-stat-details">
-                                <span id="feedback-to-final-count">0</span> problem
-                            </div>
-                        </div>
-                    </div>
-                    <div class="duration-stat-card">
-                        <div class="duration-stat-header">
-                            <i class="fas fa-stopwatch"></i>
-                            <span>Total Resolution</span>
-                        </div>
-                        <div class="duration-stat-content">
-                            <div class="duration-stat-value" id="total-resolution-avg">N/A</div>
-                            <div class="duration-stat-label">Rata-rata Durasi</div>
-                            <div class="duration-stat-details">
-                                <span id="total-resolution-count">0</span> problem
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="charts-section">
                 <div class="chart-card">
                     <h3>Frekuensi Masalah per Mesin</h3>
@@ -183,18 +124,6 @@
                     <h3>MTTR per Tipe Masalah</h3>
                     <div class="chart-wrapper">
                         <canvas id="mttrChart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-card" id="duration-chart-card" style="display: none;">
-                    <h3>Durasi Tahapan Problem</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="durationChart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-card" id="flow-type-chart-card" style="display: none;">
-                    <h3>Distribusi Tipe Alur Problem</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="flowTypeChart"></canvas>
                     </div>
                 </div>
             </div>

@@ -25,8 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         downtime: { ctx: document.getElementById('downtimeChart').getContext('2d'), type: 'bar', chart: null },
         problemType: { ctx: document.getElementById('problemTypeChart').getContext('2d'), type: 'doughnut', chart: null },
         mttr: { ctx: document.getElementById('mttrChart').getContext('2d'), type: 'bar', chart: null },
-        duration: { ctx: document.getElementById('durationChart').getContext('2d'), type: 'bar', chart: null },
-        flowType: { ctx: document.getElementById('flowTypeChart').getContext('2d'), type: 'doughnut', chart: null },
     };
 
     // Fungsi untuk mengubah detik menjadi format Jam:Menit:Detik
@@ -64,30 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (analyticsResult.success) {
                 // Update UI dengan data analytics utama terlebih dahulu
                 updateUI(analyticsResult.data);
-                
-                // Coba fetch duration data (opsional)
-                try {
-                    const durationResponse = await fetch(`/api/dashboard/analytics/duration?start_date=${startDate}&end_date=${endDate}`, {
-                        headers: getAuthHeaders()
-                    });
-                    if (durationResponse.ok) {
-                        const durationResult = await durationResponse.json();
-                        if (durationResult.success && durationResult.data) {
-                            // Tampilkan section duration analytics
-                            document.getElementById('duration-analytics-section').style.display = 'block';
-                            document.getElementById('duration-chart-card').style.display = 'block';
-                            document.getElementById('flow-type-chart-card').style.display = 'block';
-                            updateDurationAnalytics(durationResult.data);
-                            updateDurationCharts(durationResult.data);
-                        }
-                    }
-                } catch (durationError) {
-                    console.warn('Duration analytics not available:', durationError);
-                    // Sembunyikan section duration analytics
-                    document.getElementById('duration-analytics-section').style.display = 'none';
-                    document.getElementById('duration-chart-card').style.display = 'none';
-                    document.getElementById('flow-type-chart-card').style.display = 'none';
-                }
 
                 // Fetch detailed forward analytics data untuk tabel
                 try {
@@ -124,82 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateChart(chartConfigs.downtime, data.downtime.labels, data.downtime.data.map(s => (s / 60).toFixed(2)), 'Downtime (menit)');
         updateChart(chartConfigs.problemType, data.problemTypes.labels, data.problemTypes.data);
         updateChart(chartConfigs.mttr, data.mttr.labels, data.mttr.data.map(s => (s / 60).toFixed(2)), 'MTTR (menit)');
-    }
-
-    // Fungsi untuk memperbarui analytics durasi
-    function updateDurationAnalytics(durationData) {
-        try {
-            if (!durationData || !durationData.summary) {
-                console.warn('Duration data not available');
-                return;
-            }
-            
-            const summary = durationData.summary;
-            
-            // Update Active to Receive
-            if (summary.active_to_receive) {
-                document.getElementById('active-to-receive-avg').textContent = summary.active_to_receive.average_formatted || 'N/A';
-                document.getElementById('active-to-receive-count').textContent = summary.active_to_receive.count || '0';
-            }
-            
-            // Update Receive to Feedback
-            if (summary.receive_to_feedback) {
-                document.getElementById('receive-to-feedback-avg').textContent = summary.receive_to_feedback.average_formatted || 'N/A';
-                document.getElementById('receive-to-feedback-count').textContent = summary.receive_to_feedback.count || '0';
-            }
-            
-            // Update Feedback to Final
-            if (summary.feedback_to_final) {
-                document.getElementById('feedback-to-final-avg').textContent = summary.feedback_to_final.average_formatted || 'N/A';
-                document.getElementById('feedback-to-final-count').textContent = summary.feedback_to_final.count || '0';
-            }
-            
-            // Update Total Resolution
-            if (summary.total_resolution) {
-                document.getElementById('total-resolution-avg').textContent = summary.total_resolution.average_formatted || 'N/A';
-                document.getElementById('total-resolution-count').textContent = summary.total_resolution.count || '0';
-            }
-        } catch (error) {
-            console.error('Error updating duration analytics:', error);
-        }
-    }
-
-    // Fungsi untuk memperbarui chart durasi
-    function updateDurationCharts(durationData) {
-        try {
-            if (!durationData || !durationData.summary) {
-                console.warn('Duration chart data not available');
-                return;
-            }
-            
-            // Duration stages chart
-            const durationLabels = ['Active → Receive', 'Receive → Feedback', 'Feedback → Final', 'Total Resolution'];
-            const durationDataValues = [
-                (durationData.summary.active_to_receive?.average_seconds || 0) / 60, // Convert to minutes
-                (durationData.summary.receive_to_feedback?.average_seconds || 0) / 60,
-                (durationData.summary.feedback_to_final?.average_seconds || 0) / 60,
-                (durationData.summary.total_resolution?.average_seconds || 0) / 60
-            ];
-            updateChart(chartConfigs.duration, durationLabels, durationDataValues, 'Durasi (menit)');
-
-            // Flow type distribution chart
-            if (durationData.total_resolution && Array.isArray(durationData.total_resolution)) {
-                const flowTypeData = {};
-                durationData.total_resolution.forEach(problem => {
-                    const flowType = problem.flow_type;
-                    if (!flowTypeData[flowType]) {
-                        flowTypeData[flowType] = 0;
-                    }
-                    flowTypeData[flowType]++;
-                });
-                
-                const flowTypeLabels = Object.keys(flowTypeData);
-                const flowTypeValues = Object.values(flowTypeData);
-                updateChart(chartConfigs.flowType, flowTypeLabels, flowTypeValues);
-            }
-        } catch (error) {
-            console.error('Error updating duration charts:', error);
-        }
     }
 
     // Fungsi generik untuk membuat/update chart
@@ -724,52 +622,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fungsi untuk export ticketing table ke Excel
     function exportTicketingTableToExcel() {
-        const table = document.getElementById('ticketing-analytics-table');
-        if (!table) return;
+        if (!ticketingTableData || ticketingTableData.length === 0) {
+            alert('Tidak ada data untuk diekspor');
+            return;
+        }
 
-        const ws = XLSX.utils.table_to_sheet(table);
-        
-        // Set column widths untuk timestamp columns
-        const timestampColumns = ['I', 'J', 'K', 'L', 'M']; // Columns untuk timestamps
-        timestampColumns.forEach(col => {
-            if (ws[col + '1']) {
-                ws[col + '1'].z = 'yyyy-mm-dd hh:mm:ss'; // Set format untuk header
-            }
+        // Prepare data untuk Excel dengan menambahkan kolom diagnosis dan result_repair
+        const excelData = ticketingTableData.map(ticketing => {
+            return [
+                ticketing.id || '',
+                ticketing.problem_id || '',
+                ticketing.machine || '',
+                ticketing.problem_type || '',
+                ticketing.pic_technician || '',
+                ticketing.status_label || '',
+                ticketing.timestamps?.problem_received_at || '-',
+                ticketing.timestamps?.diagnosis_started_at || '-',
+                ticketing.timestamps?.repair_started_at || '-',
+                ticketing.timestamps?.repair_completed_at || '-',
+                ticketing.durations?.downtime || '-',
+                ticketing.durations?.mttr || '-',
+                ticketing.durations?.mttd || '-',
+                ticketing.timestamps?.created_at || '-',
+                ticketing.diagnosis || '', // Kolom diagnosis (hanya di export)
+                ticketing.result_repair || '' // Kolom result repair (hanya di export)
+            ];
         });
-        
-        // Set format dan width untuk semua timestamp cells
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-            timestampColumns.forEach(col => {
-                const cell = ws[col + R];
-                if (cell && cell.v && typeof cell.v === 'string' && cell.v !== '-') {
-                    // Set format untuk timestamp cells
-                    cell.z = 'yyyy-mm-dd hh:mm:ss';
-                }
-            });
-        }
-        
-        // Set column widths - auto width untuk semua columns
-        const colWidths = [];
-        const numCols = range.e.c + 1;
-        for (let C = 0; C < numCols; ++C) {
-            let maxWidth = 10; // Default width
-            for (let R = range.s.r; R <= range.e.r; ++R) {
-                const cell = ws[XLSX.utils.encode_cell({r: R, c: C})];
-                if (cell && cell.v) {
-                    const cellValue = String(cell.v);
-                    // Untuk timestamp columns, set width lebih besar
-                    if (timestampColumns.includes(XLSX.utils.encode_col(C))) {
-                        maxWidth = Math.max(maxWidth, 20);
-                    } else {
-                        maxWidth = Math.max(maxWidth, cellValue.length + 2);
-                    }
-                }
-            }
-            colWidths.push({wch: maxWidth});
-        }
+
+        // Header dengan kolom tambahan
+        const headers = [
+            'Ticketing ID',
+            'Problem ID',
+            'Mesin',
+            'Tipe Problem',
+            'PIC/Teknisi',
+            'Status',
+            'Problem Received',
+            'Diagnosis Started',
+            'Repair Started',
+            'Repair Completed',
+            'Downtime',
+            'MTTR',
+            'MTTD',
+            'Created At',
+            'Diagnosis', // Kolom diagnosis
+            'Result Repair' // Kolom result repair
+        ];
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
+
+        // Set column widths
+        const colWidths = [
+            { wch: 12 }, // Ticketing ID
+            { wch: 12 }, // Problem ID
+            { wch: 15 }, // Mesin
+            { wch: 15 }, // Tipe Problem
+            { wch: 15 }, // PIC/Teknisi
+            { wch: 12 }, // Status
+            { wch: 20 }, // Problem Received
+            { wch: 20 }, // Diagnosis Started
+            { wch: 20 }, // Repair Started
+            { wch: 20 }, // Repair Completed
+            { wch: 15 }, // Downtime
+            { wch: 12 }, // MTTR
+            { wch: 12 }, // MTTD
+            { wch: 20 }, // Created At
+            { wch: 30 }, // Diagnosis (lebih lebar untuk teks panjang)
+            { wch: 30 }  // Result Repair (lebih lebar untuk teks panjang)
+        ];
         ws['!cols'] = colWidths;
-        
+
+        // Style header row
+        const headerRange = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = 0; C <= headerRange.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
+            if (!ws[cellAddress]) continue;
+            ws[cellAddress].s = {
+                font: { bold: true },
+                fill: { fgColor: { rgb: "E0E0E0" } },
+                alignment: { horizontal: "center", vertical: "center" }
+            };
+        }
+
+        // Create workbook
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Ticketing Data');
 
