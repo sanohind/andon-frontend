@@ -1,8 +1,8 @@
 /* Divisions & Lines Selection Page Styles */
 
 .divisions-container {
-    padding: 0.25rem 0 0.25rem 0;
-    min-height: calc(100vh - 150px);
+    padding: 0.4rem 0;
+    min-height: calc(100vh - 130px);
 }
 
 .loading-spinner {
@@ -22,16 +22,16 @@
 
 .divisions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.6rem;
+    margin-top: 0.25rem;
 }
 
 .division-card {
     background: white;
     border-radius: var(--border-radius);
     box-shadow: var(--box-shadow);
-    padding: 0.5rem 0.5rem 1rem 0.5rem;
+    padding: 0.45rem 0.45rem 0.65rem 0.45rem;
     transition: var(--transition);
 }
 
@@ -44,13 +44,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.35rem;
     border-bottom: 1.5px solid var(--light-color);
 }
 
 .division-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--primary-color);
     margin: 0;
@@ -69,24 +69,24 @@
 .division-stat-item {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
     background: #ffffff;
     border: 1px solid var(--light-color);
     border-radius: 999px;
-    padding: 0.2rem 0.4rem;
+    padding: 0.15rem 0.35rem;
     box-shadow: var(--box-shadow);
 }
 
 .division-stat-label {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     color: var(--dark-color);
     opacity: 0.75;
     text-transform: uppercase;
-    letter-spacing: 0.1px;
+    letter-spacing: 0.05px;
 }
 
 .division-stat-value {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 700;
     color: var(--primary-color);
 }
@@ -104,7 +104,7 @@
 .lines-container {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.4rem;
+    gap: 0.35rem;
     min-height: fit-content;
 }
 
@@ -112,7 +112,7 @@
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
     border: 1.5px solid var(--light-color);
     border-radius: var(--border-radius);
-    padding: 0.5rem;
+    padding: 0.4rem;
     cursor: pointer;
     transition: var(--transition);
     position: relative;
@@ -145,7 +145,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
 }
 
 .line-title-wrapper {
@@ -156,13 +156,46 @@
     min-width: 0;
 }
 
+.line-stats-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    padding-left: 0.5rem;
+}
+
+.line-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #ffffff;
+    border: 1px solid var(--light-color);
+    border-radius: 999px;
+    padding: 0.15rem 0.35rem;
+    box-shadow: var(--box-shadow);
+}
+
+.line-stat-label {
+    font-size: 0.55rem;
+    color: var(--dark-color);
+    opacity: 0.75;
+    text-transform: uppercase;
+    letter-spacing: 0.05px;
+}
+
+.line-stat-value {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
 /* Stat indicator untuk Total Mesin dan Problem Aktif */
 .stat-indicator {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
 }
 
 .stat-indicator.green {
@@ -181,6 +214,45 @@
     box-shadow: 0 0 4px rgba(108, 117, 125, 0.4);
 }
 
+.stat-indicator.running {
+    background-color: #28a745;
+    box-shadow: 0 0 6px rgba(40, 167, 69, 0.5);
+    animation: runningPulse 2s infinite;
+}
+
+.stat-indicator.idle {
+    background-color: #ffc107;
+    box-shadow: 0 0 6px rgba(255, 193, 7, 0.5);
+}
+
+.stat-indicator.stop {
+    background-color: #dc3545;
+    box-shadow: 0 0 6px rgba(220, 53, 69, 0.6);
+}
+
+@keyframes runningPulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(40, 167, 69, 0.5);
+    }
+    50% {
+        opacity: 0.8;
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.8);
+    }
+}
+
+.stat-value.running-value {
+    color: #28a745;
+}
+
+.stat-value.idle-value {
+    color: #ffc107;
+}
+
+.stat-value.stop-value {
+    color: #dc3545;
+}
+
 @keyframes redIndicatorPulse {
     0%, 100% {
         opacity: 1;
@@ -195,7 +267,7 @@
 }
 
 .line-name {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--primary-color);
     margin: 0;
@@ -217,7 +289,7 @@
 .line-stats {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.3rem;
 }
 
 .stat-item {
@@ -225,7 +297,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 0.3rem 0.4rem;
+    padding: 0.25rem 0.35rem;
     background: white;
     border-radius: calc(var(--border-radius) - 2px);
     border: 1px solid var(--light-color);
@@ -255,17 +327,17 @@
 }
 
 .stat-label {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     color: var(--dark-color);
     opacity: 0.7;
     text-transform: uppercase;
-    letter-spacing: 0.1px;
+    letter-spacing: 0.05px;
     font-weight: 500;
     white-space: nowrap;
 }
 
 .stat-value {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: var(--primary-color);
 }

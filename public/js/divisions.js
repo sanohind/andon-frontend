@@ -156,21 +156,36 @@ class DivisionsManager {
             const linesHTML = division.lines.map(line => {
                 const hasProblems = line.active_problems > 0;
                 const problemIndicatorColor = hasProblems ? 'red' : 'gray';
+                const runningCount = line.running_count || 0;
+                const idleCount = line.idle_count || 0;
                 return `
                     <div class="line-card" data-line="${line.name}" onclick="divisionsManager.navigateToDashboard('${line.name}')">
                         <div class="line-header">
                             <div class="line-title-wrapper">
                                 <h3 class="line-name">${line.name}</h3>
+                                <div class="line-stats-header">
+                                    <div class="line-stat-item">
+                                        <span class="line-stat-label">Total Mesin</span>
+                                        <span class="line-stat-value">${line.total_machines}</span>
+                                    </div>
+                                </div>
                             </div>
                             <i class="fas fa-arrow-right line-arrow"></i>
                         </div>
                         <div class="line-stats">
                             <div class="stat-item">
                                 <div class="stat-label-wrapper">
-                                    <div class="stat-indicator green"></div>
-                                    <span class="stat-label">Total Mesin</span>
+                                    <div class="stat-indicator running"></div>
+                                    <span class="stat-label">Running</span>
                                 </div>
-                                <span class="stat-value">${line.total_machines}</span>
+                                <span class="stat-value running-value">${runningCount}</span>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label-wrapper">
+                                    <div class="stat-indicator idle"></div>
+                                    <span class="stat-label">Idle</span>
+                                </div>
+                                <span class="stat-value idle-value">${idleCount}</span>
                             </div>
                             <div class="stat-item ${hasProblems ? 'has-problem-highlight' : ''}">
                                 <div class="stat-label-wrapper">

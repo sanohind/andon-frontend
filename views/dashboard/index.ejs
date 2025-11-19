@@ -236,7 +236,11 @@
                         <textarea id="resultRepair" name="result_repair" rows="4" placeholder="Jelaskan perbaikan yang telah dilakukan..." required></textarea>
                     </div>
                     
-                    <!-- Waktu Problem Diterima ditetapkan otomatis saat tombol Receive ditekan -->
+                    <div class="form-group">
+                        <label for="problemReceivedAt">Waktu Problem Diterima:</label>
+                        <input type="datetime-local" id="problemReceivedAt" name="problem_received_at" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+                        <small style="color: #6c757d; display: block; margin-top: 5px;">Waktu ini otomatis diisi berdasarkan waktu ketika problem di-receive</small>
+                    </div>
                     
                     <div class="form-group">
                         <label for="diagnosisStartedAt">Waktu Mulai Diagnosa:</label>

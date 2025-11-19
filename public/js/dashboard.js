@@ -564,12 +564,12 @@ class DashboardManager {
                 
                 if (isPlcOffline) {
                     // PLC is offline - override any other status
-                    card.classList.remove('problem', 'warning'); 
+                    card.classList.remove('problem', 'warning', 'idle'); 
                     light.className = 'indicator-light offline';
                     statusText.className = 'status-text offline';
                     statusText.innerHTML = '<i class="fas fa-power-off"></i><span>PLC Offline</span>';
                 } else if (machineData) {
-                    card.classList.remove('problem', 'warning'); 
+                    card.classList.remove('problem', 'warning', 'idle'); 
 
                     // PERBAIKAN: Backend sudah melakukan role filtering, jadi kita langsung gunakan status dari backend
                     // Debug logging for cycle-based status
@@ -594,14 +594,15 @@ class DashboardManager {
                             : '';
                         statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Problem - ${problemType}${cycleInfo}</span>`;
                     } else if (machineData.status === 'warning') {
-                        card.classList.add('warning');
-                        light.className = 'indicator-light warning';
-                        statusText.className = 'status-text warning';
+                        card.classList.add('idle');
+                        card.classList.remove('warning');
+                        light.className = 'indicator-light idle';
+                        statusText.className = 'status-text idle';
                         statusText.style.display = '';
                         const cycleInfo = machineData.cycle_based_status 
                             ? ` (${machineData.cycle_based_status.cycles_without_increase} cycles)` 
                             : '';
-                        statusText.innerHTML = `<i class="fas fa-exclamation-circle"></i><span>Warning - Quantity tidak bertambah${cycleInfo}</span>`;
+                        statusText.innerHTML = `<i class="fas fa-pause-circle"></i><span>Idle - Quantity tidak bertambah${cycleInfo}</span>`;
                     } else {
                         light.className = 'indicator-light normal';
                         statusText.className = 'status-text normal'; 
@@ -610,7 +611,7 @@ class DashboardManager {
                     }
                 } else {
                     console.warn(`[${machineName} Line ${machineLineName}]: Tidak ada data status yang diterima dari server untuk meja ini.`);
-                    card.classList.remove('problem', 'warning'); 
+                    card.classList.remove('problem', 'warning', 'idle'); 
                     light.className = 'indicator-light unknown';
                     statusText.className = 'status-text unknown';
                     statusText.innerHTML = `<i class="fas fa-question-circle"></i><span>No Data / Disconnected</span>`;
@@ -1090,9 +1091,9 @@ class DashboardManager {
                 statusText = machineStatus.problem_type || 'Problem';
             } else if (machineStatus.status === 'warning') {
                 isProblem = false;
-                statusClass = 'status-warning';
-                statusIcon = 'fa-exclamation-circle';
-                statusText = 'Warning';
+                statusClass = 'status-idle';
+                statusIcon = 'fa-pause-circle';
+                statusText = 'Idle';
             } else {
                 isProblem = false;
                 statusClass = 'status-normal';
@@ -1129,7 +1130,7 @@ class DashboardManager {
                 : 'Quantity tidak bertambah';
             messageBoxHTML = `
                 <div class="system-message system-warning">
-                    <h4><i class="fas fa-exclamation-circle"></i> Warning!</h4>
+                    <h4><i class="fas fa-pause-circle"></i> Idle</h4>
                     <p>${cycleInfo}. Threshold warning: ${machineStatus.cycle_based_status?.warning_threshold || 'N/A'} cycles.</p>
                 </div>
             `;
@@ -2286,6 +2287,53 @@ class DashboardManager {
             // Set problem ID
             document.getElementById('ticketingProblemId').value = problemId;
             
+            // Fetch problem detail to get received_at
+            try {
+                const problemResponse = await fetch(`/api/dashboard/problem/${problemId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.getCookieValue('auth_token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (problemResponse.ok) {
+                    const problemData = await problemResponse.json();
+                    if (problemData.success && problemData.data) {
+                        const problem = problemData.data;
+                        
+                        // Set problem_received_at jika problem sudah di-receive
+                        const problemReceivedAtElement = document.getElementById('problemReceivedAt');
+                        if (problemReceivedAtElement && problem.received_at) {
+                            // Convert received_at format (d/m/Y H:i:s) to datetime-local format
+                            const receivedAtParts = problem.received_at.split(' ');
+                            if (receivedAtParts.length === 2) {
+                                const datePart = receivedAtParts[0].split('/');
+                                const timePart = receivedAtParts[1];
+                                if (datePart.length === 3) {
+                                    // Format: DD/MM/YYYY HH:mm:ss -> YYYY-MM-DDTHH:mm
+                                    const formattedDate = `${datePart[2]}-${datePart[1]}-${datePart[0]}T${timePart.substring(0, 5)}`;
+                                    problemReceivedAtElement.value = formattedDate;
+                                }
+                            }
+                        } else if (problemReceivedAtElement && !problem.received_at) {
+                            // Jika belum di-receive, set dengan waktu sekarang
+                            const now = new Date();
+                            const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                            problemReceivedAtElement.value = localDateTime;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching problem detail:', error);
+                // Jika error, set dengan waktu sekarang sebagai fallback
+                const problemReceivedAtElement = document.getElementById('problemReceivedAt');
+                if (problemReceivedAtElement) {
+                    const now = new Date();
+                    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                    problemReceivedAtElement.value = localDateTime;
+                }
+            }
+            
             // Show modal with proper centering
             const modal = document.getElementById('ticketingModal');
             modal.style.display = 'flex';
@@ -2374,8 +2422,9 @@ class DashboardManager {
             // Convert form data to JSON
             const data = {};
             for (let [key, value] of formData.entries()) {
-                // Abaikan field waktu manual yang kini diatur otomatis oleh sistem
-                if (key === 'problem_received_at' || key === 'repair_completed_at') continue;
+                // Abaikan field repair_completed_at yang diatur otomatis oleh sistem
+                // Tapi tetap kirim problem_received_at karena sudah diisi di form
+                if (key === 'repair_completed_at') continue;
                 data[key] = value;
             }
             

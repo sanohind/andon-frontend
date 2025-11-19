@@ -306,7 +306,8 @@ body {
     animation: pulse-border 2s infinite;
 }
 
-.machine-card.warning {
+.machine-card.warning,
+.machine-card.idle {
     border-left: 5px solid var(--warning-color);
     animation: pulse-border-yellow 2s infinite;
 }
@@ -357,7 +358,8 @@ body {
     animation: pulse-red 1.5s infinite;
 }
 
-.indicator-light.warning {
+.indicator-light.warning,
+.indicator-light.idle {
     background: var(--warning-color);
     box-shadow: 0 0 20px rgba(233, 150, 18, 0.8);
     animation: pulse-yellow 1.5s infinite;
@@ -438,7 +440,8 @@ body {
     color: var(--danger-color);
 }
 
-.status-text.warning {
+.status-text.warning,
+.status-text.idle {
     color: var(--warning-color);
 }
 
@@ -1233,7 +1236,8 @@ body {
     font-weight: 600;
 }
 
-.status-text.warning {
+.status-text.warning,
+.status-text.idle {
     color: var(--warning-color, #e99612); /* Warna kuning */
     font-weight: 600;
 }
@@ -1288,7 +1292,8 @@ body {
     color: #155724;
 }
 
-.status-badge.status-warning {
+.status-badge.status-warning,
+.status-badge.status-idle {
     background-color: #fff3cd;
     color: #856404;
 }
@@ -1350,7 +1355,8 @@ body {
     color: #155724;
 }
 
-.detail-list .status-value.status-warning {
+.detail-list .status-value.status-warning,
+.detail-list .status-value.status-idle {
     font-weight: bold;
     color: #856404;
 }
