@@ -263,6 +263,25 @@ app.get('/divisions', requireAuth, async (req, res) => {
   });
 });
 
+app.get('/manage-lines', requireAuth, async (req, res) => {
+  console.log('✅ Manage lines route hit - User:', req.user?.name, 'Role:', req.user?.role);
+  if (!req.user || req.user.role !== 'admin') {
+    console.log('❌ Access denied - User role:', req.user?.role);
+    return res.status(403).send('Akses Ditolak');
+  }
+  try {
+    console.log('✅ Rendering manage-lines page');
+    res.render('dashboard/manage-lines', {
+      title: 'Manage Lines - Andon Dashboard',
+      user: req.user
+    });
+  } catch (error) {
+    console.error('❌ Error rendering manage-lines page:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).send('Error loading page: ' + error.message);
+  }
+});
+
 app.get('/analytics', requireAuth, (req, res) => {
   // Pastikan hanya admin, management, dan manager yang bisa mengakses halaman ini
   if (!['admin', 'management', 'manager'].includes(req.user.role)) {
@@ -886,6 +905,106 @@ app.get('/users', requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Error dari Axios saat mengambil /users:", error.response?.data || error.message);
     res.status(500).send('Gagal mengambil data pengguna. Periksa log server.');
+  }
+});
+
+// Division Lines API Routes
+app.get('/api/division-lines', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/division-lines`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Get division-lines error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.post('/api/division-lines/divisions', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/division-lines/divisions`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.put('/api/division-lines/divisions/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/division-lines/divisions/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.delete('/api/division-lines/divisions/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/division-lines/divisions/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.post('/api/division-lines/lines', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/division-lines/lines`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.put('/api/division-lines/lines/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/division-lines/lines/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.delete('/api/division-lines/lines/:id', requireAuthAPI, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/division-lines/lines/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
 
@@ -2132,6 +2251,9 @@ app.use((req, res) => {
       method: req.method
     });
   }
+  // Log 404 for debugging
+  console.log(`❌ 404 - Page not found: ${req.method} ${req.path}`);
+  console.log(`Available routes: /, /divisions, /analytics, /manage-lines, /users, /plc-monitoring, /inspect-tables`);
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The requested page could not be found.',

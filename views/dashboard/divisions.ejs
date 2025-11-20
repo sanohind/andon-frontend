@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="/css/divisions.css">
 </head>
-<body class="<%= user.role === 'manager' ? 'manager-view' : '' %>">
+<body class="<%= user.role === 'manager' ? 'manager-view' : (['admin', 'maintenance', 'quality', 'engineering'].includes(user.role) ? 'admin-view' : '') %>">
     <header class="dashboard-header">
         <div class="container">
             <div class="header-content">
@@ -36,6 +36,10 @@
                                 <a href="/users" class="analytics-link" title="User Management">
                                     <i class="fas fa-users-cog"></i>
                                     <span>Users</span>
+                                </a>
+                                <a href="/manage-lines" class="analytics-link" title="Manage Lines">
+                                    <i class="fas fa-sitemap"></i>
+                                    <span>Manage Lines</span>
                                 </a>
                                 <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
                                     <i class="fas fa-table"></i>

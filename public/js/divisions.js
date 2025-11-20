@@ -52,6 +52,30 @@ class DivisionsManager {
                 });
             }, 30000);
         }
+        
+        // Listen for divisions updated event from manage-lines page
+        window.addEventListener('divisionsUpdated', () => {
+            console.log('Divisions updated event received, reloading divisions...');
+            this.loadDivisions();
+        });
+        
+        // Listen for localStorage changes (cross-tab communication)
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'divisionsUpdated') {
+                console.log('Divisions updated in another tab, reloading divisions...');
+                this.loadDivisions();
+            }
+        });
+        
+        // Check localStorage periodically for updates (fallback)
+        setInterval(() => {
+            const lastUpdate = localStorage.getItem('divisionsUpdated');
+            if (lastUpdate && (!this.lastDivisionsUpdate || parseInt(lastUpdate) > this.lastDivisionsUpdate)) {
+                this.lastDivisionsUpdate = parseInt(lastUpdate);
+                console.log('Divisions updated detected, reloading divisions...');
+                this.loadDivisions();
+            }
+        }, 2000);
     }
     
     initAlertSound() {

@@ -142,6 +142,10 @@
                                 <i class="fas fa-network-wired"></i>
                                 <span>PLC</span>
                             </a>
+                            <a href="/manage-lines" class="analytics-link" title="Manage Lines">
+                                <i class="fas fa-sitemap"></i>
+                                <span>Manage Lines</span>
+                            </a>
                             <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
                                 <i class="fas fa-table"></i>
                                 <span>Manage Tables</span>
@@ -179,9 +183,7 @@
                 </select>
                 <select name="division" id="divisionInput" style="display:none;">
                     <option value="">Pilih Divisi</option>
-                    <option value="Brazing">Brazing</option>
-                    <option value="Chassis">Chassis</option>
-                    <option value="Nylon">Nylon</option>
+                    <!-- Options akan diisi oleh JavaScript dari API -->
                 </select>
                 <select name="line_name" id="lineNameInput" style="display:none;">
                     <option value="">Pilih Line</option>
@@ -261,9 +263,7 @@
                         <label for="editUserDivision">Divisi</label>
                         <select name="division" id="editUserDivision">
                             <option value="">Pilih Divisi</option>
-                            <option value="Brazing">Brazing</option>
-                            <option value="Chassis">Chassis</option>
-                            <option value="Nylon">Nylon</option>
+                            <!-- Options akan diisi oleh JavaScript dari API -->
                         </select>
                     </div>
                     <div class="form-group" id="editUserLineGroup" style="display:none;">

@@ -74,40 +74,131 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelPartConfigBtn = document.getElementById('cancelPartConfig');
     const cancelPartConfigFooterBtn = document.getElementById('cancelPartConfigFooter');
 
-    // Mapping divisi ke line
-    const divisionLineMapping = {
-        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-    };
+    // Load divisions and lines from API
+    let divisionLineMapping = {};
+    let divisions = [];
 
-    // Pembatasan untuk role manager
-    if (userRole === 'manager') {
-        // Add form: kunci division ke divisi manager dan nonaktifkan
-        if (divisionSelect) {
-            divisionSelect.value = userDivision || '';
-            divisionSelect.disabled = true;
-        }
-        // Batasi pilihan line hanya ke line divisinya
-        if (lineNameSelect) {
-            lineNameSelect.innerHTML = '<option value="">Pilih Line</option>';
-            const allowed = divisionLineMapping[userDivision] || [];
-            allowed.forEach(line => {
-                const opt = document.createElement('option');
-                opt.value = line;
-                opt.textContent = line;
-                lineNameSelect.appendChild(opt);
+    async function loadDivisionsAndLines() {
+        try {
+            const response = await fetch('/api/division-lines', {
+                credentials: 'include'
             });
-        }
-
-        // Edit modal: nonaktifkan perubahan division & line
-        if (editDivision) {
-            editDivision.disabled = true;
-        }
-        if (editLine) {
-            editLine.disabled = true;
+            
+            if (!response.ok) {
+                throw new Error('Failed to load divisions and lines');
+            }
+            
+            const result = await response.json();
+            if (result.success && result.data) {
+                divisions = result.data;
+                // Build mapping
+                divisionLineMapping = {};
+                divisions.forEach(division => {
+                    divisionLineMapping[division.name] = division.lines.map(line => line.name);
+                });
+                
+                // Populate division dropdowns
+                populateDivisionDropdowns();
+                
+                // Apply manager restrictions after loading
+                applyManagerRestrictions();
+            }
+        } catch (error) {
+            console.error('Error loading divisions and lines:', error);
+            // Fallback to empty mapping if API fails
+            divisionLineMapping = {};
         }
     }
+
+    function populateDivisionDropdowns() {
+        // Populate add form division dropdown
+        if (divisionSelect) {
+            const currentValue = divisionSelect.value;
+            divisionSelect.innerHTML = '<option value="">Pilih Divisi</option>';
+            divisions.forEach(division => {
+                const option = document.createElement('option');
+                option.value = division.name;
+                option.textContent = division.name;
+                if (currentValue === division.name) {
+                    option.selected = true;
+                }
+                divisionSelect.appendChild(option);
+            });
+        }
+        
+        // Populate edit form division dropdown
+        if (editDivision) {
+            const currentValue = editDivision.value;
+            editDivision.innerHTML = '<option value="">Pilih Divisi</option>';
+            divisions.forEach(division => {
+                const option = document.createElement('option');
+                option.value = division.name;
+                option.textContent = division.name;
+                if (currentValue === division.name) {
+                    option.selected = true;
+                }
+                editDivision.appendChild(option);
+            });
+        }
+    }
+
+    function applyManagerRestrictions() {
+        // Pembatasan untuk role manager
+        if (userRole === 'manager') {
+            // Add form: kunci division ke divisi manager dan nonaktifkan
+            if (divisionSelect) {
+                divisionSelect.value = userDivision || '';
+                divisionSelect.disabled = true;
+            }
+            // Batasi pilihan line hanya ke line divisinya
+            if (lineNameSelect) {
+                lineNameSelect.innerHTML = '<option value="">Pilih Line</option>';
+                const allowed = divisionLineMapping[userDivision] || [];
+                allowed.forEach(line => {
+                    const opt = document.createElement('option');
+                    opt.value = line;
+                    opt.textContent = line;
+                    lineNameSelect.appendChild(opt);
+                });
+            }
+
+            // Edit modal: nonaktifkan perubahan division & line
+            if (editDivision) {
+                editDivision.disabled = true;
+            }
+            if (editLine) {
+                editLine.disabled = true;
+            }
+        }
+    }
+
+    // Load divisions and lines on page load
+    loadDivisionsAndLines();
+    
+    // Listen for divisions updated event from manage-lines page
+    window.addEventListener('divisionsUpdated', () => {
+        console.log('Divisions updated event received, reloading divisions and lines...');
+        loadDivisionsAndLines();
+    });
+    
+    // Listen for localStorage changes (cross-tab communication)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'divisionsUpdated') {
+            console.log('Divisions updated in another tab, reloading divisions and lines...');
+            loadDivisionsAndLines();
+        }
+    });
+    
+    // Check localStorage periodically for updates (fallback)
+    let lastDivisionsUpdate = null;
+    setInterval(() => {
+        const lastUpdate = localStorage.getItem('divisionsUpdated');
+        if (lastUpdate && (!lastDivisionsUpdate || parseInt(lastUpdate) > lastDivisionsUpdate)) {
+            lastDivisionsUpdate = parseInt(lastUpdate);
+            console.log('Divisions updated detected, reloading divisions and lines...');
+            loadDivisionsAndLines();
+        }
+    }, 2000);
 
     function updateLineOptions(divisionSelect, lineSelect) {
         const selectedDivision = divisionSelect.value;

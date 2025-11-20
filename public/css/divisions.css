@@ -562,6 +562,191 @@ body.manager-view .line-header {
     flex-shrink: 0;
 }
 
+/* Admin View - Similar to Manager but Smaller, Vertical Divisions, Horizontal Lines */
+body.admin-view .divisions-container {
+    padding: 0.5rem 0;
+    min-height: calc(100vh - 130px);
+    display: flex;
+    flex-direction: column;
+}
+
+body.admin-view .divisions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.3rem;
+}
+
+body.admin-view .division-card {
+    padding: 0.5rem 0.6rem;
+    min-width: 0;
+    flex-shrink: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+body.admin-view .division-header {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+body.admin-view .division-title {
+    font-size: 0.9rem;
+}
+
+/* Enlarge division indicators for admin view (smaller than manager) */
+body.admin-view .division-stat-item {
+    padding: 0.25rem 0.4rem;
+    border-width: 1.5px;
+    gap: 0.25rem;
+}
+
+body.admin-view .division-stat-label {
+    font-size: 0.55rem;
+    font-weight: 600;
+}
+
+body.admin-view .division-stat-value {
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+body.admin-view .lines-container {
+    display: flex;
+    flex-direction: row;
+    gap: 0.6rem;
+    flex-wrap: nowrap;
+    width: 100%;
+    flex: 1;
+    padding-bottom: 0.3rem;
+    align-items: stretch;
+    min-height: 140px;
+}
+
+body.admin-view .line-card {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.6rem 0.7rem;
+    border-width: 1.5px;
+    border-radius: calc(var(--border-radius) + 1px);
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+body.admin-view .line-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 15px rgba(10, 40, 86, 0.2);
+}
+
+body.admin-view .line-header {
+    margin-bottom: 0.5rem;
+}
+
+body.admin-view .line-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+body.admin-view .line-stats {
+    gap: 0.4rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 0;
+}
+
+body.admin-view .stat-item {
+    padding: 0.35rem 0.45rem;
+    border-width: 1px;
+    border-radius: calc(var(--border-radius));
+}
+
+body.admin-view .stat-label {
+    font-size: 0.55rem;
+    font-weight: 600;
+}
+
+body.admin-view .stat-value {
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+body.admin-view .stat-indicator {
+    width: 8px;
+    height: 8px;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.25);
+}
+
+body.admin-view .stat-indicator.green {
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+}
+
+body.admin-view .stat-indicator.red {
+    box-shadow: 0 0 5px rgba(220, 53, 69, 0.6);
+    animation: redIndicatorPulse 1.5s infinite;
+}
+
+body.admin-view .stat-indicator.gray {
+    box-shadow: 0 0 4px rgba(108, 117, 125, 0.4);
+}
+
+body.admin-view .stat-indicator.running {
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+    animation: runningPulse 2s infinite;
+}
+
+body.admin-view .stat-indicator.idle {
+    box-shadow: 0 0 5px rgba(255, 193, 7, 0.5);
+}
+
+body.admin-view .stat-indicator.stop {
+    box-shadow: 0 0 5px rgba(220, 53, 69, 0.6);
+}
+
+body.admin-view .line-stat-item {
+    padding: 0.2rem 0.4rem;
+    border-width: 1px;
+}
+
+body.admin-view .line-stat-label {
+    font-size: 0.55rem;
+    font-weight: 600;
+}
+
+body.admin-view .line-stat-value {
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+body.admin-view .line-arrow {
+    font-size: 0.75rem;
+}
+
+body.admin-view .stat-item.has-problem-highlight {
+    border-width: 2px;
+    box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
+    animation: problemPulse 2s infinite;
+}
+
+body.admin-view .stat-value.problems.has-problems {
+    animation: pulse 2s infinite;
+}
+
+body.admin-view .line-header {
+    flex-shrink: 0;
+}
+
+body.admin-view .division-icon {
+    font-size: 1rem;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .divisions-grid {
@@ -600,6 +785,29 @@ body.manager-view .line-header {
 
     body.manager-view .stat-item {
         padding: 0.4rem 0.5rem;
+    }
+
+    /* Admin view responsive */
+    body.admin-view .lines-container {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        max-height: none;
+    }
+
+    body.admin-view .line-card {
+        flex: 1 1 calc(50% - 0.2rem);
+        min-width: 140px;
+        max-width: 100%;
+        min-height: 90px;
+        max-height: 90px;
+    }
+
+    body.admin-view .line-name {
+        font-size: 0.7rem;
+    }
+
+    body.admin-view .stat-item {
+        padding: 0.2rem 0.3rem;
     }
 }
 

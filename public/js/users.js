@@ -48,12 +48,72 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelEditUserBtn = document.getElementById('cancelEditUser');
     const cancelEditUserFooterBtn = document.getElementById('cancelEditUserFooter');
 
-    // Mapping divisi ke line
-    const divisionLineMapping = {
-        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-    };
+    // Load divisions and lines from API
+    let divisionLineMapping = {};
+    let divisions = [];
+
+    async function loadDivisionsAndLines() {
+        try {
+            const response = await fetch('/api/division-lines', {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load divisions and lines');
+            }
+            
+            const result = await response.json();
+            if (result.success && result.data) {
+                divisions = result.data;
+                // Build mapping
+                divisionLineMapping = {};
+                divisions.forEach(division => {
+                    divisionLineMapping[division.name] = division.lines.map(line => line.name);
+                });
+                
+                // Populate division dropdowns
+                populateDivisionDropdowns();
+            }
+        } catch (error) {
+            console.error('Error loading divisions and lines:', error);
+            // Fallback to empty mapping if API fails
+            divisionLineMapping = {};
+        }
+    }
+
+    function populateDivisionDropdowns() {
+        // Populate add form division dropdown
+        const divisionInput = document.getElementById('divisionInput');
+        if (divisionInput) {
+            const currentValue = divisionInput.value;
+            divisionInput.innerHTML = '<option value="">Pilih Divisi</option>';
+            divisions.forEach(division => {
+                const option = document.createElement('option');
+                option.value = division.name;
+                option.textContent = division.name;
+                if (currentValue === division.name) {
+                    option.selected = true;
+                }
+                divisionInput.appendChild(option);
+            });
+        }
+        
+        // Populate edit form division dropdown
+        const editUserDivision = document.getElementById('editUserDivision');
+        if (editUserDivision) {
+            const currentValue = editUserDivision.value;
+            editUserDivision.innerHTML = '<option value="">Pilih Divisi</option>';
+            divisions.forEach(division => {
+                const option = document.createElement('option');
+                option.value = division.name;
+                option.textContent = division.name;
+                if (currentValue === division.name) {
+                    option.selected = true;
+                }
+                editUserDivision.appendChild(option);
+            });
+        }
+    }
 
     function updateLineOptions(divisionSelect, lineSelect) {
         const selectedDivision = divisionSelect.value;
@@ -68,6 +128,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
+
+    // Load divisions and lines on page load
+    loadDivisionsAndLines();
+    
+    // Listen for divisions updated event from manage-lines page
+    window.addEventListener('divisionsUpdated', () => {
+        console.log('Divisions updated event received, reloading divisions and lines...');
+        loadDivisionsAndLines();
+    });
+    
+    // Listen for localStorage changes (cross-tab communication)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'divisionsUpdated') {
+            console.log('Divisions updated in another tab, reloading divisions and lines...');
+            loadDivisionsAndLines();
+        }
+    });
+    
+    // Check localStorage periodically for updates (fallback)
+    let lastDivisionsUpdate = null;
+    setInterval(() => {
+        const lastUpdate = localStorage.getItem('divisionsUpdated');
+        if (lastUpdate && (!lastDivisionsUpdate || parseInt(lastUpdate) > lastDivisionsUpdate)) {
+            lastDivisionsUpdate = parseInt(lastUpdate);
+            console.log('Divisions updated detected, reloading divisions and lines...');
+            loadDivisionsAndLines();
+        }
+    }, 2000);
 
     function openEditUserModal(user) {
         editUserId.value = user.id;
