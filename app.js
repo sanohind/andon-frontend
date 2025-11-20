@@ -205,6 +205,7 @@ app.get('/', requireAuth, async (req, res) => {
     let machinesGroupedByLine = dashboardDataResponse.data?.data?.machine_statuses_by_line || {};
 
     // Safety filter (render-time) untuk manager agar hanya melihat line sesuai divisi
+    // Management melihat semua data seperti admin
     if (req.user && req.user.role === 'manager') {
       const divisionToLines = {
         'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
@@ -251,8 +252,8 @@ app.get('/', requireAuth, async (req, res) => {
 
 // Divisions page route
 app.get('/divisions', requireAuth, async (req, res) => {
-  // Only allow admin, maintenance, quality, engineering, and manager
-  if (!['admin', 'maintenance', 'quality', 'engineering', 'manager'].includes(req.user.role)) {
+  // Only allow admin, management, maintenance, quality, engineering, and manager
+  if (!['admin', 'management', 'maintenance', 'quality', 'engineering', 'manager'].includes(req.user.role)) {
     return res.redirect('/');
   }
   
@@ -263,8 +264,8 @@ app.get('/divisions', requireAuth, async (req, res) => {
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
-  // Pastikan hanya admin yang bisa mengakses halaman ini
-  if (!['admin', 'manager'].includes(req.user.role)) {
+  // Pastikan hanya admin, management, dan manager yang bisa mengakses halaman ini
+  if (!['admin', 'management', 'manager'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak'); // atau redirect ke halaman utama
   }
 
@@ -401,7 +402,7 @@ app.get('/auth', async (req, res) => {
         if (response.data.valid && response.data.user) {
             const user = response.data.user;
             // Redirect based on role
-            const rolesForDivisions = ['admin', 'maintenance', 'quality', 'engineering', 'manager'];
+            const rolesForDivisions = ['admin', 'management', 'maintenance', 'quality', 'engineering', 'manager'];
             if (rolesForDivisions.includes(user.role)) {
                 // Redirect to divisions page for these roles
                 res.redirect('/divisions');
@@ -755,7 +756,7 @@ app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
 });
 
 app.get('/plc-monitoring', requireAuth, (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!['admin', 'management'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak');
   }
   res.render('dashboard/plc-monitoring', {
@@ -837,6 +838,10 @@ app.delete('/api/inspection-tables/:id', requireAuth, async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ success: false, message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -865,7 +870,7 @@ app.delete('/api/inspection-tables/:id', requireAuth, async (req, res) => {
 });
 
 app.get('/users', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!['admin', 'management'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak');
   }
   try {
@@ -886,7 +891,7 @@ app.get('/users', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MENGAMBIL DAFTAR PENGGUNA
 app.get('/api/users', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') {
+  if (!['admin', 'management'].includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
   try {
@@ -902,6 +907,10 @@ app.get('/api/users', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MENAMBAH PENGGUNA BARU
 app.post('/api/users', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ success: false, message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -918,6 +927,10 @@ app.post('/api/users', requireAuth, async (req, res) => {
 
 // Update user
 app.put('/api/users/:id', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ success: false, message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -942,6 +955,10 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
 
 // Delete user
 app.delete('/api/users/:id', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ success: false, message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Akses Ditolak' });
   }
@@ -965,7 +982,7 @@ app.delete('/api/users/:id', requireAuth, async (req, res) => {
 
 // RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN)
 app.get('/inspect-tables', requireAuth, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
   try {
     console.log('Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
     
@@ -1022,7 +1039,7 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MENGAMBIL DAFTAR MEJA INSPECT
 app.get('/api/inspect-tables', requireAuth, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     console.log('API: Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
     
@@ -1061,6 +1078,10 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MANAJEMEN MEJA
 app.post('/api/inspect-tables', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
@@ -1073,6 +1094,10 @@ app.post('/api/inspect-tables', requireAuth, async (req, res) => {
 });
 
 app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
@@ -1085,6 +1110,10 @@ app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
 });
 
 app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
@@ -1100,6 +1129,10 @@ app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
 // Tambahan proxy untuk Set Target & Set Cycle & Running Hour & Cycle Threshold
 // PENTING: Route yang lebih spesifik harus ditempatkan SEBELUM route yang lebih umum
 app.put('/api/inspection-tables/address/:address/target', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user?.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/target`, req.body, {
@@ -1112,6 +1145,10 @@ app.put('/api/inspection-tables/address/:address/target', requireAuthAPI, async 
 });
 
 app.put('/api/inspection-tables/address/:address/cycle', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user?.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/cycle`, req.body, {
@@ -1124,6 +1161,10 @@ app.put('/api/inspection-tables/address/:address/cycle', requireAuthAPI, async (
 });
 
 app.put('/api/inspection-tables/address/:address/cycle-threshold', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user?.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}/cycle-threshold`, req.body, {
@@ -1149,6 +1190,10 @@ app.put('/api/inspection-tables/address/:address/cycle-threshold', requireAuthAP
 });
 
 app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res) => {
+  // Block write operations for management role
+  if (req.user?.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${req.params.address}`, req.body, {
@@ -1173,6 +1218,10 @@ app.get('/api/inspection-tables/metrics', requireAuthAPI, async (req, res) => {
 
 // Tambahkan proxy konsisten untuk POST inspection-tables
 app.post('/api/inspection-tables', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
@@ -1201,7 +1250,7 @@ app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
 
 // Part Configurations proxy routes
 app.get('/api/part-configurations', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const headers = {};
     if (process.env.LARAVEL_API_TOKEN) {
@@ -1218,6 +1267,10 @@ app.get('/api/part-configurations', requireAuthAPI, async (req, res) => {
 });
 
 app.post('/api/part-configurations', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations`, req.body, {
@@ -1230,6 +1283,10 @@ app.post('/api/part-configurations', requireAuthAPI, async (req, res) => {
 });
 
 app.post('/api/part-configurations/bulk-import', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations/bulk-import`, req.body, {
@@ -1242,7 +1299,7 @@ app.post('/api/part-configurations/bulk-import', requireAuthAPI, async (req, res
 });
 
 app.get('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1254,6 +1311,10 @@ app.get('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
 });
 
 app.put('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, req.body, {
@@ -1266,6 +1327,10 @@ app.put('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
 });
 
 app.delete('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
+  // Block write operations for management role
+  if (req.user.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
   if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, {
@@ -1435,7 +1500,8 @@ function filterDataForUser(user, data) {
 
     switch (user.role) {
         case 'admin':
-            // Admin melihat semua data tanpa filter
+        case 'management':
+            // Admin dan Management melihat semua data tanpa filter
             return {
                 machine_statuses_by_line: filteredMachineStatuses,
                 active_problems: filteredActiveProblems,
@@ -1528,7 +1594,8 @@ function shouldSendNotificationToUser(user, notification) {
     if (notification.isForwarded) {
         switch (user.role) {
             case 'admin':
-                return false; // Admin tidak menerima notifikasi popup
+            case 'management':
+                return false; // Admin dan Management tidak menerima notifikasi popup
 
             case 'maintenance':
                 return notification.forwarded_to_role === 'maintenance';
@@ -1551,7 +1618,8 @@ function shouldSendNotificationToUser(user, notification) {
     // Untuk problem baru (belum di-forward)
     switch (user.role) {
         case 'admin':
-            return false; // Admin tidak menerima notifikasi popup
+        case 'management':
+            return false; // Admin dan Management tidak menerima notifikasi popup
 
         case 'maintenance':
         case 'quality':

@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="/css/divisions.css">
 </head>
-<body>
+<body class="<%= user.role === 'manager' ? 'manager-view' : '' %>">
     <header class="dashboard-header">
         <div class="container">
             <div class="header-content">
@@ -24,7 +24,7 @@
                             <span><%= user.name %></span>
                         </div>
                         <div class="nav-links"> 
-                            <% if (user.role === 'admin') { %>
+                            <% if (user.role === 'admin' || user.role === 'management') { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics Dashboard">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>

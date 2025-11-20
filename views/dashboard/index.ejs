@@ -27,7 +27,7 @@
                             <span><%= user.name %></span>
                         </div>
                         <div class="nav-links"> 
-                            <% if (user.role === 'admin') { %>
+                            <% if (user.role === 'admin' || user.role === 'management') { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics Dashboard">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>
@@ -133,6 +133,7 @@
             %>
                 <% 
                     const shouldDisplayLine = user.role === 'admin' || 
+                                              user.role === 'management' ||
                                               user.role === 'manager' ||
                                               user.role === 'maintenance' || 
                                               user.role === 'quality' || 

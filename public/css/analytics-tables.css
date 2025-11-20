@@ -22,6 +22,27 @@
     flex-wrap: wrap;
 }
 
+.page-size-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--dark-color);
+}
+
+.page-size-control select {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 0.85rem;
+}
+
+.page-size-control select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
 .btn {
     padding: 0.5rem 1rem;
     border: none;

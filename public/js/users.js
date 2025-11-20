@@ -5,6 +5,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const addUserForm = document.getElementById('addUserForm');
     const userTableBody = document.querySelector('#userTable tbody');
 
+    // Get user role from data attribute
+    const userDataElement = document.getElementById('userData');
+    const currentUserRole = userDataElement ? userDataElement.dataset.role : null;
+    
+    // Disable write operations for management role
+    if (currentUserRole === 'management') {
+        // Hide add form
+        if (addUserForm) {
+            addUserForm.closest('.form-container').style.display = 'none';
+        }
+        // Disable edit/delete buttons
+        const editButtons = document.querySelectorAll('.btn-edit-user');
+        const deleteButtons = document.querySelectorAll('.btn-delete-user');
+        editButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.title = 'Role management hanya dapat melihat data';
+        });
+        deleteButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.title = 'Role management hanya dapat melihat data';
+        });
+    }
+
 
     // Edit Modal Elements
     const editUserModal = document.getElementById('editUserModal');

@@ -161,12 +161,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDisplayedData = [];
     let currentSortColumn = null;
     let currentSortDirection = 'asc';
+    let forwardSearchInitialized = false;
+    let forwardPageSize = 10;
 
     // Global variables untuk tabel ticketing analytics
     let ticketingTableData = [];
     let currentTicketingDisplayedData = [];
     let currentTicketingSortColumn = null;
     let currentTicketingSortDirection = 'asc';
+    let ticketingSearchInitialized = false;
+    let ticketingPageSize = 10;
 
     // Fungsi untuk mengupdate tabel detail forward analytics
     function updateDetailedForwardAnalyticsTable(data) {
@@ -190,10 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fungsi untuk render tabel forward analytics
     function renderForwardTable(data) {
         const tableBody = document.getElementById('forward-analytics-table-body');
-        // Simpan data yang sedang ditampilkan (hasil filter/sort)
-        currentDisplayedData = Array.isArray(data) ? data : [];
+        const dataArray = Array.isArray(data) ? data : [];
+        currentDisplayedData = dataArray;
+        const visibleData = dataArray.slice(0, forwardPageSize || 10);
         
-        tableBody.innerHTML = currentDisplayedData.map(problem => {
+        tableBody.innerHTML = visibleData.map(problem => {
             const flowTypeClass = problem.flow_type.toLowerCase().replace(/\s+/g, '-');
             const problemTypeClass = problem.problem_type.toLowerCase();
             
@@ -235,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fungsi untuk setup search pada tabel forward analytics
     function setupForwardTableSearch() {
+        if (forwardSearchInitialized) return;
         const searchInput = document.getElementById('forward-table-search');
         if (!searchInput) return;
         
@@ -249,10 +255,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             renderForwardTable(filteredData);
         });
+        forwardSearchInitialized = true;
     }
 
     // Fungsi untuk setup search pada tabel ticketing analytics
     function setupTicketingTableSearch() {
+        if (ticketingSearchInitialized) return;
         const searchInput = document.getElementById('ticketing-table-search');
         if (!searchInput) return;
         
@@ -267,9 +275,9 @@ document.addEventListener('DOMContentLoaded', () => {
                        ticketing.pic_technician.toLowerCase().includes(searchTerm) ||
                        ticketing.status.toLowerCase().includes(searchTerm);
             });
-            updateTicketingTable(filteredData);
-            currentTicketingDisplayedData = filteredData;
+            updateTicketingTable(filteredData, { skipBaseUpdate: true });
         });
+        ticketingSearchInitialized = true;
     }
 
     // Fungsi untuk sorting tabel
@@ -432,10 +440,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     return 0;
                 });
             
-                updateTicketingTable(sortedData);
-                currentTicketingDisplayedData = sortedData;
+                updateTicketingTable(sortedData, { skipBaseUpdate: true });
             });
         });
+    }
+
+    function setupPageSizeControls() {
+        const forwardPageSizeSelect = document.getElementById('forward-table-page-size');
+        if (forwardPageSizeSelect) {
+            forwardPageSizeSelect.value = forwardPageSize.toString();
+            forwardPageSizeSelect.addEventListener('change', () => {
+                forwardPageSize = parseInt(forwardPageSizeSelect.value, 10) || 10;
+                const baseData = currentDisplayedData && currentDisplayedData.length > 0 ? currentDisplayedData : forwardTableData;
+                renderForwardTable(baseData);
+            });
+        }
+
+        const ticketingPageSizeSelect = document.getElementById('ticketing-table-page-size');
+        if (ticketingPageSizeSelect) {
+            ticketingPageSizeSelect.value = ticketingPageSize.toString();
+            ticketingPageSizeSelect.addEventListener('change', () => {
+                ticketingPageSize = parseInt(ticketingPageSizeSelect.value, 10) || 10;
+                const baseData = currentTicketingDisplayedData && currentTicketingDisplayedData.length > 0 ? currentTicketingDisplayedData : ticketingTableData;
+                updateTicketingTable(baseData, { skipBaseUpdate: true });
+            });
+        }
     }
 
     // Fungsi untuk export PDF
@@ -576,26 +605,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Fungsi untuk update tabel ticketing
-    function updateTicketingTable(ticketingData) {
+    function updateTicketingTable(ticketingData, options = {}) {
+        const { skipBaseUpdate = false } = options;
         const tbody = document.getElementById('ticketing-analytics-table-body');
         const emptyState = document.getElementById('ticketing-table-empty-state');
 
         if (!tbody) return;
 
-        // Simpan data ke variabel global
-        ticketingTableData = ticketingData || [];
+        if (!skipBaseUpdate) {
+            ticketingTableData = ticketingData || [];
+        }
 
-        // Clear existing rows
+        const dataset = Array.isArray(ticketingData) ? [...ticketingData] : [];
+        currentTicketingDisplayedData = dataset;
+
         tbody.innerHTML = '';
 
-        if (!ticketingData || ticketingData.length === 0) {
+        if (dataset.length === 0) {
             emptyState.style.display = 'block';
             return;
         }
 
         emptyState.style.display = 'none';
 
-        ticketingData.forEach(ticketing => {
+        const visibleData = dataset.slice(0, ticketingPageSize || 10);
+
+        visibleData.forEach(ticketing => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${ticketing.id}</td>
@@ -616,8 +651,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.appendChild(row);
         });
 
-        // Setup search functionality
-        setupTicketingTableSearch();
+        if (!ticketingSearchInitialized) {
+            setupTicketingTableSearch();
+        }
     }
 
     // Fungsi untuk export ticketing table ke Excel
@@ -813,6 +849,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    setupPageSizeControls();
 
     // Setup table sorting
     setupTableSorting();

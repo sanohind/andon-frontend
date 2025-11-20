@@ -17,6 +17,20 @@ function getAuthHeaders() {
 
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('plc-monitoring-content');
+    
+    // Get user role from data attribute
+    const userDataElement = document.getElementById('userData');
+    const currentUserRole = userDataElement ? userDataElement.dataset.role : null;
+    
+    // Disable write operations for management role
+    if (currentUserRole === 'management') {
+        // Hide add device form if exists
+        const addDeviceForm = document.getElementById('addDeviceForm');
+        if (addDeviceForm) {
+            addDeviceForm.closest('.form-container').style.display = 'none';
+        }
+        // Disable edit/delete buttons will be handled in createTableRow function
+    }
     let refreshInterval;
 
     // Function to determine device status based on smart logic
@@ -79,6 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function createTableRow(device) {
         const deviceStatus = determineDeviceStatus(device);
         const lastSeenFormatted = formatLastSeen(device.last_seen);
+        const isManagement = currentUserRole === 'management';
+        const disabledAttr = isManagement ? 'disabled style="opacity: 0.5; cursor: not-allowed;" title="Role management hanya dapat melihat data"' : '';
         
         return `
             <tr style="${deviceStatus.isOffline ? 'background-color: #fff5f5;' : 'background-color: #f0fff4;'}">
@@ -100,10 +116,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
                 <td>
                     <div class="action-buttons">
-                        <button class="btn btn-edit btn-sm" onclick="editDevice(${device.id})" title="Edit Device">
+                        <button class="btn btn-edit btn-sm" onclick="editDevice(${device.id})" title="Edit Device" ${disabledAttr}>
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-delete btn-sm" onclick="deleteDevice(${device.id}, '${device.device_id}')" title="Delete Device">
+                        <button class="btn btn-delete btn-sm" onclick="deleteDevice(${device.id}, '${device.device_id}')" title="Delete Device" ${disabledAttr}>
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>

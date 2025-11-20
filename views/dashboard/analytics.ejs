@@ -23,7 +23,7 @@
                             <span><%= user.name %></span>
                         </div>
                         <div class="nav-links"> 
-                            <% if (user.role === 'admin') { %>
+                            <% if (user.role === 'admin' || user.role === 'management') { %>
                                 <a href="/divisions" class="analytics-link" title="Dashboard Utama">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
@@ -139,6 +139,16 @@
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
                     <input type="text" class="search-box" id="forward-table-search" placeholder="Cari problem ID, mesin, atau tipe...">
+                    <div class="page-size-control">
+                        <label for="forward-table-page-size">Tampilkan</label>
+                        <select id="forward-table-page-size">
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span>data</span>
+                    </div>
                 </div>
                 <div class="forward-analytics-table-container">
                     <table class="forward-analytics-table" id="forward-analytics-table">
@@ -212,6 +222,16 @@
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
                     <input type="text" class="search-box" id="ticketing-table-search" placeholder="Cari ticketing ID, mesin, atau teknisi...">
+                    <div class="page-size-control">
+                        <label for="ticketing-table-page-size">Tampilkan</label>
+                        <select id="ticketing-table-page-size">
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span>data</span>
+                    </div>
                 </div>
                 <div class="ticketing-analytics-table-container">
                     <table class="ticketing-analytics-table" id="ticketing-analytics-table">

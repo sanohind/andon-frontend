@@ -317,7 +317,7 @@
                             <span><%= user.name %></span>
                         </div>
                         <div class="nav-links"> 
-                            <% if (user.role === 'admin') { %>
+                            <% if (user.role === 'admin' || user.role === 'management') { %>
                                 <a href="/divisions" class="analytics-link" title="Dashboard Utama">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>

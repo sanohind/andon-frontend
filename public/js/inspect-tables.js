@@ -19,6 +19,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = userData ? userData.dataset.role : null;
     const userDivision = userData ? userData.dataset.division : null;
 
+    // Disable write operations for management role
+    if (userRole === 'management') {
+        // Hide add form
+        if (addForm) {
+            addForm.closest('.form-container').style.display = 'none';
+        }
+        // Disable all action buttons
+        const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-add-part-config, .btn-edit-part-config, .btn-delete-part-config');
+        actionButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.title = 'Role management hanya dapat melihat data';
+        });
+    }
+
     // Elements for Set Target Modal
     const setTargetModal = document.getElementById('setTargetModal');
     const setTargetForm = document.getElementById('setTargetForm');

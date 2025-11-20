@@ -129,7 +129,7 @@
                         <span><%= user.name %></span>
                     </div>
                     <div class="nav-links"> 
-                        <% if (user.role === 'admin') { %>
+                        <% if (user.role === 'admin' || user.role === 'management') { %>
                             <a href="/divisions" class="analytics-link" title="Dashboard Utama">
                                 <i class="fas fa-tachometer-alt"></i>
                                 <span>Dashboard</span>
@@ -170,6 +170,7 @@
                 <select name="role" id="roleSelect" required>
                     <option value="">Pilih Role</option>
                     <option value="admin">Admin</option>
+                    <option value="management">Management</option>
                     <option value="manager">Manager</option>
                     <option value="leader">Leader</option>
                     <option value="maintenance">Maintenance</option>
