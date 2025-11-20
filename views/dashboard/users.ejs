@@ -130,38 +130,46 @@
                     </div>
                     <div class="nav-links"> 
                         <% if (user.role === 'admin' || user.role === 'management') { %>
-                            <a href="/divisions" class="analytics-link" title="Dashboard Utama">
+                            <a href="/divisions" class="analytics-link" title="Dashboard">
                                 <i class="fas fa-tachometer-alt"></i>
                                 <span>Dashboard</span>
                             </a>
-                            <a href="/analytics" class="analytics-link" title="Analytics Dashboard">
+                            <a href="/analytics" class="analytics-link" title="Analytics">
                                 <i class="fas fa-chart-line"></i>
                                 <span>Analytics</span>
                             </a>
-                            <a href="/plc-monitoring" class="analytics-link" title="PLC Monitoring">
+                            <a href="/plc-monitoring" class="analytics-link" title="PLC">
                                 <i class="fas fa-network-wired"></i>
                                 <span>PLC</span>
                             </a>
-                            <a href="/manage-lines" class="analytics-link" title="Manage Lines">
+                            <a href="/manage-lines" class="analytics-link" title="Lines">
                                 <i class="fas fa-sitemap"></i>
-                                <span>Manage Lines</span>
+                                <span>Lines</span>
                             </a>
-                            <a href="/inspect-tables" class="analytics-link" title="Manage Inspect Tables">
+                            <a href="/inspect-tables" class="analytics-link" title="Tables">
                                 <i class="fas fa-table"></i>
-                                <span>Manage Tables</span>
+                                <span>Tables</span>
                             </a>
                         <% } %>
                     </div>
-                    <form method="POST" action="/logout" style="display: inline; margin-left: 10px;">
+                    <form method="POST" action="/logout" style="display: inline;">
                         <button type="submit" class="logout-btn" title="Logout">
                             <i class="fas fa-sign-out-alt"></i>
                         </button>
                     </form>
                 </div>
+                <div class="bottom-row-status">
+                    <div class="connection-status" id="connectionStatus">
+                        <i class="fas fa-wifi"></i>
+                        <span>Connected</span>
+                    </div>
+                    <div class="current-time">
+                        <span id="currentTime">--:--:--</span>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</header>
+    </header>
 
 <main class="dashboard-main">
     <div class="container">
@@ -283,6 +291,14 @@
     </div>
 </div>
 
-<script src="/js/users.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/header-common.js"></script>
+    <script src="/js/users.js"></script>
+    <script>
+        // Hide Users link on users page
+        document.querySelectorAll('.analytics-link[href="/users"]').forEach(link => {
+            link.style.display = 'none';
+        });
+    </script>
 </body>
 </html>

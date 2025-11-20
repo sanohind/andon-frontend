@@ -35,7 +35,7 @@ body {
 .dashboard-header {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
-    padding: 1rem 0;
+    padding: 0.5rem 0;
     box-shadow: var(--box-shadow);
     position: sticky;
     top: 0;
@@ -46,12 +46,15 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .logo {
     display: flex;
     align-items: center;
-    gap: 32px;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
 .logo i {
@@ -60,40 +63,84 @@ body {
 }
 
 .logo h1 {
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     color: var(--primary-color);
     font-weight: 700;
     margin: 0;
+    margin-left: 10px;
+    white-space: nowrap;
     display: flex;
     align-items: center;
 }
 
 .logo-img {
-    height: 40px;
+    height: 32px;
     width: auto;
     object-fit: contain;
+}
+
+.status-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.top-row-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.bottom-row-status {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    justify-content: flex-end;
+    font-size: 0.75rem;
 }
 
 .user-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     color: var(--primary-color);
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.user-info i {
+    font-size: 0.85rem;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
 }
 
 .logout-btn {
     background: var(--danger-color);
     color: white;
     border: none;
-    padding: 6px 8px;
+    padding: 4px 6px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     transition: var(--transition);
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 28px;
+    height: 28px;
 }
 
 .logout-btn:hover {
@@ -101,33 +148,40 @@ body {
     transform: translateY(-1px);
 }
 
+.logout-btn i {
+    font-size: 0.75rem;
+}
+
 .analytics-link {
     color: #0A2856;
     text-decoration: none;
-    margin-left: 15px;
-    padding: 8px 12px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
     background-color: rgba(255, 255, 255, 0.1);
     transition: background-color 0.3s ease;
     display: inline-flex;
     align-items: center;
-    font-size: 0.9em;
+    font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 .analytics-link:hover {
-    background-color: rgba(255, 255, 255, 0.103);
+    background-color: rgba(10, 40, 86, 0.1);
 }
 
 .analytics-link i {
-    margin-right: 8px;
+    margin-right: 4px;
+    font-size: 0.75rem;
 }
 
 .connection-status {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     color: var(--success-color);
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 0.75rem;
+    white-space: nowrap;
 }
 
 .connection-status.disconnected {
@@ -138,9 +192,15 @@ body {
     color: var(--warning-color);
 }
 
-.last-update {
-    font-size: 0.9rem;
+.connection-status i {
+    font-size: 0.7rem;
+}
+
+.current-time {
+    font-size: 0.75rem;
     color: var(--dark-color);
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 .back-button {
