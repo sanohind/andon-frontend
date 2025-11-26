@@ -24,7 +24,16 @@ class DashboardManager {
         this.userRole = userDataElement ? userDataElement.dataset.role : null;
         this.userLineName = userDataElement ? userDataElement.dataset.line : null;
         this.userDivision = userDataElement ? userDataElement.dataset.division : null;
-        this.machines = dashboardDataElement ? JSON.parse(dashboardDataElement.dataset.machines) : [];
+        
+        // Safely parse machines data
+        try {
+            this.machines = dashboardDataElement && dashboardDataElement.dataset.machines 
+                ? JSON.parse(dashboardDataElement.dataset.machines) 
+                : [];
+        } catch (e) {
+            console.warn('Error parsing machines data:', e);
+            this.machines = [];
+        }
         
         // Get line filter from URL query parameter
         const urlParams = new URLSearchParams(window.location.search);
@@ -52,32 +61,56 @@ class DashboardManager {
     }
 
     init() {
-		this.initSocket();
-        this.bindEvents();
-        this.loadDashboardData();
-        this.loadStats();
+        try {
+            this.initSocket();
+            this.bindEvents();
+            this.loadDashboardData();
+            this.loadStats();
 
-        // Load table metrics (target, cycle, oee) and refresh periodically
-        this.loadTableMetrics();
-        setInterval(() => this.loadTableMetrics(), 60000);
-		// Check Node-RED core status immediately and on interval
-		this.checkNodeRedStatus();
-		setInterval(() => {
-			this.checkNodeRedStatus();
-		}, 10000);
-        
-        // Auto refresh every 30 seconds sebagai fallback HANYA jika socket tidak terhubung
-        setInterval(() => {
-            if (!this.socketConnected) {
-                console.log('🔄 Fallback refresh activated (socket disconnected)');
-                this.fallbackActive = true;
-                this.loadDashboardDataWithFallbackDetection();
-            } else {
-                this.fallbackActive = false;
-            }
-        }, 30000); // 30 detik untuk fallback
-        
-        console.log('🚀 Dashboard Manager initialized');
+            // Load table metrics (target, cycle, oee) and refresh periodically
+            this.loadTableMetrics();
+            setInterval(() => {
+                try {
+                    this.loadTableMetrics();
+                } catch (e) {
+                    console.error('Error in loadTableMetrics interval:', e);
+                }
+            }, 60000);
+            
+            // Check Node-RED core status immediately and on interval
+            this.checkNodeRedStatus();
+            setInterval(() => {
+                try {
+                    this.checkNodeRedStatus();
+                } catch (e) {
+                    console.error('Error in checkNodeRedStatus interval:', e);
+                }
+            }, 10000);
+            
+            // Auto refresh every 30 seconds sebagai fallback HANYA jika socket tidak terhubung
+            setInterval(() => {
+                try {
+                    if (!this.socketConnected) {
+                        console.log('🔄 Fallback refresh activated (socket disconnected)');
+                        this.fallbackActive = true;
+                        this.loadDashboardDataWithFallbackDetection();
+                    } else {
+                        this.fallbackActive = false;
+                    }
+                } catch (e) {
+                    console.error('Error in fallback refresh interval:', e);
+                }
+            }, 30000); // 30 detik untuk fallback
+            
+            console.log('🚀 Dashboard Manager initialized');
+        } catch (error) {
+            console.error('Error initializing DashboardManager:', error);
+            // Tampilkan pesan error ke user
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000;';
+            errorDiv.innerHTML = '<h3 style="color: #e74c3c; margin-bottom: 10px;">Error Memuat Dashboard</h3><p>Terjadi error saat memuat dashboard. Silakan refresh halaman.</p><button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #0A2856; color: white; border: none; border-radius: 4px; cursor: pointer;">Refresh Halaman</button>';
+            document.body.appendChild(errorDiv);
+        }
     }
 
     async loadTableMetrics() {
@@ -239,15 +272,31 @@ class DashboardManager {
                 console.log('🔄 Using cached filtered data for refresh');
                 this.updateMachineStatuses(this.lastMachineStatuses);
                 this.updateActiveProblems(this.lastActiveProblems);
-                this.updateLastUpdateTime();
+                try {
+                    this.updateLastUpdateTime();
+                } catch (err) {
+                    console.warn('Error updating last update time:', err);
+                }
             } else {
                 // Fallback: Jika data tidak tersedia, minta refresh dari server
                 console.log('🔄 No cached data, requesting refresh from server');
-                this.socket.emit('requestUpdate');
+                if (this.socket && this.socketConnected) {
+                    this.socket.emit('requestUpdate');
+                } else {
+                    // Jika socket belum terhubung, gunakan fallback detection
+                    console.log('🔄 Socket not connected, using fallback detection');
+                    await this.loadDashboardDataWithFallbackDetection();
+                }
             }
         } catch (error) {
             console.error('Error loading dashboard data:', error);
-            this.showSweetAlert('error', 'Error', 'Failed to load dashboard data');
+            // Jangan tampilkan error jika ini adalah error socket, gunakan fallback
+            if (!this.socketConnected) {
+                console.log('🔄 Socket error, trying fallback detection');
+                await this.loadDashboardDataWithFallbackDetection();
+            } else {
+                this.showSweetAlert('error', 'Error', 'Failed to load dashboard data');
+            }
         }
     }
 
@@ -305,13 +354,23 @@ class DashboardManager {
     async loadDashboardDataWithFallbackDetection() {
         try {
             // Load dashboard status for machine statuses
+            // PERBAIKAN: Kirim lineFilter ke backend untuk filtering
             const token = this.getCookieValue('auth_token');
-            const response = await fetch('/api/dashboard/status', {
+            const queryParams = {};
+            if (this.lineFilter) {
+                queryParams.line_name = this.lineFilter;
+            }
+            const queryString = Object.keys(queryParams).length > 0 
+                ? '?' + new URLSearchParams(queryParams).toString() 
+                : '';
+            
+            const response = await fetch(`/api/dashboard/status${queryString}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'X-User-Role': this.userRole || '',
-                    'X-User-Division': this.userDivision || ''
+                    'X-User-Division': this.userDivision || '',
+                    'X-Line-Name': this.lineFilter || ''
                 }
             });
             const data = await response.json();
@@ -371,7 +430,11 @@ class DashboardManager {
                 this.updateMachineStatuses(data.data.machine_statuses_by_line);
                 this.updateActiveProblems(activeProblems);
                 this.updateStatsFromDashboardData({...data.data, active_problems: activeProblems});
-                this.updateLastUpdateTime();
+                try {
+                    this.updateLastUpdateTime();
+                } catch (err) {
+                    console.warn('Error updating last update time:', err);
+                }
                 this.loadStats(); // Refresh stats too
             } else {
                 throw new Error(data.message || 'Failed to load dashboard data');
@@ -445,15 +508,18 @@ class DashboardManager {
         }
 
         // Jangan turunkan angka valid ke 0 jika data sementara kosong
-        const currentShown = Number(document.getElementById('totalMachines').textContent || 0);
+        const totalMachinesEl = document.getElementById('totalMachines');
+        const currentShown = totalMachinesEl ? Number(totalMachinesEl.textContent || 0) : 0;
         const safeTotal = (Number.isFinite(totalMachines) && totalMachines > 0)
             ? totalMachines
             : (currentShown > 0 ? currentShown : totalMachines);
 
-        // Update counters dengan data yang sudah difilter
-        document.getElementById('totalMachines').textContent = safeTotal;
-        document.getElementById('activeProblems').textContent = activeProblemsCount;
-        document.getElementById('criticalProblems').textContent = criticalProblemsCount;
+        // Update counters dengan data yang sudah difilter - dengan null checks
+        if (totalMachinesEl) totalMachinesEl.textContent = safeTotal;
+        const activeProblemsEl = document.getElementById('activeProblems');
+        if (activeProblemsEl) activeProblemsEl.textContent = activeProblemsCount;
+        const criticalProblemsEl = document.getElementById('criticalProblems');
+        if (criticalProblemsEl) criticalProblemsEl.textContent = criticalProblemsCount;
     }
 
     async loadStats() {
@@ -500,7 +566,11 @@ class DashboardManager {
             this.updateMachineStatuses(data.data.machine_statuses_by_line);
             this.updateActiveProblems(data.data.active_problems);
             this.updateStatsFromDashboardData(data.data);
-            this.updateLastUpdateTime();
+            try {
+                this.updateLastUpdateTime();
+            } catch (err) {
+                console.warn('Error updating last update time:', err);
+            }
             
             // Handle new problems for notifications (this comes from server-side detection)
             if (data.data.new_problems && data.data.new_problems.length > 0) {
@@ -555,7 +625,7 @@ class DashboardManager {
                 const statusText = document.getElementById(`status-${machineId}-line-${machineLineName}`);
 
                 if (!card || !light || !statusText) {
-                    console.warn(`Elements not found for ${machineName} line ${machineLineName}`);
+                    // Silently skip if elements not found (machine might not be rendered on current page due to filtering)
                     return;
                 }
 
@@ -755,8 +825,11 @@ class DashboardManager {
 
     updateStats(stats) {
         // Jangan pernah menimpa angka valid dengan 0 akibat refresh cepat
+        const totalMachinesEl = document.getElementById('totalMachines');
+        if (!totalMachinesEl) return; // Exit early if element doesn't exist
+        
         const backendTotal = Number(stats.total_machines);
-        const currentShown = Number(document.getElementById('totalMachines').textContent || 0);
+        const currentShown = Number(totalMachinesEl.textContent || 0);
 
         let totalMachines;
         if (Number.isFinite(backendTotal) && backendTotal > 0) {
@@ -769,10 +842,15 @@ class DashboardManager {
             totalMachines = this.computeTotalMachinesFromLastStatuses();
         }
 
-        document.getElementById('totalMachines').textContent = Number.isFinite(totalMachines) ? totalMachines : 0;
-        document.getElementById('activeProblems').textContent = stats.active_problems || 0;
-        document.getElementById('resolvedToday').textContent = stats.resolved_today || 0;
-        document.getElementById('criticalProblems').textContent = stats.critical_problems || 0;
+        // Safe update with null checks (totalMachinesEl already defined above)
+        const activeProblemsEl = document.getElementById('activeProblems');
+        const resolvedTodayEl = document.getElementById('resolvedToday');
+        const criticalProblemsEl = document.getElementById('criticalProblems');
+        
+        totalMachinesEl.textContent = Number.isFinite(totalMachines) ? totalMachines : 0;
+        if (activeProblemsEl) activeProblemsEl.textContent = stats.active_problems || 0;
+        if (resolvedTodayEl) resolvedTodayEl.textContent = stats.resolved_today || 0;
+        if (criticalProblemsEl) criticalProblemsEl.textContent = stats.critical_problems || 0;
     }
 
     computeTotalMachinesFromLastStatuses() {
@@ -929,7 +1007,15 @@ class DashboardManager {
 	}
 
     updateLastUpdateTime() {
-        document.getElementById('lastUpdate').textContent = moment().format('HH:mm:ss');
+        const lastUpdateElement = document.getElementById('lastUpdate');
+        if (lastUpdateElement) {
+            lastUpdateElement.textContent = moment().format('HH:mm:ss');
+        }
+        // Update currentTime if it exists (for header display)
+        const currentTimeElement = document.getElementById('currentTime');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = moment().format('HH:mm:ss');
+        }
     }
 
     async showProblemDetail(machine, problemId = null, machineLine = null) {
@@ -1240,24 +1326,24 @@ class DashboardManager {
         if (actualStatus === 'active' && isLeader) {
             // Problem baru, leader bisa forward atau resolve langsung
             actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-forward" id="forwardBtn" style="background-color: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
-                        <i class="fas fa-share" style="margin-right: 5px;"></i>
-                        Forward ke ${targetRole}
+                <div class="action-buttons">
+                    <button class="btn btn-forward" id="forwardBtn">
+                        <i class="fas fa-share"></i>
+                        Forward
                     </button>
-                    <button class="btn btn-direct-resolve" id="directResolveBtn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
-                        <i class="fas fa-check" style="margin-right: 5px;"></i>
-                        Direct Resolve
+                    <button class="btn btn-direct-resolve" id="directResolveBtn">
+                        <i class="fas fa-check"></i>
+                        Resolve
                     </button>
                 </div>
             `;
         } else if (actualStatus === 'forwarded' && isDepartmentUser) {
             // Problem sudah di-forward, department user bisa receive
             actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px;">
-                    <button class="btn btn-receive" id="receiveBtn" style="background-color: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                        <i class="fas fa-hand-paper" style="margin-right: 5px;"></i>
-                        Receive Problem
+                <div class="action-buttons">
+                    <button class="btn btn-receive" id="receiveBtn">
+                        <i class="fas fa-hand-paper"></i>
+                        Receive
                     </button>
                 </div>
             `;
@@ -1275,8 +1361,8 @@ class DashboardManager {
                 if (!hasTicketing) {
                     // Belum ada ticketing, tampilkan tombol isi form
                     ticketingButton = `
-                        <button class="btn ticketing-btn" id="ticketingBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 10px; width: 100%;">
-                            <i class="fas fa-clipboard-list" style="margin-right: 5px;"></i>
+                        <button class="btn btn-ticketing" id="ticketingBtn">
+                            <i class="fas fa-clipboard-list"></i>
                             Isi Form Ticketing
                         </button>
                     `;
@@ -1284,24 +1370,24 @@ class DashboardManager {
                 } else {
                     // Sudah ada ticketing, tampilkan tombol mark as resolved
                     resolvedButton = `
-                        <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                            <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
-                            Mark as Resolved (Feedback)
+                        <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn">
+                            <i class="fas fa-check-circle"></i>
+                            Feedback
                         </button>
                     `;
                 }
             } else {
                 // Bukan maintenance/quality atau bukan machine/quality problem, langsung tampilkan resolved button
                 resolvedButton = `
-                    <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn" style="background-color: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                        <i class="fas fa-check-circle" style="margin-right: 5px;"></i>
-                        Mark as Resolved (Feedback)
+                    <button class="btn btn-feedback-resolved" id="feedbackResolvedBtn">
+                        <i class="fas fa-check-circle"></i>
+                        Feedback
                     </button>
                 `;
             }
             
             actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px;">
+                <div class="action-buttons">
                     ${ticketingButton}
                     ${resolvedButton}
                 </div>
@@ -1309,9 +1395,9 @@ class DashboardManager {
         } else if (actualStatus === 'feedback_resolved' && isLeader) {
             // Problem sudah ada feedback resolved, leader bisa final resolve
             actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px;">
-                    <button class="btn btn-final-resolve" id="finalResolveBtn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                        <i class="fas fa-check-double" style="margin-right: 5px;"></i>
+                <div class="action-buttons">
+                    <button class="btn btn-final-resolve" id="finalResolveBtn">
+                        <i class="fas fa-check-double"></i>
                         Final Resolve
                     </button>
                 </div>
@@ -1319,9 +1405,9 @@ class DashboardManager {
         } else if (actualStatus === 'active' && isManager) {
             // Manager bisa kirim notifikasi ulang ke leader
             actionButtons = `
-                <div class="action-buttons" style="margin-top: 20px;">
-                    <button class="btn btn-notify-leader" id="notifyLeaderBtn" style="background-color: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                        <i class="fas fa-bell" style="margin-right: 5px;"></i>
+                <div class="action-buttons">
+                    <button class="btn btn-notify-leader" id="notifyLeaderBtn">
+                        <i class="fas fa-bell"></i>
                         Kirim Notifikasi Ulang ke Leader
                     </button>
                 </div>
@@ -1611,55 +1697,79 @@ class DashboardManager {
     }
 
     showForwardConfirmation(problemId, problemData) {
-    let targetRole = '';
-    switch (problemData.problem_type.toLowerCase()) {
-        case 'machine':
-            targetRole = 'Maintenance Team';
-            break;
-        case 'quality':
-            targetRole = 'Quality Control Team';
-            break;
-        case 'material':
-            targetRole = 'Engineering Team';
-            break;
-        case 'engineering':
-            targetRole = 'Engineering Team';
-            break;
-        default:
-            // Log untuk debugging jika ada tipe problem yang tidak dikenali
-            console.warn('Unknown problem type:', problemData.problem_type);
-            targetRole = 'Engineering Team'; // Default ke Engineering Team
-    }
+        let targetRole = '';
+        switch (problemData.problem_type.toLowerCase()) {
+            case 'machine':
+                targetRole = 'Maintenance Team';
+                break;
+            case 'quality':
+                targetRole = 'Quality Control Team';
+                break;
+            case 'material':
+                targetRole = 'Engineering Team';
+                break;
+            case 'engineering':
+                targetRole = 'Engineering Team';
+                break;
+            default:
+                // Log untuk debugging jika ada tipe problem yang tidak dikenali
+                console.warn('Unknown problem type:', problemData.problem_type);
+                targetRole = 'Engineering Team'; // Default ke Engineering Team
+        }
 
-    Swal.fire({
-        title: 'Forward Problem?',
-        html: `
-            <div style="text-align: left; margin: 15px 0;">
-                <p><strong>Mesin:</strong> ${problemData.machine}</p>
-                <p><strong>Problem:</strong> ${problemData.problem_type}</p>
-                <p><strong>Akan diteruskan ke:</strong> <span style="color: #0066cc; font-weight: bold;">${targetRole}</span></p>
-            </div>
-            <div style="text-align: left; margin-top: 15px;">
-                <label for="forwardMessage" style="display: block; margin-bottom: 5px; font-weight: bold;">Pesan (Opsional):</label>
-                <textarea id="forwardMessage" class="swal2-input" placeholder="Tambahkan pesan untuk tim yang menangani..." style="height: 80px; resize: vertical;"></textarea>
-            </div>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Forward',
-        cancelButtonText: 'Batal',
-        confirmButtonColor: '#0066cc',
-        cancelButtonColor: '#6c757d',
-        preConfirm: () => {
-            const message = document.getElementById('forwardMessage').value;
-            return { message: message };
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            this.forwardProblem(problemId, result.value.message);
-        }
-    });
-}
+        Swal.fire({
+            title: 'Forward Problem?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                    <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                    <p><strong>Akan diteruskan ke:</strong> <span style="color: #0066cc; font-weight: bold;">${targetRole}</span></p>
+                </div>
+                <div style="text-align: left; margin-top: 20px;">
+                    <label for="forwardMessage" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Pesan (Opsional):</label>
+                    <textarea id="forwardMessage" placeholder="Tambahkan pesan untuk tim yang menangani..." style="width: 100%; min-width: 100%; max-width: 100%; height: 100px; padding: 12px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 0.95rem; line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease;"></textarea>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Forward',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#0066cc',
+            cancelButtonColor: '#6c757d',
+            allowEnterKey: true,
+            allowOutsideClick: false,
+            width: '600px',
+            didOpen: () => {
+                // Tambahkan focus style untuk textarea
+                const forwardMessageField = document.getElementById('forwardMessage');
+                
+                if (forwardMessageField) {
+                    forwardMessageField.addEventListener('focus', function() {
+                        this.style.borderColor = '#0A2856';
+                        this.style.boxShadow = '0 0 0 3px rgba(10, 40, 86, 0.1)';
+                    });
+                    forwardMessageField.addEventListener('blur', function() {
+                        this.style.borderColor = '#ced4da';
+                        this.style.boxShadow = 'none';
+                    });
+                }
+            },
+            preConfirm: () => {
+                const forwardMessageField = document.getElementById('forwardMessage');
+                if (!forwardMessageField) {
+                    Swal.showValidationMessage('Field pesan tidak ditemukan');
+                    return false;
+                }
+                
+                const message = (forwardMessageField.value || '').trim();
+                return { message: message };
+            }
+        }).then((result) => {
+            if (result.isConfirmed && result.value) {
+                this.forwardProblem(problemId, result.value.message);
+            }
+        });
+    }
 
     // 5. METHOD BARU: forwardProblem
     async forwardProblem(problemId, message = '') {
@@ -1841,30 +1951,34 @@ class DashboardManager {
                 this.closeModal();
                 this.loadDashboardData(); // Refresh data
                 
-                // Jika user adalah maintenance dan problem type adalah machine, tampilkan form ticketing
-                if (this.userRole === 'maintenance') {
-                    // Get problem detail untuk cek tipe problem
-                    try {
-                        const token = this.getCookieValue('auth_token');
-                        const problemResponse = await fetch(`/api/dashboard/problem/${problemId}`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                        const problemData = await problemResponse.json();
+                // Otomatis tampilkan form ticketing jika user memerlukan ticketing
+                try {
+                    const token = this.getCookieValue('auth_token');
+                    const problemResponse = await fetch(`/api/dashboard/problem/${problemId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const problemData = await problemResponse.json();
+                    
+                    if (problemData.success && problemData.data.problem_type) {
+                        const problemType = problemData.data.problem_type.toLowerCase();
+                        const shouldShowTicketing = 
+                            (this.userRole === 'maintenance' && problemType === 'machine') ||
+                            (this.userRole === 'quality' && problemType === 'quality') ||
+                            (this.userRole === 'engineering' && (problemType === 'engineering' || problemType === 'material'));
                         
-                        if (problemData.success && problemData.data.problem_type && 
-                            problemData.data.problem_type.toLowerCase() === 'machine') {
+                        if (shouldShowTicketing) {
                             // Delay sedikit untuk memastikan modal sebelumnya sudah tertutup
                             setTimeout(() => {
                                 this.openTicketingForm(problemId);
                             }, 1000);
                         }
-                    } catch (error) {
-                        console.error('Error checking problem type:', error);
                     }
+                } catch (error) {
+                    // Silent fail, tidak perlu log error
                 }
             } else {
                 throw new Error(data.message);
@@ -1885,9 +1999,13 @@ class DashboardManager {
                     <p><strong>Problem:</strong> ${problemData.problem_type}</p>
                     <p style="color: #ffc107; font-weight: bold;">Ini adalah feedback bahwa problem sudah selesai ditangani. Leader akan melakukan final confirmation.</p>
                 </div>
-                <div style="text-align: left; margin-top: 15px;">
-                    <label for="feedbackMessage" style="display: block; margin-bottom: 5px; font-weight: bold;">Pesan (Opsional):</label>
-                    <textarea id="feedbackMessage" class="swal2-input" placeholder="Tambahkan catatan tentang penanganan problem..." style="height: 80px; resize: vertical;"></textarea>
+                <div style="text-align: left; margin-top: 20px;">
+                    <label for="resultRepair" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Result/Perbaikan yang Dilakukan: <span style="color: red;">*</span></label>
+                    <textarea id="resultRepair" placeholder="Jelaskan perbaikan yang telah dilakukan..." style="width: 100%; min-width: 100%; max-width: 100%; height: 120px; padding: 12px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 0.95rem; line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease;" required></textarea>
+                </div>
+                <div style="text-align: left; margin-top: 20px;">
+                    <label for="feedbackMessage" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Pesan (Opsional):</label>
+                    <textarea id="feedbackMessage" placeholder="Tambahkan catatan tentang penanganan problem..." style="width: 100%; min-width: 100%; max-width: 100%; height: 100px; padding: 12px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 0.95rem; line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease;"></textarea>
                 </div>
             `,
             icon: 'question',
@@ -1896,19 +2014,189 @@ class DashboardManager {
             cancelButtonText: 'Batal',
             confirmButtonColor: '#ffc107',
             cancelButtonColor: '#6c757d',
+            allowEnterKey: true,
+            allowOutsideClick: false,
+            width: '600px',
+            didOpen: () => {
+                // Tambahkan focus style untuk textarea
+                const resultRepairField = document.getElementById('resultRepair');
+                const feedbackMessageField = document.getElementById('feedbackMessage');
+                
+                if (resultRepairField) {
+                    resultRepairField.addEventListener('focus', function() {
+                        this.style.borderColor = '#0A2856';
+                        this.style.boxShadow = '0 0 0 3px rgba(10, 40, 86, 0.1)';
+                    });
+                    resultRepairField.addEventListener('blur', function() {
+                        this.style.borderColor = '#ced4da';
+                        this.style.boxShadow = 'none';
+                    });
+                }
+                
+                if (feedbackMessageField) {
+                    feedbackMessageField.addEventListener('focus', function() {
+                        this.style.borderColor = '#0A2856';
+                        this.style.boxShadow = '0 0 0 3px rgba(10, 40, 86, 0.1)';
+                    });
+                    feedbackMessageField.addEventListener('blur', function() {
+                        this.style.borderColor = '#ced4da';
+                        this.style.boxShadow = 'none';
+                    });
+                }
+                
+                // Enable/disable confirm button based on result_repair field
+                // Validasi sederhana: hanya cek apakah result_repair tidak kosong
+                let pollInterval = null;
+                
+                const enableButton = () => {
+                    const confirmButton = Swal.getConfirmButton() || document.querySelector('.swal2-confirm');
+                    if (confirmButton) {
+                        // Force enable - override semua
+                        confirmButton.disabled = false;
+                        confirmButton.removeAttribute('disabled');
+                        confirmButton.removeAttribute('aria-disabled');
+                        confirmButton.style.cssText += 'opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;';
+                        confirmButton.classList.remove('swal2-disabled', 'swal2-deny');
+                    }
+                };
+                
+                const disableButton = () => {
+                    let confirmButton = Swal.getConfirmButton();
+                    if (!confirmButton) {
+                        confirmButton = document.querySelector('.swal2-confirm');
+                    }
+                    if (!confirmButton) {
+                        confirmButton = document.querySelector('button.swal2-confirm');
+                    }
+                    
+                    if (confirmButton) {
+                        confirmButton.disabled = true;
+                        confirmButton.setAttribute('disabled', 'disabled');
+                        confirmButton.setAttribute('aria-disabled', 'true');
+                        confirmButton.style.opacity = '0.5';
+                        confirmButton.style.cursor = 'not-allowed';
+                        confirmButton.style.pointerEvents = 'none';
+                        confirmButton.classList.add('swal2-disabled');
+                    }
+                };
+                
+                const updateButtonState = () => {
+                    const resultRepairField = document.getElementById('resultRepair');
+                    if (!resultRepairField) {
+                        return;
+                    }
+                    
+                    const value = resultRepairField.value || '';
+                    const hasValue = value.trim().length > 0;
+                    
+                    if (hasValue) {
+                        enableButton();
+                    } else {
+                        disableButton();
+                    }
+                };
+                
+                // Setup sederhana: langsung monitor dan force enable jika perlu
+                const setupValidation = () => {
+                    const resultRepairField = document.getElementById('resultRepair');
+                    const confirmButton = Swal.getConfirmButton() || document.querySelector('.swal2-confirm');
+                    
+                    if (!resultRepairField || !confirmButton) {
+                        setTimeout(setupValidation, 50);
+                        return;
+                    }
+                    
+                    // Event listener sederhana
+                    const inputHandler = () => updateButtonState();
+                    const pasteHandler = () => setTimeout(updateButtonState, 10);
+                    
+                    resultRepairField.addEventListener('input', inputHandler);
+                    resultRepairField.addEventListener('paste', pasteHandler);
+                    
+                    // Polling sederhana - terus force enable jika ada value
+                    pollInterval = setInterval(() => {
+                        const button = Swal.getConfirmButton() || document.querySelector('.swal2-confirm');
+                        const value = (resultRepairField.value || '').trim();
+                        if (value.length > 0 && button) {
+                            // Force enable terus-menerus - override semua
+                            button.disabled = false;
+                            button.removeAttribute('disabled');
+                            button.removeAttribute('aria-disabled');
+                            button.style.cssText += 'opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;';
+                            button.classList.remove('swal2-disabled', 'swal2-deny');
+                        } else if (button) {
+                            button.disabled = true;
+                            button.style.opacity = '0.5';
+                            button.style.pointerEvents = 'none';
+                        }
+                    }, 100);
+                    
+                    // Initial check
+                    updateButtonState();
+                    
+                    // Simpan reference untuk cleanup
+                    if (resultRepairField) {
+                        resultRepairField._pollInterval = pollInterval;
+                        resultRepairField._inputHandler = inputHandler;
+                        resultRepairField._pasteHandler = pasteHandler;
+                    }
+                };
+                
+                setTimeout(setupValidation, 50);
+            },
+            willClose: () => {
+                // Cleanup polling interval saat modal ditutup
+                try {
+                    const resultRepairField = document.getElementById('resultRepair');
+                    if (resultRepairField) {
+                        // Hapus event listeners
+                        if (resultRepairField._inputHandler) {
+                            resultRepairField.removeEventListener('input', resultRepairField._inputHandler);
+                        }
+                        if (resultRepairField._pasteHandler) {
+                            resultRepairField.removeEventListener('paste', resultRepairField._pasteHandler);
+                        }
+                        // Clear interval
+                        if (resultRepairField._pollInterval) {
+                            clearInterval(resultRepairField._pollInterval);
+                            resultRepairField._pollInterval = null;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error during modal cleanup:', e);
+                }
+            },
             preConfirm: () => {
-                const message = document.getElementById('feedbackMessage').value;
-                return { message: message };
+                const resultRepairField = document.getElementById('resultRepair');
+                if (!resultRepairField) {
+                    Swal.showValidationMessage('Field Result/Perbaikan tidak ditemukan');
+                    return false;
+                }
+                
+                const resultRepair = (resultRepairField.value || '').trim();
+                const message = (document.getElementById('feedbackMessage')?.value || '').trim();
+                
+                // Validasi sederhana: hanya cek apakah tidak kosong
+                if (resultRepair.length === 0) {
+                    Swal.showValidationMessage('Result/Perbaikan yang Dilakukan wajib diisi');
+                    return false;
+                }
+                
+                // Jika sudah terisi, return data
+                return { 
+                    result_repair: resultRepair,
+                    message: message 
+                };
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                this.feedbackResolvedProblem(problemId, result.value.message);
+                this.feedbackResolvedProblem(problemId, result.value.result_repair, result.value.message);
             }
         });
     }
 
     // Method untuk feedback resolved problem
-    async feedbackResolvedProblem(problemId, message = '') {
+    async feedbackResolvedProblem(problemId, resultRepair, message = '') {
         try {
             const token = this.getCookieValue('auth_token');
             const response = await fetch(`/api/dashboard/problem/${problemId}/feedback-resolved`, {
@@ -1918,6 +2206,7 @@ class DashboardManager {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    result_repair: resultRepair,
                     message: message || 'Problem sudah selesai ditangani.'
                 })
             });
@@ -2263,17 +2552,19 @@ class DashboardManager {
             });
 
             if (response.status === 404) {
-                return false; // Ticketing belum ada
+                // 404 adalah normal jika ticketing belum ada
+                return false;
             }
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Jangan log error, return false saja
+                return false;
             }
 
             const data = await response.json();
             return data.success && data.data; // Return true jika ada ticketing
         } catch (error) {
-            console.error('Error checking ticketing:', error);
+            // Jangan log error, karena 404 adalah normal
             return false; // Default ke false jika error
         }
     }
@@ -2417,6 +2708,11 @@ class DashboardManager {
     async submitTicketingForm() {
         try {
             const form = document.getElementById('ticketingForm');
+            if (!form) {
+                this.showSweetAlert('error', 'Error', 'Form tidak ditemukan');
+                return;
+            }
+            
             const formData = new FormData(form);
             
             // Convert form data to JSON
@@ -2425,12 +2721,39 @@ class DashboardManager {
                 // Abaikan field repair_completed_at yang diatur otomatis oleh sistem
                 // Tapi tetap kirim problem_received_at karena sudah diisi di form
                 if (key === 'repair_completed_at') continue;
-                data[key] = value;
+                // Trim string values
+                data[key] = typeof value === 'string' ? value.trim() : value;
             }
             
-            // Validate required fields
-            if (!data.pic_technician || !data.diagnosis || !data.result_repair) {
-                this.showSweetAlert('warning', 'Validasi Error', 'Mohon isi semua field yang wajib diisi');
+            // Validate required fields dengan pesan yang lebih spesifik
+            const errors = [];
+            
+            // Check problem_id dari form
+            const problemIdInput = document.getElementById('ticketingProblemId');
+            if (!problemIdInput || !problemIdInput.value) {
+                errors.push('Problem ID tidak ditemukan. Silakan tutup form dan buka lagi.');
+            } else {
+                data.problem_id = problemIdInput.value;
+            }
+            
+            // Check PIC/Technician dari select
+            const picSelect = document.getElementById('picTechnician');
+            if (!picSelect || !picSelect.value || picSelect.value === '') {
+                errors.push('PIC/Teknisi wajib dipilih');
+            }
+            
+            // Check Diagnosis dari textarea
+            const diagnosisTextarea = document.getElementById('diagnosis');
+            if (!diagnosisTextarea || !diagnosisTextarea.value || diagnosisTextarea.value.trim() === '') {
+                errors.push('Diagnosa/Analisis Masalah wajib diisi');
+            }
+            
+            if (errors.length > 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Validasi Error',
+                    html: errors.join('<br>')
+                });
                 return;
             }
             
@@ -2452,6 +2775,20 @@ class DashboardManager {
                 },
                 body: JSON.stringify(data)
             });
+
+            // Handle non-OK responses
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({
+                    message: `HTTP error! status: ${response.status}`
+                }));
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: errorData.message || 'Gagal menyimpan ticketing. Silakan coba lagi.'
+                });
+                return;
+            }
 
             const result = await response.json();
             
@@ -2680,10 +3017,39 @@ function submitTicketingForm() {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    dashboardManager = new DashboardManager();
-    
-    // Request notification permission on load (for browser notifications as backup)
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+    try {
+        // Pastikan body visible
+        if (document.body) {
+            document.body.style.visibility = 'visible';
+            document.body.style.display = 'block';
+        }
+        
+        dashboardManager = new DashboardManager();
+        
+        // Request notification permission on load (for browser notifications as backup)
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    } catch (error) {
+        console.error('Error initializing DashboardManager:', error);
+        
+        // Pastikan konten tetap terlihat meskipun ada error
+        if (document.body) {
+            document.body.style.visibility = 'visible';
+            document.body.style.display = 'block';
+        }
+        
+        // Tampilkan pesan error ke user
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #e74c3c; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; max-width: 400px;';
+        errorDiv.innerHTML = '<strong>Error Memuat Dashboard</strong><p style="margin: 10px 0 0 0; font-size: 0.9em;">Terjadi error saat memuat dashboard. Silakan refresh halaman.</p><button onclick="location.reload()" style="margin-top: 10px; padding: 6px 12px; background: white; color: #e74c3c; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Refresh</button>';
+        document.body.appendChild(errorDiv);
+        
+        // Auto-hide setelah 10 detik
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 10000);
     }
 });

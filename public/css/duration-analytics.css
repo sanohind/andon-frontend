@@ -264,6 +264,11 @@
     color: #721c24;
 }
 
+.problem-type.engineering {
+    background: #e2e3ff;
+    color: #2f327d;
+}
+
 .flow-type {
     padding: 0.25rem 0.5rem;
     border-radius: 12px;
@@ -292,7 +297,7 @@
 }
 
 .timestamp {
-    font-family: 'Courier New', monospace;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 0.8rem;
     color: #6c757d;
 }
@@ -493,6 +498,12 @@
     background-color: #d1ecf1;
     color: #0c5460;
     border: 1px solid #bee5eb;
+}
+
+.status-badge.close {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
 }
 
 .status-badge.completed {

@@ -292,6 +292,7 @@
                                 <th class="sortable" data-column="created_at">
                                     Created At <i class="fas fa-sort"></i>
                                 </th>
+                                <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="ticketing-analytics-table-body">
@@ -307,6 +308,35 @@
             </div>
         </div>
     </main>
+
+    <!-- Edit Ticketing Modal -->
+    <div class="modal" id="editTicketingModal" style="display: none;">
+        <div class="modal-content edit-ticketing-modal-content">
+            <div class="modal-header">
+                <h3>Edit Ticketing Problem</h3>
+                <button class="modal-close" onclick="closeEditTicketingModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editTicketingForm">
+                    <input type="hidden" id="editTicketingId" name="ticketing_id">
+                    
+                    <div class="form-group">
+                        <label for="editDiagnosis">Diagnosa/Analisis Masalah:</label>
+                        <textarea id="editDiagnosis" name="diagnosis" rows="6" placeholder="Jelaskan diagnosa atau analisis masalah yang terjadi..." required></textarea>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="editResultRepair">Result/Perbaikan yang Dilakukan:</label>
+                        <textarea id="editResultRepair" name="result_repair" rows="6" placeholder="Jelaskan perbaikan yang telah dilakukan..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditTicketingModal()">Batal</button>
+                <button class="btn btn-primary" onclick="submitEditTicketingForm()">Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>

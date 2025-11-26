@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
         mttr: { ctx: document.getElementById('mttrChart').getContext('2d'), type: 'bar', chart: null },
     };
 
+    let lastSelectedRange = null;
+
     // Fungsi untuk mengubah detik menjadi format Jam:Menit:Detik
     function formatSeconds(seconds) {
         if (isNaN(seconds) || seconds < 0) return 'N/A';
@@ -46,9 +48,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return parts.join(' ');
     }
+
+    function formatTimestampDisplay(value) {
+        if (!value) return '-';
+        const parsed = moment(value, ['YYYY-MM-DD HH:mm:ss', moment.ISO_8601], true);
+        if (!parsed.isValid()) {
+            return value;
+        }
+        return parsed.format('DD/MM/YYYY HH:mm:ss');
+    }
     
     // Fungsi untuk mengambil data dari backend
     async function fetchAnalyticsData(startDate, endDate) {
+        if (startDate && endDate) {
+            lastSelectedRange = { start: startDate, end: endDate };
+        }
         try {
             // Fetch basic analytics data (prioritas utama)
             const analyticsResponse = await fetch(`/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`, {
@@ -138,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             picker.on('selected', (date1, date2) => {
                 const startDate = moment(date1.dateInstance).format('YYYY-MM-DD');
                 const endDate = moment(date2.dateInstance).format('YYYY-MM-DD');
+                lastSelectedRange = { start: startDate, end: endDate };
                 fetchAnalyticsData(startDate, endDate);
                 fetchTicketingData(startDate, endDate);
             });
@@ -153,8 +168,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Array.isArray(dates) && dates.length === 2) {
             return [moment(dates[0]).format('YYYY-MM-DD'), moment(dates[1]).format('YYYY-MM-DD')];
         }
+        if (lastSelectedRange && lastSelectedRange.start && lastSelectedRange.end) {
+            return [lastSelectedRange.start, lastSelectedRange.end];
+        }
         return null;
     }
+
+    function getEnsuredDateRange() {
+        const range = getCurrentDateRange();
+        if (range) {
+            return range;
+        }
+        const fallbackStart = lastSelectedRange?.start || moment().subtract(29, 'days').format('YYYY-MM-DD');
+        const fallbackEnd = lastSelectedRange?.end || moment().format('YYYY-MM-DD');
+        return [fallbackStart, fallbackEnd];
+    }
+    
+    // Expose to window for global access
+    window.getCurrentDateRange = getCurrentDateRange;
 
     // Global variables untuk tabel forward analytics
     let forwardTableData = [];
@@ -171,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTicketingSortDirection = 'asc';
     let ticketingSearchInitialized = false;
     let ticketingPageSize = 10;
+    let ticketingEditHandlerAttached = false;
 
     // Fungsi untuk mengupdate tabel detail forward analytics
     function updateDetailedForwardAnalyticsTable(data) {
@@ -201,6 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
         tableBody.innerHTML = visibleData.map(problem => {
             const flowTypeClass = problem.flow_type.toLowerCase().replace(/\s+/g, '-');
             const problemTypeClass = problem.problem_type.toLowerCase();
+            const users = problem.users || {};
+            const forwardedBy = users.forwarded_by && users.forwarded_by.trim() !== '' ? users.forwarded_by : '-';
+            const receivedBy = users.received_by && users.received_by.trim() !== '' ? users.received_by : '-';
+            const feedbackBy = users.feedback_by && users.feedback_by.trim() !== '' ? users.feedback_by : '-';
             
             // Tentukan class durasi berdasarkan nilai
             const getDurationClass = (minutes) => {
@@ -216,11 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="machine-info">${problem.machine}</span></td>
                     <td><span class="problem-type ${problemTypeClass}">${problem.problem_type}</span></td>
                     <td><span class="flow-type ${flowTypeClass}">${problem.flow_type}</span></td>
-                    <td><span class="timestamp">${problem.timestamps.active_at}</span></td>
-                    <td><span class="timestamp">${problem.timestamps.forwarded_at || '-'}</span></td>
-                    <td><span class="timestamp">${problem.timestamps.received_at || '-'}</span></td>
-                    <td><span class="timestamp">${problem.timestamps.feedback_resolved_at || '-'}</span></td>
-                    <td><span class="timestamp">${problem.timestamps.final_resolved_at}</span></td>
+                    <td><span class="timestamp">${formatTimestampDisplay(problem.timestamps.active_at)}</span></td>
+                    <td><span class="timestamp">${formatTimestampDisplay(problem.timestamps.forwarded_at)}</span></td>
+                    <td><span class="timestamp">${formatTimestampDisplay(problem.timestamps.received_at)}</span></td>
+                    <td><span class="timestamp">${formatTimestampDisplay(problem.timestamps.feedback_resolved_at)}</span></td>
+                    <td><span class="timestamp">${formatTimestampDisplay(problem.timestamps.final_resolved_at)}</span></td>
                     <td><span class="duration ${getDurationClass(problem.durations_minutes.active_to_forward)}">${problem.durations_formatted.active_to_forward}</span></td>
                     <td><span class="duration ${getDurationClass(problem.durations_minutes.forward_to_receive)}">${problem.durations_formatted.forward_to_receive}</span></td>
                     <td><span class="duration ${getDurationClass(problem.durations_minutes.receive_to_feedback)}">${problem.durations_formatted.receive_to_feedback}</span></td>
@@ -228,9 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="duration ${getDurationClass(problem.durations_minutes.total_duration)}">${problem.durations_formatted.total_duration}</span></td>
                     <td>
                         <div class="user-info">
-                            ${problem.users.forwarded_by ? `<div><strong>Forward:</strong> ${problem.users.forwarded_by}</div>` : ''}
-                            ${problem.users.received_by ? `<div><strong>Receive:</strong> ${problem.users.received_by}</div>` : ''}
-                            ${problem.users.feedback_by ? `<div><strong>Feedback:</strong> ${problem.users.feedback_by}</div>` : ''}
+                            <div><strong>Forward:</strong> ${forwardedBy}</div>
+                            <div><strong>Receive:</strong> ${receivedBy}</div>
+                            <div><strong>Feedback:</strong> ${feedbackBy}</div>
                         </div>
                     </td>
                 </tr>
@@ -268,12 +304,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const searchTerm = this.value.toLowerCase();
             const baseData = ticketingTableData || [];
             const filteredData = baseData.filter(ticketing => {
+                const machineValue = (
+                    ticketing.machine_display_name ||
+                    ticketing.machine_name ||
+                    ticketing.machine ||
+                    ticketing.machine_identifier ||
+                    ''
+                ).toString().toLowerCase();
+                const problemTypeValue = (ticketing.problem_type || '').toLowerCase();
+                const picValue = (ticketing.pic_technician || '').toLowerCase();
+                const statusValue = (ticketing.status || '').toLowerCase();
                 return ticketing.id.toString().includes(searchTerm) ||
                        ticketing.problem_id.toString().includes(searchTerm) ||
-                       ticketing.machine.toLowerCase().includes(searchTerm) ||
-                       ticketing.problem_type.toLowerCase().includes(searchTerm) ||
-                       ticketing.pic_technician.toLowerCase().includes(searchTerm) ||
-                       ticketing.status.toLowerCase().includes(searchTerm);
+                       machineValue.includes(searchTerm) ||
+                       problemTypeValue.includes(searchTerm) ||
+                       picValue.includes(searchTerm) ||
+                       statusValue.includes(searchTerm);
             });
             updateTicketingTable(filteredData, { skipBaseUpdate: true });
         });
@@ -389,6 +435,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const baseData = currentTicketingDisplayedData && currentTicketingDisplayedData.length > 0 ? currentTicketingDisplayedData : ticketingTableData;
                 const sortedData = [...baseData].sort((a, b) => {
                     let aVal, bVal;
+                    const normalizeMachineValue = (entry) => (
+                        entry.machine_display_name ||
+                        entry.machine_name ||
+                        entry.machine ||
+                        entry.machine_identifier ||
+                        ''
+                    ).toString().toLowerCase();
             
                     switch (column) {
                         case 'id':
@@ -400,8 +453,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             bVal = b.problem_id;
                             break;
                         case 'machine':
-                            aVal = a.machine;
-                            bVal = b.machine;
+                            aVal = normalizeMachineValue(a);
+                            bVal = normalizeMachineValue(b);
                             break;
                         case 'problem_type':
                             aVal = a.problem_type;
@@ -488,23 +541,26 @@ document.addEventListener('DOMContentLoaded', () => {
         ].filter(Boolean);
 
         // Prepare table data
-        const tableData = exportData.map(problem => [
-            problem.problem_id,
-            problem.machine,
-            problem.problem_type,
-            problem.flow_type,
-            problem.timestamps.active_at,
-            problem.timestamps.forwarded_at || '-',
-            problem.timestamps.received_at || '-',
-            problem.timestamps.feedback_resolved_at || '-',
-            problem.timestamps.final_resolved_at,
-            problem.durations_formatted.active_to_forward,
-            problem.durations_formatted.forward_to_receive,
-            problem.durations_formatted.receive_to_feedback,
-            problem.durations_formatted.feedback_to_final,
-            problem.durations_formatted.total_duration,
-            `${problem.users.forwarded_by || '-'} | ${problem.users.received_by || '-'} | ${problem.users.feedback_by || '-'}`
-        ]);
+        const tableData = exportData.map(problem => {
+            const users = problem.users || {};
+            return [
+                problem.problem_id,
+                problem.machine,
+                problem.problem_type,
+                problem.flow_type,
+                formatTimestampDisplay(problem.timestamps.active_at),
+                formatTimestampDisplay(problem.timestamps.forwarded_at),
+                formatTimestampDisplay(problem.timestamps.received_at),
+                formatTimestampDisplay(problem.timestamps.feedback_resolved_at),
+                formatTimestampDisplay(problem.timestamps.final_resolved_at),
+                problem.durations_formatted.active_to_forward,
+                problem.durations_formatted.forward_to_receive,
+                problem.durations_formatted.receive_to_feedback,
+                problem.durations_formatted.feedback_to_final,
+                problem.durations_formatted.total_duration,
+                `${users.forwarded_by || '-'} | ${users.received_by || '-'} | ${users.feedback_by || '-'}`
+            ];
+        });
 
         // Table headers
         const headers = [
@@ -585,6 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fungsi untuk fetch data ticketing
     async function fetchTicketingData(startDate, endDate) {
+        if (startDate && endDate) {
+            lastSelectedRange = { start: startDate, end: endDate };
+        }
         try {
             const response = await fetch(`/api/dashboard/analytics/ticketing?start_date=${startDate}&end_date=${endDate}`, {
                 headers: getAuthHeaders()
@@ -603,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching ticketing data:', error);
         }
     }
+    
+    // Expose to window for global access
+    window.fetchTicketingData = fetchTicketingData;
 
     // Fungsi untuk update tabel ticketing
     function updateTicketingTable(ticketingData, options = {}) {
@@ -631,11 +693,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const visibleData = dataset.slice(0, ticketingPageSize || 10);
 
         visibleData.forEach(ticketing => {
+            // Prioritaskan nama mesin, jangan gunakan machine_identifier (address) sebagai fallback
+            // Backend seharusnya sudah mengembalikan nama mesin di field 'machine'
+            const machineName =
+                (
+                    ticketing.machine_display_name ||
+                    ticketing.machine_name ||
+                    ticketing.machine ||
+                    ''
+                ).toString().trim() || '-';
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${ticketing.id}</td>
                 <td>${ticketing.problem_id}</td>
-                <td>${ticketing.machine}</td>
+                <td>${machineName}</td>
                 <td>${ticketing.problem_type}</td>
                 <td>${ticketing.pic_technician}</td>
                 <td><span class="status-badge ${ticketing.status}">${ticketing.status_label}</span></td>
@@ -647,9 +718,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${ticketing.durations.mttr || '-'}</td>
                 <td>${ticketing.durations.mttd || '-'}</td>
                 <td>${ticketing.timestamps.created_at}</td>
+                <td>
+                    <button class="btn-edit-ticketing" type="button" title="Edit ticketing" aria-label="Edit ticketing" data-ticketing-id="${ticketing.id}">
+                        <i class="fas fa-edit" aria-hidden="true"></i>
+                    </button>
+                </td>
             `;
             tbody.appendChild(row);
         });
+
+        if (!ticketingEditHandlerAttached) {
+            tbody.addEventListener('click', function(e) {
+                if (e.target.closest('.btn-edit-ticketing')) {
+                    const btn = e.target.closest('.btn-edit-ticketing');
+                    const ticketingId = btn.getAttribute('data-ticketing-id');
+                    if (ticketingId) {
+                        // Use window function to ensure it's accessible
+                        const openModal = window.openEditTicketingModal || openEditTicketingModal;
+                        if (typeof openModal === 'function') {
+                            openModal(ticketingId);
+                        } else {
+                            console.error('openEditTicketingModal function not found');
+                            alert('Fungsi edit tidak tersedia. Silakan refresh halaman.');
+                        }
+                    }
+                }
+            });
+            ticketingEditHandlerAttached = true;
+        }
 
         if (!ticketingSearchInitialized) {
             setupTicketingTableSearch();
@@ -658,17 +754,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fungsi untuk export ticketing table ke Excel
     function exportTicketingTableToExcel() {
-        if (!ticketingTableData || ticketingTableData.length === 0) {
+        const exportData = (currentTicketingDisplayedData && currentTicketingDisplayedData.length > 0)
+            ? currentTicketingDisplayedData
+            : ticketingTableData;
+
+        if (!exportData || exportData.length === 0) {
             alert('Tidak ada data untuk diekspor');
             return;
         }
 
         // Prepare data untuk Excel dengan menambahkan kolom diagnosis dan result_repair
-        const excelData = ticketingTableData.map(ticketing => {
+        const excelData = exportData.map(ticketing => {
+            const machineName = (
+                ticketing.machine_display_name ||
+                ticketing.machine_name ||
+                ticketing.machine ||
+                ticketing.machine_identifier ||
+                ''
+            ).toString().trim();
             return [
                 ticketing.id || '',
                 ticketing.problem_id || '',
-                ticketing.machine || '',
+                machineName || '',
                 ticketing.problem_type || '',
                 ticketing.pic_technician || '',
                 ticketing.status_label || '',
@@ -826,10 +933,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (refreshForwardBtn) {
         refreshForwardBtn.addEventListener('click', function() {
-            const range = getCurrentDateRange();
-            if (range) {
-                fetchAnalyticsData(range[0], range[1]);
-            }
+            const [start, end] = getEnsuredDateRange();
+            fetchAnalyticsData(start, end);
         });
     }
 
@@ -843,10 +948,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (refreshTicketingBtn) {
         refreshTicketingBtn.addEventListener('click', function() {
-            const range = getCurrentDateRange();
-            if (range) {
-                fetchTicketingData(range[0], range[1]);
-            }
+            const [start, end] = getEnsuredDateRange();
+            fetchTicketingData(start, end);
         });
     }
 
@@ -859,7 +962,300 @@ document.addEventListener('DOMContentLoaded', () => {
     const thirtyDaysAgo = moment().subtract(29, 'days').format('YYYY-MM-DD');
     const today = moment().format('YYYY-MM-DD');
     picker.setDateRange(thirtyDaysAgo, today);
+    lastSelectedRange = { start: thirtyDaysAgo, end: today };
     // Pastikan langsung fetch data untuk range default
     fetchAnalyticsData(thirtyDaysAgo, today);
     fetchTicketingData(thirtyDaysAgo, today);
 });
+
+// Helper function to get cookie value (global scope)
+function getCookieValue(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+// Helper function to get authentication headers (global scope)
+function getAuthHeadersGlobal() {
+    const token = getCookieValue('auth_token');
+    return {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    };
+}
+
+// Function to create edit ticketing modal if it doesn't exist
+function ensureEditTicketingModalExists() {
+    let modal = document.getElementById('editTicketingModal');
+    
+    if (!modal) {
+        // Create modal structure
+        modal = document.createElement('div');
+        modal.id = 'editTicketingModal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        
+        modal.innerHTML = `
+            <div class="modal-content edit-ticketing-modal-content">
+                <div class="modal-header">
+                    <h3>Edit Ticketing Problem</h3>
+                    <button class="modal-close" onclick="closeEditTicketingModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="editTicketingForm">
+                        <input type="hidden" id="editTicketingId" name="ticketing_id">
+                        
+                        <div class="form-group">
+                            <label for="editDiagnosis">Diagnosa/Analisis Masalah:</label>
+                            <textarea id="editDiagnosis" name="diagnosis" rows="6" placeholder="Jelaskan diagnosa atau analisis masalah yang terjadi..." required></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="editResultRepair">Result/Perbaikan yang Dilakukan:</label>
+                            <textarea id="editResultRepair" name="result_repair" rows="6" placeholder="Jelaskan perbaikan yang telah dilakukan..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeEditTicketingModal()">Batal</button>
+                    <button class="btn btn-primary" onclick="submitEditTicketingForm()">Simpan Perubahan</button>
+                </div>
+            </div>
+        `;
+        
+        // Append to body
+        document.body.appendChild(modal);
+        console.log('Edit ticketing modal created dynamically');
+    }
+    
+    return modal;
+}
+
+// Function to wait for element to be available
+function waitForElement(selector, timeout = 3000) {
+    return new Promise((resolve, reject) => {
+        // Check immediately first
+        const element = document.querySelector(selector);
+        if (element) {
+            resolve(element);
+            return;
+        }
+
+        // If document is not ready, wait for it
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    resolve(element);
+                } else {
+                    reject(new Error(`Element ${selector} not found after DOMContentLoaded`));
+                }
+            });
+            return;
+        }
+
+        // Use MutationObserver to watch for element
+        const observer = new MutationObserver((mutations, obs) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                obs.disconnect();
+                resolve(element);
+            }
+        });
+
+        observer.observe(document.body || document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+
+        setTimeout(() => {
+            observer.disconnect();
+            // Final check
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+            } else {
+                reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+            }
+        }, timeout);
+    });
+}
+
+// Function to open edit ticketing modal
+async function openEditTicketingModal(ticketingId) {
+    try {
+        const headers = getAuthHeadersGlobal();
+        const response = await fetch(`/api/ticketing/${ticketingId}`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch ticketing data');
+        }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Failed to fetch ticketing data');
+        }
+
+        const ticketing = result.data;
+        
+        // Ensure modal exists (create if needed)
+        const editTicketingModalEl = ensureEditTicketingModalExists();
+        
+        // Get form elements - query from modal directly to ensure we get them
+        let editTicketingIdEl = editTicketingModalEl.querySelector('#editTicketingId');
+        let editDiagnosisEl = editTicketingModalEl.querySelector('#editDiagnosis');
+        let editResultRepairEl = editTicketingModalEl.querySelector('#editResultRepair');
+        
+        // If elements still not found, try getElementById as fallback
+        if (!editTicketingIdEl) editTicketingIdEl = document.getElementById('editTicketingId');
+        if (!editDiagnosisEl) editDiagnosisEl = document.getElementById('editDiagnosis');
+        if (!editResultRepairEl) editResultRepairEl = document.getElementById('editResultRepair');
+        
+        // If elements still not found after ensuring modal exists, wait a bit for DOM to update
+        if (!editTicketingIdEl || !editDiagnosisEl || !editResultRepairEl) {
+            // Wait a moment for DOM to update
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Try again
+            editTicketingIdEl = editTicketingModalEl.querySelector('#editTicketingId') || document.getElementById('editTicketingId');
+            editDiagnosisEl = editTicketingModalEl.querySelector('#editDiagnosis') || document.getElementById('editDiagnosis');
+            editResultRepairEl = editTicketingModalEl.querySelector('#editResultRepair') || document.getElementById('editResultRepair');
+            
+            // If still not found, there's a real problem
+            if (!editTicketingIdEl || !editDiagnosisEl || !editResultRepairEl) {
+                console.error('Form elements not found even after creating modal:', {
+                    editTicketingId: !!editTicketingIdEl,
+                    editDiagnosis: !!editDiagnosisEl,
+                    editResultRepair: !!editResultRepairEl,
+                    modalExists: !!editTicketingModalEl,
+                    modalHasContent: editTicketingModalEl ? editTicketingModalEl.innerHTML.length > 0 : false
+                });
+                throw new Error('Form elements tidak ditemukan. Silakan refresh halaman dan coba lagi.');
+            }
+        }
+        
+        // Fill form with current data
+        editTicketingIdEl.value = ticketing.id;
+        editDiagnosisEl.value = ticketing.diagnosis || '';
+        editResultRepairEl.value = ticketing.result_repair || '';
+        
+        // Show modal - ensure it's centered
+        editTicketingModalEl.style.display = 'flex';
+        editTicketingModalEl.style.alignItems = 'center';
+        editTicketingModalEl.style.justifyContent = 'center';
+    } catch (error) {
+        console.error('Error opening edit modal:', error);
+        alert('Gagal memuat data ticketing: ' + error.message);
+    }
+}
+
+// Expose functions to window for global access
+window.openEditTicketingModal = openEditTicketingModal;
+
+// Function to close edit ticketing modal
+function closeEditTicketingModal() {
+    const modal = document.getElementById('editTicketingModal');
+    const form = document.getElementById('editTicketingForm');
+    
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    if (form) {
+        form.reset();
+}
+}
+
+// Expose functions to window for global access
+window.closeEditTicketingModal = closeEditTicketingModal;
+
+// Function to submit edit ticketing form
+async function submitEditTicketingForm() {
+    try {
+        const form = document.getElementById('editTicketingForm');
+        
+        if (!form) {
+            throw new Error('Form tidak ditemukan');
+        }
+        
+        const formData = new FormData(form);
+        
+        const data = {
+            diagnosis: formData.get('diagnosis'),
+            result_repair: formData.get('result_repair') || ''
+        };
+        
+        // Validate required fields - diagnosis is required, result_repair is optional
+        if (!data.diagnosis || !data.diagnosis.trim()) {
+            alert('Mohon isi field Diagnosa/Analisis Masalah');
+            return;
+        }
+        
+        const ticketingId = formData.get('ticketing_id');
+        
+        if (!ticketingId) {
+            throw new Error('Ticketing ID tidak ditemukan');
+        }
+        
+        const headers = getAuthHeadersGlobal();
+        
+        // Show loading
+        const submitBtn = document.querySelector('#editTicketingModal .btn-primary');
+        
+        if (!submitBtn) {
+            throw new Error('Tombol submit tidak ditemukan');
+        }
+        
+        const originalText = submitBtn.textContent;
+        submitBtn.setAttribute('data-original-text', originalText);
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Menyimpan...';
+        
+        let response;
+        let result;
+        
+        try {
+            response = await fetch(`/api/ticketing/${ticketingId}`, {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify(data)
+        });
+
+            result = await response.json();
+        } finally {
+            // Always reset button state
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        }
+        
+        if (result.success) {
+            alert('Ticketing berhasil diupdate');
+            closeEditTicketingModal();
+            
+            // Refresh ticketing table - use window object to access functions from DOMContentLoaded scope
+            if (window.getCurrentDateRange && window.fetchTicketingData) {
+                const range = window.getCurrentDateRange();
+                if (range) {
+                    window.fetchTicketingData(range[0], range[1]);
+                }
+            } else {
+                // Fallback: reload page if functions not available
+                location.reload();
+            }
+        } else {
+            throw new Error(result.message || 'Failed to update ticketing');
+        }
+    } catch (error) {
+        console.error('Error updating ticketing:', error);
+        alert('Gagal mengupdate ticketing: ' + error.message);
+    }
+}
+
+// Expose functions to window for global access
+window.submitEditTicketingForm = submitEditTicketingForm;

@@ -9,8 +9,16 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.32/sweetalert2.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="/css/ticketing.css">
+    <style>
+        /* Ensure body and html are always visible */
+        html, body {
+            visibility: visible !important;
+            display: block !important;
+            opacity: 1 !important;
+        }
+    </style>
 </head>
-<body>
+<body style="visibility: visible; display: block; opacity: 1;">
     <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display: none;"></div>
     
     <header class="dashboard-header">
@@ -234,11 +242,6 @@
                     <div class="form-group">
                         <label for="diagnosis">Diagnosa/Analisis Masalah:</label>
                         <textarea id="diagnosis" name="diagnosis" rows="4" placeholder="Jelaskan diagnosa atau analisis masalah yang terjadi..." required></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="resultRepair">Result/Perbaikan yang Dilakukan:</label>
-                        <textarea id="resultRepair" name="result_repair" rows="4" placeholder="Jelaskan perbaikan yang telah dilakukan..." required></textarea>
                     </div>
                     
                     <div class="form-group">

@@ -194,11 +194,21 @@ app.get('/', requireAuth, async (req, res) => {
     const lineFilter = req.query.line;
     
     // Ambil data dashboard dari Laravel dengan konteks role/division
-    const dashboardDataResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
+    // PERBAIKAN: Kirim lineFilter sebagai query parameter untuk filtering di backend
+    const queryParams = {};
+    if (lineFilter) {
+      queryParams.line_name = lineFilter;
+    }
+    const queryString = Object.keys(queryParams).length > 0 
+      ? '?' + new URLSearchParams(queryParams).toString() 
+      : '';
+    
+    const dashboardDataResponse = await axios.get(`${LARAVEL_API_BASE}/dashboard/status${queryString}`, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
         'X-User-Role': req.user?.role || '',
-        'X-User-Division': req.user?.division || ''
+        'X-User-Division': req.user?.division || '',
+        'X-Line-Name': lineFilter || ''
       }
     });
 
@@ -513,12 +523,24 @@ app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
     const userRole = (req.user && req.user.role) || req.headers['x-user-role'] || '';
     const userDivision = (req.user && req.user.division) || req.headers['x-user-division'] || '';
+    // PERBAIKAN: Ambil line_name dari query parameter untuk filtering
+    const lineName = req.query.line_name || req.headers['x-line-name'] || '';
     
-    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
+    // Build query string
+    const queryParams = {};
+    if (lineName) {
+      queryParams.line_name = lineName;
+    }
+    const queryString = Object.keys(queryParams).length > 0 
+      ? '?' + new URLSearchParams(queryParams).toString() 
+      : '';
+    
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status${queryString}`, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
         'X-User-Role': userRole,
-        'X-User-Division': userDivision
+        'X-User-Division': userDivision,
+        'X-Line-Name': lineName
       }
     });
     
@@ -1488,7 +1510,16 @@ function createProblemKey(problem) {
 // Function to fetch and emit dashboard data WITH problem detection
 async function fetchAndEmitDashboardData(socket = null) {
     try {
-        // Ambil data mentah dari backend tanpa filtering (karena filtering dilakukan di Node.js)
+        // PERBAIKAN: Ambil line_name dari socket user atau query parameter untuk filtering
+        let lineName = null;
+        if (socket && socket.user) {
+            // Jika socket memiliki user info, gunakan line_name dari user
+            // Tapi untuk filtering berdasarkan line yang dipilih, kita perlu ambil dari query saat connect
+            // Untuk sekarang, kita akan filter di frontend JavaScript
+        }
+        
+        // Ambil data dari backend
+        // PERBAIKAN: Backend sudah melakukan filtering berdasarkan line_name jika dikirim
         const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status`, {
             headers: {
                 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
@@ -2156,6 +2187,29 @@ app.post('/api/dashboard/ticketing', requireAuthAPI, async (req, res) => {
   }
 });
 
+app.get('/api/dashboard/ticketing/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/${req.params.id}`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching ticketing by ID:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch ticketing',
+        error: error.message 
+      });
+    }
+  }
+});
+
 app.get('/api/dashboard/ticketing/problem/:problemId', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/problem/${req.params.problemId}`, {
@@ -2173,6 +2227,30 @@ app.get('/api/dashboard/ticketing/problem/:problemId', requireAuthAPI, async (re
       res.status(500).json({ 
         success: false, 
         message: 'Failed to fetch ticketing',
+        error: error.message 
+      });
+    }
+  }
+});
+
+app.put('/api/dashboard/ticketing/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/dashboard/ticketing/${req.params.id}`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error updating ticketing:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update ticketing',
         error: error.message 
       });
     }
@@ -2222,6 +2300,54 @@ app.get('/api/dashboard/analytics/ticketing', requireAuthAPI, async (req, res) =
   }
 });
 
+// Ticketing analytics modal requires direct /api/ticketing routes (without dashboard prefix)
+app.get('/api/ticketing/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/ticketing/${req.params.id}`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching ticketing (direct route):', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch ticketing',
+        error: error.message
+      });
+    }
+  }
+});
+
+app.put('/api/ticketing/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/ticketing/${req.params.id}`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error updating ticketing (direct route):', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update ticketing',
+        error: error.message
+      });
+    }
+  }
+});
+
 // Auto refresh dashboard data every 1 seconds with enhanced problem detection
 setInterval(() => {
   if (activeConnections.size > 0) {
@@ -2251,9 +2377,15 @@ app.use((req, res) => {
       method: req.method
     });
   }
-  // Log 404 for debugging
-  console.log(`❌ 404 - Page not found: ${req.method} ${req.path}`);
-  console.log(`Available routes: /, /divisions, /analytics, /manage-lines, /users, /plc-monitoring, /inspect-tables`);
+  // Ignore .well-known requests (Chrome DevTools, etc.)
+  if (req.path.startsWith('/.well-known/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  // Log 404 for debugging (skip for .well-known)
+  if (!req.path.startsWith('/.well-known/')) {
+    console.log(`❌ 404 - Page not found: ${req.method} ${req.path}`);
+    console.log(`Available routes: /, /divisions, /analytics, /manage-lines, /users, /plc-monitoring, /inspect-tables`);
+  }
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The requested page could not be found.',
