@@ -200,6 +200,195 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 2000);
 
+    // ========== FILTER FUNCTIONALITY ==========
+    
+    // Filter elements
+    const filterName = document.getElementById('filterName');
+    const filterDivision = document.getElementById('filterDivision');
+    const filterLine = document.getElementById('filterLine');
+    const filterAddress = document.getElementById('filterAddress');
+    const clearFiltersBtn = document.getElementById('clearFilters');
+    
+    // Populate line filter dropdown based on divisions
+    function populateLineFilter() {
+        if (!filterLine) return;
+        
+        // Get all unique lines from table data
+        const rows = document.querySelectorAll('#tablesTable tbody tr[data-id]');
+        const linesSet = new Set();
+        
+        rows.forEach(row => {
+            const line = row.dataset.line;
+            if (line) {
+                linesSet.add(line);
+            }
+        });
+        
+        // Get selected division to filter lines
+        const selectedDivision = filterDivision ? filterDivision.value : '';
+        
+        // Clear and repopulate
+        filterLine.innerHTML = '<option value="">Semua Line</option>';
+        
+        // If division is selected, filter lines by division
+        let linesToShow = Array.from(linesSet);
+        if (selectedDivision && divisionLineMapping[selectedDivision]) {
+            // Filter lines that belong to selected division
+            linesToShow = linesToShow.filter(line => 
+                divisionLineMapping[selectedDivision].includes(line)
+            );
+        } else if (selectedDivision && Object.keys(divisionLineMapping).length > 0) {
+            // If division is selected but not in mapping, show all lines from table
+            // (fallback case)
+        }
+        
+        // Sort lines alphabetically
+        linesToShow.sort().forEach(line => {
+            const option = document.createElement('option');
+            option.value = line;
+            option.textContent = line;
+            filterLine.appendChild(option);
+        });
+    }
+    
+    // Filter table rows based on filter inputs
+    function filterTable() {
+        if (!tableBody) return;
+        
+        const nameFilter = filterName ? filterName.value.toLowerCase().trim() : '';
+        const divisionFilter = filterDivision ? filterDivision.value : '';
+        const lineFilter = filterLine ? filterLine.value : '';
+        const addressFilter = filterAddress ? filterAddress.value.toLowerCase().trim() : '';
+        
+        const rows = tableBody.querySelectorAll('tr[data-id]');
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            // Skip part-config-row
+            if (row.classList.contains('part-config-row')) {
+                return;
+            }
+            
+            const name = row.cells[0].textContent.toLowerCase();
+            const division = row.dataset.division || '';
+            const line = row.dataset.line || '';
+            const address = row.cells[3].textContent.toLowerCase();
+            const partConfigRow = row.nextElementSibling;
+            
+            // Apply filters
+            const matchesName = !nameFilter || name.includes(nameFilter);
+            const matchesDivision = !divisionFilter || division === divisionFilter;
+            const matchesLine = !lineFilter || line === lineFilter;
+            const matchesAddress = !addressFilter || address.includes(addressFilter);
+            
+            const isVisible = matchesName && matchesDivision && matchesLine && matchesAddress;
+            
+            if (isVisible) {
+                row.style.display = '';
+                visibleCount++;
+                // Show/hide part-config-row if it exists
+                if (partConfigRow && partConfigRow.classList.contains('part-config-row')) {
+                    partConfigRow.style.display = '';
+                }
+            } else {
+                row.style.display = 'none';
+                // Hide part-config-row if it exists
+                if (partConfigRow && partConfigRow.classList.contains('part-config-row')) {
+                    partConfigRow.style.display = 'none';
+                    partConfigRow.classList.remove('show'); // Collapse if expanded
+                }
+            }
+        });
+        
+        // Show "no results" message if no rows are visible
+        let noResultsRow = tableBody.querySelector('.no-results-row');
+        if (visibleCount === 0 && rows.length > 0) {
+            if (!noResultsRow) {
+                noResultsRow = document.createElement('tr');
+                noResultsRow.className = 'no-results-row';
+                noResultsRow.innerHTML = `
+                    <td colspan="5" class="no-results">
+                        <i class="fas fa-search"></i>
+                        <p>Tidak ada data yang sesuai dengan filter yang dipilih</p>
+                        <button onclick="clearAllFilters()" style="margin-top: 10px; padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Bersihkan Filter
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(noResultsRow);
+            }
+            noResultsRow.style.display = '';
+        } else {
+            if (noResultsRow) {
+                noResultsRow.style.display = 'none';
+            }
+        }
+    }
+    
+    // Clear all filters
+    function clearAllFilters() {
+        if (filterName) filterName.value = '';
+        if (filterDivision) filterDivision.value = '';
+        if (filterLine) filterLine.value = '';
+        if (filterAddress) filterAddress.value = '';
+        populateLineFilter(); // Repopulate line filter with all lines
+        filterTable();
+    }
+    
+    // Make clearAllFilters available globally for the button onclick
+    window.clearAllFilters = clearAllFilters;
+    
+    // Add event listeners for filters
+    if (filterName) {
+        filterName.addEventListener('input', filterTable);
+    }
+    
+    if (filterDivision) {
+        filterDivision.addEventListener('change', () => {
+            populateLineFilter(); // Update line options based on selected division
+            filterLine.value = ''; // Reset line filter when division changes
+            filterTable();
+        });
+    }
+    
+    if (filterLine) {
+        filterLine.addEventListener('change', filterTable);
+    }
+    
+    if (filterAddress) {
+        filterAddress.addEventListener('input', filterTable);
+    }
+    
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', clearAllFilters);
+    }
+    
+    // Populate line filter on page load
+    // Wait a bit to ensure table is rendered
+    function initializeFilters() {
+        populateLineFilter();
+        // Ensure initial filter state (show all rows)
+        filterTable();
+    }
+    
+    // Initialize filters after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        initializeFilters();
+    }, 500);
+    
+    // Also populate when divisions are loaded
+    const checkDivisionsLoaded = setInterval(() => {
+        if (Object.keys(divisionLineMapping).length > 0) {
+            populateLineFilter();
+            clearInterval(checkDivisionsLoaded);
+        }
+    }, 200);
+    
+    // Stop checking after 5 seconds
+    setTimeout(() => {
+        clearInterval(checkDivisionsLoaded);
+    }, 5000);
+
     function updateLineOptions(divisionSelect, lineSelect) {
         const selectedDivision = divisionSelect.value;
         lineSelect.innerHTML = '<option value="">Pilih Line</option>';

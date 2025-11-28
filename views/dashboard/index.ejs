@@ -57,13 +57,11 @@
                                     <span>Tables</span>
                                 </a>
                             <% } else if (user.role === 'manager') { %>
+                                <!-- Manager tidak memiliki akses ke analytics -->
+                            <% } else if (['maintenance', 'quality', 'engineering'].includes(user.role)) { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>
-                                </a>
-                                <a href="/inspect-tables" class="analytics-link" title="Tables">
-                                    <i class="fas fa-table"></i>
-                                    <span>Tables</span>
                                 </a>
                             <% } %>
                         </div>
@@ -104,7 +102,7 @@
                     </div>
                     <div class="stat-info">
                         <div class="stat-number" id="totalMachines">0</div>
-                        <div class="stat-label">Total Meja</div>
+                        <div class="stat-label">Total Meja/Mesin</div>
                     </div>
                 </div>
                 

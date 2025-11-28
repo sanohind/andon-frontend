@@ -293,8 +293,8 @@ app.get('/manage-lines', requireAuth, async (req, res) => {
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
-  // Pastikan hanya admin, management, dan manager yang bisa mengakses halaman ini
-  if (!['admin', 'management', 'manager'].includes(req.user.role)) {
+  // Allow admin, management, maintenance, quality, dan engineering (manager tidak bisa akses)
+  if (!['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak'); // atau redirect ke halaman utama
   }
 
@@ -1121,9 +1121,9 @@ app.delete('/api/users/:id', requireAuth, async (req, res) => {
   }
 });
 
-// RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN)
+// RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN & MANAGEMENT)
 app.get('/inspect-tables', requireAuth, async (req, res) => {
-  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
   try {
     console.log('Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
     
@@ -1148,20 +1148,6 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
       tableList = [];
     }
 
-    // Filter for manager: only tables in their division/lines
-    if (req.user.role === 'manager') {
-      const divisionToLines = {
-        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-      };
-      const allowedLines = divisionToLines[req.user.division] || [];
-      tableList = tableList.filter((t) => {
-        const line = t.line_name || t.lineName || t.line;
-        const division = t.division || null;
-        return (division && division === req.user.division) || (line && allowedLines.includes(line));
-      });
-    }
     
     res.render('dashboard/inspect-tables', {
       title: 'Manage Inspect Tables',
@@ -1180,7 +1166,7 @@ app.get('/inspect-tables', requireAuth, async (req, res) => {
 
 // RUTE PROXY API UNTUK MENGAMBIL DAFTAR MEJA INSPECT
 app.get('/api/inspect-tables', requireAuth, async (req, res) => {
-  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     console.log('API: Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
     
@@ -1223,7 +1209,7 @@ app.post('/api/inspect-tables', requireAuth, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1239,7 +1225,7 @@ app.put('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1255,7 +1241,7 @@ app.delete('/api/inspect-tables/:id', requireAuth, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/inspection-tables/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1363,7 +1349,7 @@ app.post('/api/inspection-tables', requireAuthAPI, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/inspection-tables`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1412,7 +1398,7 @@ app.post('/api/part-configurations', requireAuthAPI, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1428,7 +1414,7 @@ app.post('/api/part-configurations/bulk-import', requireAuthAPI, async (req, res
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/part-configurations/bulk-import`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1456,7 +1442,7 @@ app.put('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, req.body, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
@@ -1472,7 +1458,7 @@ app.delete('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
   if (req.user.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/part-configurations/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }

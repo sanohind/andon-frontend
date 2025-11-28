@@ -49,9 +49,10 @@
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
                                 </a>
-                                <a href="/inspect-tables" class="analytics-link" title="Tables">
-                                    <i class="fas fa-table"></i>
-                                    <span>Tables</span>
+                            <% } else if (['maintenance', 'quality', 'engineering'].includes(user.role)) { %>
+                                <a href="/divisions" class="analytics-link" title="Dashboard">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <span>Dashboard</span>
                                 </a>
                             <% } %>
                         </div>
@@ -83,6 +84,7 @@
                 <input type="text" id="date-range-picker" placeholder="Pilih Rentang Tanggal" />
             </div>
 
+            <% if (['admin', 'management'].includes(user.role)) { %>
             <div class="stats-section">
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
@@ -140,8 +142,10 @@
                     </div>
                 </div>
             </div>
+            <% } %>
 
             <!-- Detailed Forward Problem Analytics Table Section -->
+            <% if (['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(user.role)) { %>
             <div class="detailed-forward-analytics-section">
                 <h3>Data Detail Forward Problem Resolution</h3>
                 <div class="table-actions">
@@ -223,8 +227,10 @@
                     <p>Pilih rentang tanggal untuk melihat data detail forward problem resolution.</p>
                 </div>
             </div>
+            <% } %>
 
             <!-- Ticketing Problem Analytics Table Section -->
+            <% if (['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(user.role)) { %>
             <div class="ticketing-analytics-section">
                 <h3>Data Ticketing Problem</h3>
                 <div class="table-actions">
@@ -306,6 +312,7 @@
                     <p>Pilih rentang tanggal untuk melihat data ticketing problem.</p>
                 </div>
             </div>
+            <% } %>
         </div>
     </main>
 
@@ -344,6 +351,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display: none;"></div>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/header-common.js"></script>
     <script src="/js/analytics.js"></script>

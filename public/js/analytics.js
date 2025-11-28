@@ -1,6 +1,17 @@
 // public/js/analytics.js
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Get user role from data attribute
+    const userDataEl = document.getElementById('userData');
+    const userRole = userDataEl ? userDataEl.getAttribute('data-role') : null;
+    const userLine = userDataEl ? userDataEl.getAttribute('data-line') : null;
+    const userDivision = userDataEl ? userDataEl.getAttribute('data-division') : null;
+    
+    // Determine what to show based on role
+    // Manager tidak bisa akses halaman analytics, jadi tidak perlu di-handle di sini
+    const showCharts = ['admin', 'management'].includes(userRole);
+    const showTables = ['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(userRole);
+    
     // Helper function to get authentication headers
     function getAuthHeaders() {
         const token = getCookieValue('auth_token');
@@ -19,13 +30,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
-    // Konfigurasi awal untuk chart
-    const chartConfigs = {
-        frequency: { ctx: document.getElementById('frequencyChart').getContext('2d'), type: 'bar', chart: null },
-        downtime: { ctx: document.getElementById('downtimeChart').getContext('2d'), type: 'bar', chart: null },
-        problemType: { ctx: document.getElementById('problemTypeChart').getContext('2d'), type: 'doughnut', chart: null },
-        mttr: { ctx: document.getElementById('mttrChart').getContext('2d'), type: 'bar', chart: null },
-    };
+    // Konfigurasi awal untuk chart (hanya jika chart section ada)
+    const chartConfigs = {};
+    if (showCharts) {
+        const frequencyEl = document.getElementById('frequencyChart');
+        const downtimeEl = document.getElementById('downtimeChart');
+        const problemTypeEl = document.getElementById('problemTypeChart');
+        const mttrEl = document.getElementById('mttrChart');
+        
+        if (frequencyEl) chartConfigs.frequency = { ctx: frequencyEl.getContext('2d'), type: 'bar', chart: null };
+        if (downtimeEl) chartConfigs.downtime = { ctx: downtimeEl.getContext('2d'), type: 'bar', chart: null };
+        if (problemTypeEl) chartConfigs.problemType = { ctx: problemTypeEl.getContext('2d'), type: 'doughnut', chart: null };
+        if (mttrEl) chartConfigs.mttr = { ctx: mttrEl.getContext('2d'), type: 'bar', chart: null };
+    }
 
     let lastSelectedRange = null;
 
@@ -64,22 +81,32 @@ document.addEventListener('DOMContentLoaded', () => {
             lastSelectedRange = { start: startDate, end: endDate };
         }
         try {
-            // Fetch basic analytics data (prioritas utama)
-            const analyticsResponse = await fetch(`/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`, {
-                headers: getAuthHeaders()
-            });
-            if (!analyticsResponse.ok) {
-                throw new Error('Failed to fetch analytics data');
+            // Build URL (manager tidak bisa akses halaman ini)
+            let analyticsUrl = `/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`;
+            
+            // Fetch basic analytics data (hanya jika showCharts)
+            if (showCharts) {
+                const analyticsResponse = await fetch(analyticsUrl, {
+                    headers: getAuthHeaders()
+                });
+                if (!analyticsResponse.ok) {
+                    throw new Error('Failed to fetch analytics data');
+                }
+                const analyticsResult = await analyticsResponse.json();
+
+                if (analyticsResult.success) {
+                    // Update UI dengan data analytics utama terlebih dahulu
+                    updateUI(analyticsResult.data);
+                } else {
+                    console.error('Analytics API Error:', analyticsResult.message);
+                }
             }
-            const analyticsResult = await analyticsResponse.json();
 
-            if (analyticsResult.success) {
-                // Update UI dengan data analytics utama terlebih dahulu
-                updateUI(analyticsResult.data);
-
-                // Fetch detailed forward analytics data untuk tabel
+            // Fetch detailed forward analytics data untuk tabel (hanya jika showTables)
+            if (showTables) {
                 try {
-                    const forwardResp = await fetch(`/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`, {
+                    let forwardUrl = `/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`;
+                    const forwardResp = await fetch(forwardUrl, {
                         headers: getAuthHeaders()
                     });
                     if (forwardResp.ok) {
@@ -91,8 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (forwardErr) {
                     console.warn('Detailed forward analytics not available:', forwardErr);
                 }
-            } else {
-                console.error('Analytics API Error:', analyticsResult.message);
             }
         } catch (error) {
             console.error('Fetch Error:', error);
@@ -101,17 +126,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fungsi untuk memperbarui semua elemen UI
     function updateUI(data) {
-        // Update KPI Cards
-        document.getElementById('kpi-total-problems').textContent = data.kpis.total_problems;
-        document.getElementById('kpi-total-downtime').textContent = formatSeconds(data.kpis.total_downtime_seconds);
-        document.getElementById('kpi-mttr').textContent = formatSeconds(data.kpis.average_resolution_time_seconds);
-        document.getElementById('kpi-worst-machine').textContent = data.kpis.most_problematic_machine;
+        if (!showCharts) return;
+        
+        // Update KPI Cards (hanya jika elemen ada)
+        const kpiTotalProblems = document.getElementById('kpi-total-problems');
+        const kpiTotalDowntime = document.getElementById('kpi-total-downtime');
+        const kpiMttr = document.getElementById('kpi-mttr');
+        const kpiWorstMachine = document.getElementById('kpi-worst-machine');
+        
+        if (kpiTotalProblems) kpiTotalProblems.textContent = data.kpis.total_problems;
+        if (kpiTotalDowntime) kpiTotalDowntime.textContent = formatSeconds(data.kpis.total_downtime_seconds);
+        if (kpiMttr) kpiMttr.textContent = formatSeconds(data.kpis.average_resolution_time_seconds);
+        if (kpiWorstMachine) kpiWorstMachine.textContent = data.kpis.most_problematic_machine;
 
-        // Update Charts (chart lama - prioritas utama)
-        updateChart(chartConfigs.frequency, data.problemFrequency.labels, data.problemFrequency.data);
-        updateChart(chartConfigs.downtime, data.downtime.labels, data.downtime.data.map(s => (s / 60).toFixed(2)), 'Downtime (menit)');
-        updateChart(chartConfigs.problemType, data.problemTypes.labels, data.problemTypes.data);
-        updateChart(chartConfigs.mttr, data.mttr.labels, data.mttr.data.map(s => (s / 60).toFixed(2)), 'MTTR (menit)');
+        // Update Charts (hanya jika chart configs ada)
+        if (chartConfigs.frequency) {
+            updateChart(chartConfigs.frequency, data.problemFrequency.labels, data.problemFrequency.data);
+        }
+        if (chartConfigs.downtime) {
+            updateChart(chartConfigs.downtime, data.downtime.labels, data.downtime.data.map(s => (s / 60).toFixed(2)), 'Downtime (menit)');
+        }
+        if (chartConfigs.problemType) {
+            updateChart(chartConfigs.problemType, data.problemTypes.labels, data.problemTypes.data);
+        }
+        if (chartConfigs.mttr) {
+            updateChart(chartConfigs.mttr, data.mttr.labels, data.mttr.data.map(s => (s / 60).toFixed(2)), 'MTTR (menit)');
+        }
     }
 
     // Fungsi generik untuk membuat/update chart
@@ -154,7 +194,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const endDate = moment(date2.dateInstance).format('YYYY-MM-DD');
                 lastSelectedRange = { start: startDate, end: endDate };
                 fetchAnalyticsData(startDate, endDate);
-                fetchTicketingData(startDate, endDate);
+                if (showTables) {
+                    fetchTicketingData(startDate, endDate);
+                }
             });
         },
     });
@@ -965,7 +1007,9 @@ document.addEventListener('DOMContentLoaded', () => {
     lastSelectedRange = { start: thirtyDaysAgo, end: today };
     // Pastikan langsung fetch data untuk range default
     fetchAnalyticsData(thirtyDaysAgo, today);
-    fetchTicketingData(thirtyDaysAgo, today);
+    if (showTables) {
+        fetchTicketingData(thirtyDaysAgo, today);
+    }
 });
 
 // Helper function to get cookie value (global scope)

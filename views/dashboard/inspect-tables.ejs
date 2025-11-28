@@ -223,6 +223,112 @@
             align-items: center;
         }
 
+        /* Filter Container Styles */
+        .filter-container {
+            background-color: #f8f9fc;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            width: 100%;
+            margin-top: 15px;
+            margin-bottom: 20px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .filter-group label {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .filter-group label i {
+            font-size: 0.9em;
+        }
+
+        .filter-input,
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 0.9em;
+            transition: var(--transition);
+            background-color: white;
+        }
+
+        .filter-input:focus,
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .btn-clear-filters {
+            padding: 8px 16px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            height: 36px;
+            white-space: nowrap;
+        }
+
+        .btn-clear-filters:hover {
+            background-color: #5a6268;
+            opacity: 0.9;
+        }
+
+        .btn-clear-filters i {
+            font-size: 0.9em;
+        }
+
+        /* Empty filter result message */
+        .no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .no-results i {
+            font-size: 3em;
+            color: #ddd;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .filter-row {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                min-width: 100%;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -315,6 +421,46 @@
             </div>
             <div class="table-container">
                 <h3>Daftar Meja Inspect</h3>
+                <div class="filter-container">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label for="filterName">
+                                <i class="fas fa-search"></i> Nama
+                            </label>
+                            <input type="text" id="filterName" placeholder="Cari nama meja..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <label for="filterDivision">
+                                <i class="fas fa-building"></i> Divisi
+                            </label>
+                            <select id="filterDivision" class="filter-select">
+                                <option value="">Semua Divisi</option>
+                                <option value="Brazing">Brazing</option>
+                                <option value="Chassis">Chassis</option>
+                                <option value="Nylon">Nylon</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filterLine">
+                                <i class="fas fa-sitemap"></i> Line
+                            </label>
+                            <select id="filterLine" class="filter-select">
+                                <option value="">Semua Line</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="filterAddress">
+                                <i class="fas fa-map-marker-alt"></i> Address
+                            </label>
+                            <input type="text" id="filterAddress" placeholder="Cari address..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <button id="clearFilters" class="btn-clear-filters" title="Bersihkan Filter">
+                                <i class="fas fa-times"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <table id="tablesTable">
                     <thead>
                         <tr>
