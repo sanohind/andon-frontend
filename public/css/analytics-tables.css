@@ -589,3 +589,73 @@
     }
 }
 
+/* Line Quantity Charts Styles */
+#quantityChartsContainer {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.line-quantity-chart-item {
+    background: #f8f9fa;
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+}
+
+.line-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.line-chart-header h4 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.line-chart-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.line-chart-summary .summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.line-chart-summary .summary-item span {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.line-chart-summary .summary-item strong {
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    #quantityChartsContainer {
+        grid-template-columns: 1fr;
+    }
+    
+    .line-chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .line-chart-summary {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+

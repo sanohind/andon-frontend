@@ -1067,6 +1067,93 @@ body {
     font-size: 1.1rem;
 }
 
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.chart-card-header h3 {
+    margin: 0;
+    text-align: left;
+}
+
+.chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--dark-color);
+}
+
+.chart-controls label {
+    font-weight: 600;
+}
+
+.chart-controls select {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+    min-width: 180px;
+}
+
+.chart-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.chart-summary .summary-item {
+    background: #f8f9fc;
+    border-radius: var(--border-radius);
+    padding: 0.75rem 1rem;
+    min-width: 160px;
+}
+
+.chart-summary .summary-item span {
+    display: block;
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.chart-summary .summary-item strong {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.quantity-chart-card {
+    grid-column: span 2;
+}
+
+.chart-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px dashed #d1d5db;
+    border-radius: var(--border-radius);
+    color: #6b7280;
+    text-align: center;
+    padding: 1rem;
+}
+
+.chart-empty-state i {
+    font-size: 2rem;
+    color: #d1d5db;
+}
+
 .chart-wrapper {
     position: relative;
     height: 300px; /* Memberi tinggi default untuk canvas chart */
@@ -1081,6 +1168,9 @@ body {
     }
     .charts-section {
         grid-template-columns: 1fr;
+    }
+    .quantity-chart-card {
+        grid-column: 1;
     }
 }
 .quantity-info .label {

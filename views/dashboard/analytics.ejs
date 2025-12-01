@@ -117,6 +117,24 @@
             </div>
 
             <div class="charts-section">
+                <div class="chart-card quantity-chart-card">
+                    <div class="chart-card-header">
+                        <h3>Perbandingan Quantity Target vs Aktual</h3>
+                        <div class="chart-controls">
+                            <label for="divisionQuantitySelect">Pilih Divisi</label>
+                            <select id="divisionQuantitySelect" class="line-select">
+                                <option value="">Memuat data...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="quantityChartsContainer">
+                        <!-- Charts akan ditambahkan secara dinamis per line -->
+                    </div>
+                    <div class="chart-empty-state" id="lineQuantityEmptyState" style="display: none;">
+                        <i class="fas fa-database"></i>
+                        <p>Belum ada data produksi untuk divisi ini.</p>
+                    </div>
+                </div>
                 <div class="chart-card">
                     <h3>Frekuensi Masalah per Mesin</h3>
                     <div class="chart-wrapper">

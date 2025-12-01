@@ -771,6 +771,32 @@ app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req,
   }
 });
 
+// Endpoint untuk line quantity comparison analytics
+app.get('/api/dashboard/analytics/line-quantity', requireAuthAPI, async (req, res) => {
+  try {
+    const { start_date, end_date, division } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-quantity`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: {
+        start_date,
+        end_date,
+        division
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching line quantity analytics:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch line quantity analytics',
+      error: error.message
+    });
+  }
+});
+
 // Endpoint untuk analytics umum (harus didefinisikan setelah route yang lebih spesifik)
 app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {
