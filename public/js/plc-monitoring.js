@@ -293,20 +293,20 @@ let sortField = 'device_id';
 let sortOrder = 'asc';
 
 // CRUD Functions
-function openAddDeviceModal() {
+async function openAddDeviceModal() {
     document.getElementById('modalTitle').textContent = 'Add New Device';
     document.getElementById('deviceForm').reset();
     document.getElementById('deviceId').value = '';
     
     // Load inspection tables and reset selection
-    selectedTableNames = [];
-    loadInspectionTables();
+    selectedTableAddresses = [];
+    await loadInspectionTables();
     renderSelectedTables();
     
     document.getElementById('deviceModal').style.display = 'flex';
 }
 
-function editDevice(deviceId) {
+async function editDevice(deviceId) {
     const device = currentDevices.find(d => d.id == deviceId);
     if (!device) {
         alert('Device not found');
@@ -321,7 +321,7 @@ function editDevice(deviceId) {
     document.getElementById('detailsInput').value = device.details || '';
     
     // Load inspection tables and initialize selection
-    loadInspectionTables();
+    await loadInspectionTables();
     initializeSelectedTables(device.controlled_tables || '');
     
     document.getElementById('deviceModal').style.display = 'flex';
@@ -363,8 +363,8 @@ async function saveDevice() {
         
         const method = isEdit ? 'PUT' : 'POST';
         
-        // Add controlled_tables from selectedTableNames
-        data.controlled_tables = JSON.stringify(selectedTableNames);
+        // Add controlled_tables from selected table addresses
+        data.controlled_tables = JSON.stringify(selectedTableAddresses);
         
         const response = await fetch(url, {
             method: method,
@@ -465,7 +465,7 @@ function updateSortIcon() {
 
 // Global variables for multi-select
 let allInspectionTables = [];
-let selectedTableNames = [];
+let selectedTableAddresses = [];
 
 // Load inspection tables when modal opens
 async function loadInspectionTables() {
@@ -480,6 +480,7 @@ async function loadInspectionTables() {
             allInspectionTables = result.data;
             console.log('Loaded tables:', allInspectionTables);
             renderTableOptions();
+            return allInspectionTables;
         } else {
             console.error('Failed to load inspection tables:', result.message);
             document.getElementById('tableOptions').innerHTML = '<div class="loading-tables">Failed to load tables: ' + result.message + '</div>';
@@ -488,6 +489,7 @@ async function loadInspectionTables() {
         console.error('Error loading inspection tables:', error);
         document.getElementById('tableOptions').innerHTML = '<div class="loading-tables">Error loading tables: ' + error.message + '</div>';
     }
+    return [];
 }
 
 // Render table options
@@ -505,7 +507,8 @@ function renderTableOptions() {
     
     const filteredTables = allInspectionTables.filter(table => 
         table.name.toLowerCase().includes(searchTerm) ||
-        (table.line_name && table.line_name.toLowerCase().includes(searchTerm))
+        (table.line_name && table.line_name.toLowerCase().includes(searchTerm)) ||
+        (table.address && table.address.toLowerCase().includes(searchTerm))
     );
     
     console.log('Filtered tables:', filteredTables);
@@ -515,26 +518,34 @@ function renderTableOptions() {
         return;
     }
     
-    container.innerHTML = filteredTables.map(table => `
-        <div class="table-option ${selectedTableNames.includes(table.name) ? 'selected' : ''}" 
-             onclick="toggleTableSelection('${table.name}')">
-            <input type="checkbox" ${selectedTableNames.includes(table.name) ? 'checked' : ''} 
-                   onchange="toggleTableSelection('${table.name}')">
-            <div class="table-option-info">
-                <div class="table-option-name">${table.name}</div>
-                <div class="table-option-details">Line: ${table.line_name || 'N/A'} | Division: ${table.division || 'N/A'}</div>
+    container.innerHTML = filteredTables.map(table => {
+        const tableAddress = (table.address || '').toString();
+        const isSelected = tableAddress && selectedTableAddresses.includes(tableAddress);
+        const safeAddress = tableAddress.replace(/'/g, "\\'");
+        return `
+            <div class="table-option ${isSelected ? 'selected' : ''}" 
+                 onclick="toggleTableSelection('${safeAddress}')">
+                <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                       onchange="toggleTableSelection('${safeAddress}')">
+                <div class="table-option-info">
+                    <div class="table-option-name">${table.name}</div>
+                    <div class="table-option-details">
+                        Line: ${table.line_name || 'N/A'} | Division: ${table.division || 'N/A'} | Address: ${table.address}
+                    </div>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // Toggle table selection
-function toggleTableSelection(tableName) {
-    const index = selectedTableNames.indexOf(tableName);
+function toggleTableSelection(tableAddress) {
+    if (!tableAddress) return;
+    const index = selectedTableAddresses.indexOf(tableAddress);
     if (index > -1) {
-        selectedTableNames.splice(index, 1);
+        selectedTableAddresses.splice(index, 1);
     } else {
-        selectedTableNames.push(tableName);
+        selectedTableAddresses.push(tableAddress);
     }
     renderTableOptions();
     renderSelectedTables();
@@ -543,26 +554,32 @@ function toggleTableSelection(tableName) {
 // Render selected tables
 function renderSelectedTables() {
     const container = document.getElementById('selectedList');
-    if (selectedTableNames.length === 0) {
+    if (selectedTableAddresses.length === 0) {
         container.innerHTML = '<span style="color: #999; font-style: italic;">No tables selected</span>';
         return;
     }
     
-    container.innerHTML = selectedTableNames.map(tableName => `
+    container.innerHTML = selectedTableAddresses.map(address => {
+        const tableInfo = allInspectionTables.find(table => table.address === address);
+        const displayName = tableInfo ? tableInfo.name : address;
+        const safeAddress = (address || '').replace(/'/g, "\\'");
+        return `
         <div class="selected-item">
-            ${tableName}
-            <button type="button" class="remove-btn" onclick="removeTableSelection('${tableName}')">
+            ${displayName}
+            <button type="button" class="remove-btn" onclick="removeTableSelection('${safeAddress}')">
                 <i class="fas fa-times"></i>
             </button>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // Remove table selection
-function removeTableSelection(tableName) {
-    const index = selectedTableNames.indexOf(tableName);
+function removeTableSelection(tableAddress) {
+    if (!tableAddress) return;
+    const index = selectedTableAddresses.indexOf(tableAddress);
     if (index > -1) {
-        selectedTableNames.splice(index, 1);
+        selectedTableAddresses.splice(index, 1);
         renderTableOptions();
         renderSelectedTables();
     }
@@ -581,12 +598,13 @@ function clearTableSearch() {
 
 // Initialize selected tables from JSON
 function initializeSelectedTables(jsonString) {
-    selectedTableNames = [];
+    selectedTableAddresses = [];
     if (jsonString) {
         try {
             const parsed = JSON.parse(jsonString);
             if (Array.isArray(parsed)) {
-                selectedTableNames = parsed;
+                const resolved = parsed.map(value => resolveTableAddress(value)).filter(Boolean);
+                selectedTableAddresses = Array.from(new Set(resolved));
             }
         } catch (e) {
             console.warn('Failed to parse controlled_tables JSON:', e);
@@ -594,4 +612,23 @@ function initializeSelectedTables(jsonString) {
     }
     renderTableOptions();
     renderSelectedTables();
+}
+
+function resolveTableAddress(value) {
+    if (!value) return null;
+    if (typeof value === 'object') {
+        if (value.address) return value.address;
+        if (value.name) return findAddressByName(value.name);
+        return null;
+    }
+    const stringValue = value.toString().trim();
+    if (!stringValue) return null;
+    const matchByAddress = allInspectionTables.find(table => table.address === stringValue);
+    if (matchByAddress) return matchByAddress.address;
+    return findAddressByName(stringValue);
+}
+
+function findAddressByName(name) {
+    const table = allInspectionTables.find(table => table.name === name);
+    return table ? table.address : null;
 }

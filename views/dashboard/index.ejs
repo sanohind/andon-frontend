@@ -20,6 +20,19 @@
 </head>
 <body style="visibility: visible; display: block; opacity: 1;">
     <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display: none;"></div>
+    <%
+        const flatMachines = [];
+        Object.keys(machinesByLine || {}).forEach(lineKey => {
+            (machinesByLine[lineKey] || []).forEach(machine => {
+                flatMachines.push({
+                    name: machine.name,
+                    line_name: machine.line_name,
+                    address: machine.address || null
+                });
+            });
+        });
+    %>
+    <div id="dashboardData" data-machines='<%- JSON.stringify(flatMachines) %>' style="display: none;"></div>
     
     <header class="dashboard-header">
         <div class="container">
@@ -159,7 +172,8 @@
                                 <!-- PERBAIKAN: Ubah onclick parameter agar lebih eksplisit -->
                                 <div class="machine-card compact<%= machine.status === 'problem' ? ' problem' : (machine.status === 'warning' ? ' warning' : '') %>" 
                                     data-machine="<%= machine.name %>" 
-                                    data-line="<%= machine.line_name %>" 
+                                    data-line="<%= machine.line_name %>"
+                                    data-address="<%= machine.address || '' %>" 
                                     onclick="showProblemDetail('<%= machine.name %>', null, '<%= machine.line_name %>')">                                   
                                     <div class="machine-header">
                                         <h3><%= machine.name %></h3>

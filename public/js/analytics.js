@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Set value yang dipilih - hanya jika ada value yang valid
                 if (selectedValue) {
                     divisionQuantitySelect.value = selectedValue;
-                }
+            }
             }
 
             const hasLines = Array.isArray(lines) && lines.length > 0;
@@ -307,16 +307,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
+            type: 'bar',
+            data: {
                     labels: ['Perbandingan'],
                     datasets: [
                         {
                             label: 'Target',
                             data: [target],
                             backgroundColor: '#c7d2fe',
-                            borderRadius: 6,
-                            maxBarThickness: 80
+                    borderRadius: 6,
+                    maxBarThickness: 80
                         },
                         {
                             label: 'Aktual',
@@ -326,39 +326,39 @@ document.addEventListener('DOMContentLoaded', () => {
                             maxBarThickness: 80
                         }
                     ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
                         legend: { 
                             display: true,
                             position: 'top'
                         },
-                        tooltip: {
-                            callbacks: {
-                                label(context) {
-                                    const rawValue = typeof context.parsed === 'object'
-                                        ? context.parsed.y
-                                        : context.parsed;
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                const rawValue = typeof context.parsed === 'object'
+                                    ? context.parsed.y
+                                    : context.parsed;
                                     return `${context.dataset.label}: ${formatQuantityValue(rawValue)}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: false
-                        },
-                        y: {
-                            beginAtZero: true,
-                            stacked: false,
-                            ticks: {
-                                callback: (value) => formatQuantityValue(value)
                             }
                         }
                     }
+                },
+                scales: {
+                        x: {
+                            stacked: false
+                        },
+                    y: {
+                        beginAtZero: true,
+                            stacked: false,
+                        ticks: {
+                            callback: (value) => formatQuantityValue(value)
+                        }
+                    }
                 }
+            }
             });
 
             // Store chart reference

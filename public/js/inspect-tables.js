@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openEditModal(id, address, name, division, lineName) {
         editId.value = id;
         editId.setAttribute('data-address', address);
-        editName.value = name;
+        editName.value = (name || '').trim();
         editDivision.value = division || '';
         
         // Update line options based on division
@@ -516,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const address = row.dataset.address;
 
         if (button.classList.contains('btn-edit')) {
-            const currentName = row.cells[0].textContent;
+            const currentName = (row.dataset.name || row.cells[0].textContent || '').trim();
             const currentDivision = row.dataset.division;
             const currentLine = row.dataset.line;
             const currentAddress = row.dataset.address;

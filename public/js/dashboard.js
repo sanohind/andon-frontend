@@ -40,6 +40,9 @@ class DashboardManager {
         this.lineFilter = urlParams.get('line') || null;
 
         this.metricsByAddress = new Map();
+        this.machineNameToAddress = new Map();
+        this.machineAddressToName = new Map();
+        this.buildMachineAddressMaps();
         this.init();
     }
 
@@ -974,11 +977,21 @@ class DashboardManager {
 		}
 	}
 
-	// Check if a machine is controlled by an offline PLC
+    buildMachineAddressMaps() {
+        (this.machines || []).forEach(machine => {
+            if (machine && machine.name && machine.address) {
+                this.machineNameToAddress.set(machine.name, machine.address);
+                this.machineAddressToName.set(machine.address, machine.name);
+            }
+        });
+    }
+
+    // Check if a machine is controlled by an offline PLC
 	isMachineControlledByOfflinePlc(machineName) {
 		if (!this.plcDevices || this.plcDevices.length === 0) return false;
 		
 		const now = new Date();
+        const machineAddress = this.machineNameToAddress.get(machineName);
 		
 		for (const plc of this.plcDevices) {
 			const lastSeen = plc.last_seen ? new Date(plc.last_seen) : null;
@@ -987,24 +1000,89 @@ class DashboardManager {
 			const isOffline = over1min || offlineByStatus;
 			
 			if (isOffline && plc.controlled_tables) {
-				let controlledTables = [];
-				try {
-					controlledTables = typeof plc.controlled_tables === 'string' 
-						? JSON.parse(plc.controlled_tables) 
-						: plc.controlled_tables;
-				} catch (e) {
-					console.warn('Failed to parse controlled_tables for PLC:', plc.device_id);
-					continue;
-				}
-				
-				if (controlledTables.includes(machineName)) {
+                const normalized = this.normalizeControlledTables(plc.controlled_tables);
+                
+                if (machineAddress && normalized.addresses.has(machineAddress)) {
 					return true;
 				}
+
+                if (normalized.names.has(machineName)) {
+                    return true;
+                }
 			}
 		}
 		
 		return false;
 	}
+
+    normalizeControlledTables(rawTables) {
+        const normalized = {
+            addresses: new Set(),
+            names: new Set()
+        };
+
+        if (!rawTables) {
+            return normalized;
+        }
+
+        let parsedTables = rawTables;
+        if (typeof rawTables === 'string') {
+            try {
+                parsedTables = JSON.parse(rawTables);
+            } catch (e) {
+                console.warn('Failed to parse controlled_tables JSON:', rawTables);
+                return normalized;
+            }
+        }
+
+        if (!Array.isArray(parsedTables)) {
+            return normalized;
+        }
+
+        parsedTables.forEach(entry => {
+            if (!entry) return;
+            if (typeof entry === 'object') {
+                if (entry.address) {
+                    this.addControlledTableEntry(normalized, entry.address);
+                }
+                if (entry.name) {
+                    normalized.names.add(entry.name);
+                    const addressFromName = this.machineNameToAddress.get(entry.name);
+                    if (addressFromName) {
+                        normalized.addresses.add(addressFromName);
+                    }
+                }
+            } else if (typeof entry === 'string') {
+                this.addControlledTableEntry(normalized, entry);
+            }
+        });
+
+        return normalized;
+    }
+
+    addControlledTableEntry(normalized, value) {
+        if (!value) return;
+        const trimmed = value.toString().trim();
+        if (!trimmed) return;
+
+        // If matches an address, store address and name (if known)
+        if (this.machineAddressToName.has(trimmed)) {
+            normalized.addresses.add(trimmed);
+            normalized.names.add(this.machineAddressToName.get(trimmed));
+            return;
+        }
+
+        // If matches a machine name, map to address if available
+        const addressFromName = this.machineNameToAddress.get(trimmed);
+        if (addressFromName) {
+            normalized.addresses.add(addressFromName);
+            normalized.names.add(trimmed);
+            return;
+        }
+
+        // Fallback: treat as name to maintain backward compatibility
+        normalized.names.add(trimmed);
+    }
 
     updateLastUpdateTime() {
         const lastUpdateElement = document.getElementById('lastUpdate');
