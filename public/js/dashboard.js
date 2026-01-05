@@ -510,12 +510,18 @@ class DashboardManager {
             });
         }
 
-        // Jangan turunkan angka valid ke 0 jika data sementara kosong
+        // BUGFIX: Jika lineFilter ada dan totalMachines = 0, berarti line tersebut memang tidak punya mesin
+        // Jangan tampilkan total mesin keseluruhan, tampilkan 0
         const totalMachinesEl = document.getElementById('totalMachines');
         const currentShown = totalMachinesEl ? Number(totalMachinesEl.textContent || 0) : 0;
-        const safeTotal = (Number.isFinite(totalMachines) && totalMachines > 0)
-            ? totalMachines
-            : (currentShown > 0 ? currentShown : totalMachines);
+        let safeTotal = totalMachines;
+        
+        // Hanya gunakan fallback jika tidak ada lineFilter (untuk dashboard global)
+        // Jika ada lineFilter, gunakan nilai actual (bisa 0)
+        if (!this.lineFilter && Number.isFinite(totalMachines) && totalMachines === 0 && currentShown > 0) {
+            // Dashboard global: jangan turunkan angka valid ke 0 jika data sementara kosong
+            safeTotal = currentShown;
+        }
 
         // Update counters dengan data yang sudah difilter - dengan null checks
         if (totalMachinesEl) totalMachinesEl.textContent = safeTotal;
@@ -742,10 +748,18 @@ class DashboardManager {
         // PERBAIKAN: Filter problems berdasarkan role user
         let filteredProblems = problems;
 
+        // BUGFIX: Priority 1 - Filter berdasarkan lineFilter (jika ada)
+        // Hanya tampilkan problem pada dashboard line yang mesinnya bermasalah
+        if (this.lineFilter) {
+            filteredProblems = filteredProblems.filter(problem => {
+                return problem.line_name && problem.line_name.toString() === this.lineFilter.toString();
+            });
+        }
+
         // Filter berdasarkan role dan line_name
         if (this.userRole === 'leader' && this.userLineName) {
             // Leader hanya melihat problem dari line mereka sendiri
-            filteredProblems = problems.filter(problem => {
+            filteredProblems = filteredProblems.filter(problem => {
                 return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
         } else if (this.userRole === 'manager' && this.userDivision) {
@@ -757,16 +771,16 @@ class DashboardManager {
                 'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
             };
             const allowedLines = divisionLineMapping[this.userDivision] || [];
-            filteredProblems = problems.filter(problem => {
+            filteredProblems = filteredProblems.filter(problem => {
                 // Filter by line_name yang sesuai dengan divisi manager
                 return problem.line_name && allowedLines.includes(problem.line_name);
             });
         } else if (this.userRole === 'admin') {
-            // Admin melihat semua problem
-            filteredProblems = problems;
+            // Admin melihat semua problem (tidak perlu filter lagi jika sudah difilter by lineFilter)
+            // filteredProblems tetap seperti di atas
         } else if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
             // Department users hanya melihat problem yang sudah di-forward ke mereka
-            filteredProblems = problems.filter(problem => {
+            filteredProblems = filteredProblems.filter(problem => {
                 return problem.is_forwarded && problem.forwarded_to_role === this.userRole;
             });
         }
