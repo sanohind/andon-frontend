@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="/css/divisions.css">
 </head>
-<body class="<%= user.role === 'manager' ? 'manager-view' : (['admin', 'maintenance', 'quality', 'engineering'].includes(user.role) ? 'admin-view' : '') %>">
+<body class="<%= user.role === 'manager' ? 'manager-view' : (['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(user.role) ? 'admin-view' : '') %>">
     <header class="dashboard-header">
         <div class="container">
             <div class="header-content">
@@ -25,6 +25,10 @@
                         </div>
                         <div class="nav-links"> 
                             <% if (user.role === 'admin' || user.role === 'management') { %>
+                                <a href="/divisions" class="analytics-link" title="Dashboard">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <span>Dashboard</span>
+                                </a>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>
