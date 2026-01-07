@@ -496,7 +496,6 @@ class DashboardManager {
         
         // Total active problems = log problems + cycle-based problems
         const activeProblemsCount = activeProblems.length + cycleBasedProblemsCount;
-        const criticalProblemsCount = activeProblems.filter(p => p.severity === 'critical').length;
         
         // Hitung total machines dari data yang ada - filter by line if lineFilter exists
         let totalMachines = 0;
@@ -527,8 +526,6 @@ class DashboardManager {
         if (totalMachinesEl) totalMachinesEl.textContent = safeTotal;
         const activeProblemsEl = document.getElementById('activeProblems');
         if (activeProblemsEl) activeProblemsEl.textContent = activeProblemsCount;
-        const criticalProblemsEl = document.getElementById('criticalProblems');
-        if (criticalProblemsEl) criticalProblemsEl.textContent = criticalProblemsCount;
     }
 
     async loadStats() {
@@ -862,12 +859,10 @@ class DashboardManager {
         // Safe update with null checks (totalMachinesEl already defined above)
         const activeProblemsEl = document.getElementById('activeProblems');
         const resolvedTodayEl = document.getElementById('resolvedToday');
-        const criticalProblemsEl = document.getElementById('criticalProblems');
         
         totalMachinesEl.textContent = Number.isFinite(totalMachines) ? totalMachines : 0;
         if (activeProblemsEl) activeProblemsEl.textContent = stats.active_problems || 0;
         if (resolvedTodayEl) resolvedTodayEl.textContent = stats.resolved_today || 0;
-        if (criticalProblemsEl) criticalProblemsEl.textContent = stats.critical_problems || 0;
     }
 
     computeTotalMachinesFromLastStatuses() {
@@ -1416,12 +1411,16 @@ class DashboardManager {
         problem.problem_status = actualStatus;
         
         if (actualStatus === 'active' && isLeader) {
-            // Problem baru, leader bisa forward atau resolve langsung
+            // Problem baru, leader bisa forward, cancel, atau resolve langsung
             actionButtons = `
                 <div class="action-buttons">
                     <button class="btn btn-forward" id="forwardBtn">
                         <i class="fas fa-share"></i>
                         Forward
+                    </button>
+                    <button class="btn btn-cancel" id="cancelBtn">
+                        <i class="fas fa-times"></i>
+                        Cancel
                     </button>
                     <button class="btn btn-direct-resolve" id="directResolveBtn">
                         <i class="fas fa-check"></i>
@@ -1818,7 +1817,7 @@ class DashboardManager {
                     <p><strong>Akan diteruskan ke:</strong> <span style="color: #0066cc; font-weight: bold;">${targetRole}</span></p>
                 </div>
                 <div style="text-align: left; margin-top: 20px;">
-                    <label for="forwardMessage" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Pesan (Opsional):</label>
+                    <label for="forwardMessage" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Pesan <span style="color: #dc3545;">*</span>:</label>
                     <textarea id="forwardMessage" placeholder="Tambahkan pesan untuk tim yang menangani..." style="width: 100%; min-width: 100%; max-width: 100%; height: 100px; padding: 12px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 0.95rem; line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease;"></textarea>
                 </div>
             `,
@@ -1828,14 +1827,35 @@ class DashboardManager {
             cancelButtonText: 'Batal',
             confirmButtonColor: '#0066cc',
             cancelButtonColor: '#6c757d',
-            allowEnterKey: true,
+            allowEnterKey: false,
             allowOutsideClick: false,
             width: '600px',
             didOpen: () => {
                 // Tambahkan focus style untuk textarea
                 const forwardMessageField = document.getElementById('forwardMessage');
+                let pollInterval = null;
                 
                 if (forwardMessageField) {
+                    // Disable tombol forward secara default
+                    const updateButtonState = () => {
+                        const button = Swal.getConfirmButton() || document.querySelector('.swal2-confirm');
+                        const value = (forwardMessageField.value || '').trim();
+                        if (button) {
+                            if (value.length > 0) {
+                                button.disabled = false;
+                                button.removeAttribute('disabled');
+                                button.removeAttribute('aria-disabled');
+                                button.style.cssText += 'opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;';
+                                button.classList.remove('swal2-disabled', 'swal2-deny');
+                            } else {
+                                button.disabled = true;
+                                button.style.opacity = '0.5';
+                                button.style.pointerEvents = 'none';
+                                button.classList.add('swal2-disabled');
+                            }
+                        }
+                    };
+
                     forwardMessageField.addEventListener('focus', function() {
                         this.style.borderColor = '#0A2856';
                         this.style.boxShadow = '0 0 0 3px rgba(10, 40, 86, 0.1)';
@@ -1844,6 +1864,48 @@ class DashboardManager {
                         this.style.borderColor = '#ced4da';
                         this.style.boxShadow = 'none';
                     });
+                    
+                    // Event listener untuk input dan paste
+                    const inputHandler = () => updateButtonState();
+                    const pasteHandler = () => setTimeout(updateButtonState, 10);
+                    
+                    forwardMessageField.addEventListener('input', inputHandler);
+                    forwardMessageField.addEventListener('paste', pasteHandler);
+                    
+                    // Polling untuk memastikan button state selalu update
+                    pollInterval = setInterval(() => {
+                        updateButtonState();
+                    }, 100);
+                    
+                    // Initial check
+                    updateButtonState();
+                    
+                    // Simpan reference untuk cleanup
+                    forwardMessageField._pollInterval = pollInterval;
+                    forwardMessageField._inputHandler = inputHandler;
+                    forwardMessageField._pasteHandler = pasteHandler;
+                }
+            },
+            willClose: () => {
+                // Cleanup polling interval saat modal ditutup
+                try {
+                    const forwardMessageField = document.getElementById('forwardMessage');
+                    if (forwardMessageField) {
+                        // Hapus event listeners
+                        if (forwardMessageField._inputHandler) {
+                            forwardMessageField.removeEventListener('input', forwardMessageField._inputHandler);
+                        }
+                        if (forwardMessageField._pasteHandler) {
+                            forwardMessageField.removeEventListener('paste', forwardMessageField._pasteHandler);
+                        }
+                        // Clear interval
+                        if (forwardMessageField._pollInterval) {
+                            clearInterval(forwardMessageField._pollInterval);
+                            forwardMessageField._pollInterval = null;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error during modal cleanup:', e);
                 }
             },
             preConfirm: () => {
@@ -1854,6 +1916,13 @@ class DashboardManager {
                 }
                 
                 const message = (forwardMessageField.value || '').trim();
+                
+                // Validasi: pesan wajib diisi
+                if (message.length === 0) {
+                    Swal.showValidationMessage('Pesan wajib diisi');
+                    return false;
+                }
+                
                 return { message: message };
             }
         }).then((result) => {
@@ -1920,6 +1989,14 @@ class DashboardManager {
         if (finalResolveBtn) {
             finalResolveBtn.addEventListener('click', () => {
                 this.showFinalResolveConfirmation(problemId, problemData);
+            });
+        }
+
+        // Cancel button (for canceling problem without saving to database/analytics)
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                this.showCancelConfirmation(problemId, problemData);
             });
         }
 
@@ -2315,6 +2392,55 @@ class DashboardManager {
         } catch (error) {
             console.error('Error feedback resolved problem:', error);
             this.showSweetAlert('error', 'Error', 'Failed to send feedback: ' + error.message);
+        }
+    }
+
+    // Method untuk show cancel confirmation (cancel problem without saving to database/analytics)
+    showCancelConfirmation(problemId, problemData) {
+        Swal.fire({
+            title: 'Cancel Problem?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Mesin:</strong> ${problemData.machine}</p>
+                    <p><strong>Problem:</strong> ${problemData.problem_type}</p>
+                    <p style="color: #dc3545; font-weight: bold;">Ini akan mematikan problem tanpa menyimpan data ke database atau analytics. Digunakan untuk mengatasi kesalahan penekanan tombol oleh operator.</p>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Cancel Problem',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                this.cancelProblem(problemId);
+            }
+        });
+    }
+
+    // Method untuk cancel problem (hanya mematikan problem tanpa logging)
+    async cancelProblem(problemId) {
+        try {
+            const response = await fetch(`/api/dashboard/problem/${problemId}/cancel`, {
+                method: 'POST',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify({})
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSweetAlert('success', 'Problem Cancelled', data.message);
+                this.closeModal();
+                this.loadDashboardData(); // Refresh data
+                this.loadStats(); // Refresh stats
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Error canceling problem:', error);
+            this.showSweetAlert('error', 'Error', 'Failed to cancel problem: ' + error.message);
         }
     }
 

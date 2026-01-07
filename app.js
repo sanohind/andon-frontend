@@ -2133,6 +2133,38 @@ app.post('/api/dashboard/problem/:id/final-resolved', requireAuthAPI, async (req
   }
 });
 
+// Cancel Problem Route (membatalkan problem tanpa logging/analytics)
+app.post('/api/dashboard/problem/:id/cancel', requireAuthAPI, async (req, res) => {
+  try {
+    // Hanya leader yang boleh cancel
+    if (req.user.role !== 'leader') {
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya leader yang dapat melakukan cancel problem.'
+      });
+    }
+
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/cancel`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Tidak ada broadcast khusus untuk cancel, langsung kembalikan hasil
+    res.status(response.status || 200).json(response.data);
+  } catch (error) {
+    console.error('Error canceling problem:', error.response?.data || error.message);
+    const statusCode = error.response?.status || 500;
+    res.status(statusCode).json({ 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to cancel problem',
+      error: error.response?.data || error.message 
+    });
+  }
+});
+
 app.get('/api/dashboard/forward-logs', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/forward-logs`, {
