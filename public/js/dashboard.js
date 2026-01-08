@@ -1562,6 +1562,12 @@ class DashboardManager {
                         <strong>Forwarded at:</strong> ${problem.forwarded_at || 'N/A'}<br>
                         <strong>Target:</strong> ${targetRole}<br>
                         ${problem.forward_message ? `<strong>Message:</strong> ${problem.forward_message}` : ''}
+                        ${problem.forward_photo ? `
+                            <div style="margin-top: 10px;">
+                                <strong>Foto:</strong><br>
+                                <img src="${problem.forward_photo}" alt="Forward Photo" style="max-width: 100%; max-height: 300px; border-radius: 4px; margin-top: 5px; border: 1px solid #ced4da; cursor: pointer;" onclick="window.open('${problem.forward_photo}', '_blank')">
+                            </div>
+                        ` : ''}
                     </div>
                 ` : ''}
 
@@ -1820,6 +1826,15 @@ class DashboardManager {
                     <label for="forwardMessage" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Pesan <span style="color: #dc3545;">*</span>:</label>
                     <textarea id="forwardMessage" placeholder="Tambahkan pesan untuk tim yang menangani..." style="width: 100%; min-width: 100%; max-width: 100%; height: 100px; padding: 12px; border: 1px solid #ced4da; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 0.95rem; line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease;"></textarea>
                 </div>
+                <div style="text-align: left; margin-top: 20px;">
+                    <label for="forwardPhoto" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Foto (Opsional):</label>
+                    <input type="file" id="forwardPhoto" accept="image/*" capture="environment" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+                    <small style="color: #6c757d; display: block; margin-top: 5px;">Format: JPG, PNG, atau GIF (max 5MB)</small>
+                    <div id="photoPreview" style="margin-top: 10px; display: none;">
+                        <img id="photoPreviewImg" src="" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 4px; border: 1px solid #ced4da; margin-top: 10px;">
+                        <button type="button" id="removePhotoBtn" style="margin-top: 5px; padding: 5px 10px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">Hapus Foto</button>
+                    </div>
+                </div>
             `,
             icon: 'question',
             showCancelButton: true,
@@ -1885,6 +1900,49 @@ class DashboardManager {
                     forwardMessageField._inputHandler = inputHandler;
                     forwardMessageField._pasteHandler = pasteHandler;
                 }
+
+                // Handle foto upload dan preview
+                const photoInput = document.getElementById('forwardPhoto');
+                const photoPreview = document.getElementById('photoPreview');
+                const photoPreviewImg = document.getElementById('photoPreviewImg');
+                const removePhotoBtn = document.getElementById('removePhotoBtn');
+
+                if (photoInput) {
+                    photoInput.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            // Validasi ukuran file (max 5MB)
+                            if (file.size > 5 * 1024 * 1024) {
+                                Swal.showValidationMessage('Ukuran foto terlalu besar. Maksimal 5MB.');
+                                photoInput.value = '';
+                                return;
+                            }
+
+                            // Validasi tipe file
+                            if (!file.type.startsWith('image/')) {
+                                Swal.showValidationMessage('File harus berupa gambar.');
+                                photoInput.value = '';
+                                return;
+                            }
+
+                            // Tampilkan preview
+                            const reader = new FileReader();
+                            reader.onload = function(event) {
+                                photoPreviewImg.src = event.target.result;
+                                photoPreview.style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+
+                if (removePhotoBtn) {
+                    removePhotoBtn.addEventListener('click', function() {
+                        photoInput.value = '';
+                        photoPreview.style.display = 'none';
+                        photoPreviewImg.src = '';
+                    });
+                }
             },
             willClose: () => {
                 // Cleanup polling interval saat modal ditutup
@@ -1922,25 +1980,38 @@ class DashboardManager {
                     Swal.showValidationMessage('Pesan wajib diisi');
                     return false;
                 }
+
+                // Get photo file if exists
+                const photoInput = document.getElementById('forwardPhoto');
+                const photoFile = photoInput && photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
                 
-                return { message: message };
+                return { message: message, photo: photoFile };
             }
         }).then((result) => {
             if (result.isConfirmed && result.value) {
-                this.forwardProblem(problemId, result.value.message);
+                this.forwardProblem(problemId, result.value.message, result.value.photo);
             }
         });
     }
 
     // 5. METHOD BARU: forwardProblem
-    async forwardProblem(problemId, message = '') {
+    async forwardProblem(problemId, message = '', photo = null) {
         try {
+            // Use FormData if photo exists, otherwise use JSON
+            const formData = new FormData();
+            formData.append('message', message || 'Problem telah diteruskan untuk penanganan.');
+            if (photo) {
+                formData.append('photo', photo);
+            }
+
+            const headers = this.getAuthHeaders();
+            // Don't set Content-Type for FormData, let browser set it with boundary
+            delete headers['Content-Type'];
+
             const response = await fetch(`/api/dashboard/problem/${problemId}/forward`, {
                 method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify({
-                    message: message || 'Problem telah diteruskan untuk penanganan.'
-                })
+                headers: headers,
+                body: photo ? formData : JSON.stringify({ message: message || 'Problem telah diteruskan untuk penanganan.' })
             });
 
             const data = await response.json();
@@ -2683,13 +2754,13 @@ class DashboardManager {
             cancelButtonColor: '#6c757d',
             toast: false,
             position: 'center',
-            timer: 10000,
-            timerProgressBar: true
+            // Notifikasi ini membutuhkan aksi dari leader, jadi jangan auto-close
+            allowOutsideClick: false
         }).then((result) => {
             if (result.isConfirmed) {
-                // Buka problem detail untuk final resolve
-                this.loadDashboardData(); // Refresh data first
-                // Note: Problem ID akan didapat dari data yang sudah di-refresh
+                // Buka langsung modal detail problem untuk final resolve
+                // Gunakan problem_id untuk memuat detail problem; nama mesin akan diambil dari API
+                this.showProblemDetail(`Problem ${data.problem_id}`, data.problem_id);
             }
         });
     }
@@ -2902,8 +2973,18 @@ class DashboardManager {
             if (data.success && data.data && Array.isArray(data.data)) {
                 data.data.forEach(technician => {
                     const option = document.createElement('option');
-                    option.value = technician;
-                    option.textContent = technician;
+                    // Handle both old format (string) and new format (object with id, nama, departement)
+                    if (typeof technician === 'string') {
+                        option.value = technician;
+                        option.textContent = technician;
+                    } else if (technician.nama) {
+                        option.value = technician.nama;
+                        option.textContent = technician.nama;
+                        // Store id as data attribute if needed
+                        if (technician.id) {
+                            option.dataset.id = technician.id;
+                        }
+                    }
                     select.appendChild(option);
                 });
             } else {

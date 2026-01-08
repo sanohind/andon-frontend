@@ -7,6 +7,7 @@ const path = require('path');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const moment = require('moment-timezone');
+const multer = require('multer');
 require('dotenv').config();
 
 // Set timezone untuk Node.js
@@ -38,6 +39,14 @@ if (process.env.NODE_ENV !== 'production') {
   console.log('LARAVEL_API_TOKEN exists:', !!process.env.LARAVEL_API_TOKEN);
   console.log('=== END ENVIRONMENT DEBUG ===');
 }
+
+// Configure multer for file uploads
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB
+    }
+});
 
 // Middleware
 app.use(cors());
@@ -1809,7 +1818,7 @@ function shouldSendNotificationToUser(user, notification) {
 }
 
 // Forward Problem Routes
-app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, async (req, res) => {
+app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, upload.single('photo'), async (req, res) => {
   try {
     // Validasi bahwa user adalah leader
     if (req.user.role !== 'leader') {
@@ -1819,12 +1828,33 @@ app.post('/api/dashboard/problem/:id/forward', requireAuthAPI, async (req, res) 
       });
     }
 
-    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/forward`, req.body, {
-      headers: {
-        'Authorization': `Bearer ${req.user.token || req.session.token}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+    // Handle multipart/form-data (untuk upload foto)
+    const FormData = require('form-data');
+    const formData = new FormData();
+    
+    // Tambahkan message (ambil dari body atau field)
+    const message = req.body.message || '';
+    formData.append('message', message);
+
+    // Tambahkan foto jika ada
+    if (req.file) {
+      formData.append('photo', req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype
+      });
+    }
+
+    // Headers untuk FormData
+    const headers = {
+      'Authorization': `Bearer ${req.user.token || req.session.token}`,
+      'Accept': 'application/json',
+      ...formData.getHeaders()
+    };
+
+    const response = await axios.post(`${LARAVEL_API_BASE}/dashboard/problem/${req.params.id}/forward`, formData, {
+      headers: headers,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
     });
     
     if (response.data.success) {
@@ -2241,10 +2271,15 @@ app.get('/api/dashboard/ticketing/:id', requireAuthAPI, async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching ticketing by ID:', error.message);
+    // Log error details for debugging
     if (error.response) {
+      // Only log 500 errors, 404 is expected in some cases
+      if (error.response.status === 500) {
+        console.error('Error fetching ticketing by ID:', error.response.status, error.response.data);
+      }
       res.status(error.response.status).json(error.response.data);
     } else {
+      console.error('Error fetching ticketing by ID:', error.message);
       res.status(500).json({ 
         success: false, 
         message: 'Failed to fetch ticketing',
@@ -2264,15 +2299,20 @@ app.get('/api/dashboard/ticketing/problem/:problemId', requireAuthAPI, async (re
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching ticketing by problem:', error.message);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
+    // 404 is expected when ticketing doesn't exist yet, don't log as error
+    if (error.response && error.response.status === 404) {
+      res.status(404).json(error.response.data);
     } else {
-      res.status(500).json({ 
-        success: false, 
-        message: 'Failed to fetch ticketing',
-        error: error.message 
-      });
+      console.error('Error fetching ticketing by problem:', error.message);
+      if (error.response) {
+        res.status(error.response.status).json(error.response.data);
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to fetch ticketing',
+          error: error.message 
+        });
+      }
     }
   }
 });
