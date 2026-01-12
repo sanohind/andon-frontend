@@ -2444,7 +2444,7 @@ class DashboardManager {
     // 5. METHOD BARU: forwardProblem
     async forwardProblem(problemId, message = '', photo = null) {
         try {
-            // Use FormData if photo exists, otherwise use JSON
+            // Always use FormData because backend expects multipart/form-data
             const formData = new FormData();
             formData.append('message', message || 'Problem telah diteruskan untuk penanganan.');
             if (photo) {
@@ -2458,8 +2458,13 @@ class DashboardManager {
             const response = await fetch(`/api/dashboard/problem/${problemId}/forward`, {
                 method: 'POST',
                 headers: headers,
-                body: photo ? formData : JSON.stringify({ message: message || 'Problem telah diteruskan untuk penanganan.' })
+                body: formData
             });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
 
             const data = await response.json();
             
@@ -2468,7 +2473,7 @@ class DashboardManager {
                 this.closeModal();
                 this.loadDashboardData(); // Refresh data
             } else {
-                throw new Error(data.message);
+                throw new Error(data.message || 'Failed to forward problem');
             }
         } catch (error) {
             console.error('Error forwarding problem:', error);
