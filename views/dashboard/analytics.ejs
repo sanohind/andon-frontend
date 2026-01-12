@@ -331,8 +331,81 @@
                 </div>
             </div>
             <% } %>
+
+            <!-- Teknisi PIC Management Section - Only for Admin -->
+            <% if (user.role === 'admin') { %>
+            <div class="teknisi-pic-section">
+                <h3>Data Teknisi PIC</h3>
+                <div class="table-actions">
+                    <button class="btn btn-primary" id="add-teknisi-pic-btn">
+                        <i class="fas fa-plus"></i> Tambah Teknisi
+                    </button>
+                    <button class="btn btn-secondary" id="refresh-teknisi-pic-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="teknisi-pic-table-container">
+                    <table class="teknisi-pic-table" id="teknisi-pic-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="id">
+                                    ID <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="nama">
+                                    Nama <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-column="departement">
+                                    Departement <i class="fas fa-sort"></i>
+                                </th>
+                                <th style="width: 150px;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teknisi-pic-table-body">
+                            <!-- Data akan diisi oleh JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="teknisi-pic-empty-state" style="display: none;">
+                    <i class="fas fa-users"></i>
+                    <h4>Tidak ada data</h4>
+                    <p>Belum ada data teknisi PIC. Klik "Tambah Teknisi" untuk menambahkan data baru.</p>
+                </div>
+            </div>
+            <% } %>
         </div>
     </main>
+
+    <!-- Teknisi PIC Modal -->
+    <div class="modal" id="teknisiPicModal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="teknisiPicModalTitle">Tambah Teknisi PIC</h3>
+                <button class="modal-close" onclick="closeTeknisiPicModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="teknisiPicForm">
+                    <input type="hidden" id="teknisiPicId" name="id">
+                    <div class="form-group">
+                        <label for="teknisiPicNama">Nama <span style="color: #dc3545;">*</span>:</label>
+                        <input type="text" id="teknisiPicNama" name="nama" placeholder="Masukkan nama teknisi" required>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="teknisiPicDepartement">Departement <span style="color: #dc3545;">*</span>:</label>
+                        <select id="teknisiPicDepartement" name="departement" required>
+                            <option value="">Pilih Departement</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="quality">Quality</option>
+                            <option value="engineering">Engineering</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTeknisiPicModal()">Batal</button>
+                <button class="btn btn-primary" onclick="submitTeknisiPicForm()">Simpan</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Edit Ticketing Modal -->
     <div class="modal" id="editTicketingModal" style="display: none;">

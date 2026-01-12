@@ -1,5 +1,11 @@
 // public/js/analytics.js
 
+// Teknisi PIC table state (global scope - must be defined before DOMContentLoaded)
+let teknisiPicTableData = [];
+let currentTeknisiPicDisplayedData = [];
+let currentTeknisiPicSortColumn = null;
+let currentTeknisiPicSortDirection = 'asc';
+
 document.addEventListener('DOMContentLoaded', () => {
     // Get user role from data attribute
     const userDataEl = document.getElementById('userData');
@@ -508,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTicketingSortDirection = 'asc';
     let ticketingSearchInitialized = false;
     let ticketingPageSize = 10;
+
     let ticketingEditHandlerAttached = false;
 
     // Fungsi untuk mengupdate tabel detail forward analytics
@@ -800,6 +807,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             
                 updateTicketingTable(sortedData, { skipBaseUpdate: true });
+            });
+        });
+
+        // Setup sorting untuk teknisi PIC table
+        const teknisiPicSortableHeaders = document.querySelectorAll('.teknisi-pic-table th.sortable');
+        
+        teknisiPicSortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.dataset.column;
+            
+                // Toggle sort direction
+                if (currentTeknisiPicSortColumn === column) {
+                    currentTeknisiPicSortDirection = currentTeknisiPicSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentTeknisiPicSortDirection = 'asc';
+                }
+                currentTeknisiPicSortColumn = column;
+            
+                // Update header classes
+                teknisiPicSortableHeaders.forEach(h => {
+                    h.classList.remove('asc', 'desc');
+                });
+                this.classList.add(currentTeknisiPicSortDirection);
+            
+                // Sort data berdasarkan data yang sedang ditampilkan sekarang
+                const baseData = currentTeknisiPicDisplayedData && currentTeknisiPicDisplayedData.length > 0 ? currentTeknisiPicDisplayedData : teknisiPicTableData;
+                const sortedData = [...baseData].sort((a, b) => {
+                    let aVal, bVal;
+            
+                    switch (column) {
+                        case 'id':
+                            aVal = a.id || 0;
+                            bVal = b.id || 0;
+                            break;
+                        case 'nama':
+                            aVal = (a.nama || '').toLowerCase();
+                            bVal = (b.nama || '').toLowerCase();
+                            break;
+                        case 'departement':
+                            aVal = (a.departement || '').toLowerCase();
+                            bVal = (b.departement || '').toLowerCase();
+                            break;
+                        default:
+                            return 0;
+                    }
+            
+                    if (aVal < bVal) return currentTeknisiPicSortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return currentTeknisiPicSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            
+                renderTeknisiPicTable(sortedData);
             });
         });
     }
@@ -1267,6 +1326,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Teknisi PIC Management (only for admin)
+    if (userRole === 'admin') {
+        // Load teknisi PIC data on page load
+        loadTeknisiPicData();
+
+        // Event listeners for teknisi PIC buttons
+        const addTeknisiPicBtn = document.getElementById('add-teknisi-pic-btn');
+        const refreshTeknisiPicBtn = document.getElementById('refresh-teknisi-pic-btn');
+
+        if (addTeknisiPicBtn) {
+            addTeknisiPicBtn.addEventListener('click', function() {
+                openTeknisiPicModal();
+            });
+        }
+
+        if (refreshTeknisiPicBtn) {
+            refreshTeknisiPicBtn.addEventListener('click', function() {
+                loadTeknisiPicData();
+            });
+        }
+    }
+
     setupPageSizeControls();
 
     // Setup table sorting
@@ -1578,3 +1659,285 @@ async function submitEditTicketingForm() {
 
 // Expose functions to window for global access
 window.submitEditTicketingForm = submitEditTicketingForm;
+
+// ========================================
+// TEKNISI PIC MANAGEMENT FUNCTIONS
+// ========================================
+
+// Load teknisi PIC data
+async function loadTeknisiPicData() {
+    try {
+        const headers = getAuthHeadersGlobal();
+        const response = await fetch('/api/teknisi-pic', {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch teknisi PIC data');
+        }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Failed to fetch teknisi PIC data');
+        }
+
+        const teknisiPics = result.data || [];
+        teknisiPicTableData = teknisiPics;
+        currentTeknisiPicDisplayedData = teknisiPics;
+        renderTeknisiPicTable(teknisiPics);
+    } catch (error) {
+        console.error('Error loading teknisi PIC data:', error);
+        const tbody = document.getElementById('teknisi-pic-table-body');
+        const emptyState = document.getElementById('teknisi-pic-empty-state');
+        
+        if (tbody) {
+            tbody.innerHTML = '';
+        }
+        
+        if (emptyState) {
+            emptyState.style.display = 'block';
+            emptyState.innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <h4>Error</h4>
+                <p>Gagal memuat data teknisi PIC: ${error.message}</p>
+            `;
+        }
+    }
+}
+
+// Render teknisi PIC table
+function renderTeknisiPicTable(teknisiPics) {
+    const tbody = document.getElementById('teknisi-pic-table-body');
+    const emptyState = document.getElementById('teknisi-pic-empty-state');
+    
+    if (!tbody) return;
+    
+    // Update displayed data
+    currentTeknisiPicDisplayedData = teknisiPics || [];
+    
+    if (!teknisiPics || teknisiPics.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyState) {
+            emptyState.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
+    
+    // Format departement name
+    const formatDepartement = (dept) => {
+        const deptMap = {
+            'maintenance': 'Maintenance',
+            'quality': 'Quality',
+            'engineering': 'Engineering'
+        };
+        return deptMap[dept] || dept;
+    };
+    
+    tbody.innerHTML = teknisiPics.map(teknisi => `
+        <tr>
+            <td>${teknisi.id || '-'}</td>
+            <td>${teknisi.nama || '-'}</td>
+            <td><span class="departement-badge ${teknisi.departement || ''}">${formatDepartement(teknisi.departement || '')}</span></td>
+            <td>
+                <button class="btn-edit" onclick="editTeknisiPic(${teknisi.id})" title="Edit" aria-label="Edit teknisi PIC">
+                    <i class="fas fa-edit" aria-hidden="true"></i>
+                </button>
+                <button class="btn-delete" onclick="deleteTeknisiPic(${teknisi.id}, '${(teknisi.nama || '').replace(/'/g, "\\'")}')" title="Hapus" aria-label="Hapus teknisi PIC">
+                    <i class="fas fa-trash" aria-hidden="true"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Open teknisi PIC modal (for add or edit)
+function openTeknisiPicModal(id = null) {
+    const modal = document.getElementById('teknisiPicModal');
+    const title = document.getElementById('teknisiPicModalTitle');
+    const form = document.getElementById('teknisiPicForm');
+    const namaInput = document.getElementById('teknisiPicNama');
+    const departementInput = document.getElementById('teknisiPicDepartement');
+    const idInput = document.getElementById('teknisiPicId');
+    
+    if (!modal || !form || !namaInput || !departementInput || !idInput) {
+        console.error('Modal elements not found');
+        return;
+    }
+    
+    // Reset form
+    form.reset();
+    idInput.value = '';
+    
+    if (id) {
+        // Edit mode - load data
+        if (title) title.textContent = 'Edit Teknisi PIC';
+        
+        // Fetch data
+        fetch(`/api/teknisi-pic`, {
+            method: 'GET',
+            headers: getAuthHeadersGlobal()
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                const teknisi = result.data.find(t => t.id === id);
+                if (teknisi) {
+                    idInput.value = teknisi.id;
+                    namaInput.value = teknisi.nama || '';
+                    departementInput.value = teknisi.departement || '';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading teknisi data:', error);
+            alert('Gagal memuat data teknisi PIC');
+        });
+    } else {
+        // Add mode
+        if (title) title.textContent = 'Tambah Teknisi PIC';
+    }
+    
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+}
+
+// Close teknisi PIC modal
+function closeTeknisiPicModal() {
+    const modal = document.getElementById('teknisiPicModal');
+    const form = document.getElementById('teknisiPicForm');
+    
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    }
+    
+    if (form) {
+        form.reset();
+    }
+}
+
+// Submit teknisi PIC form
+async function submitTeknisiPicForm() {
+    try {
+        const form = document.getElementById('teknisiPicForm');
+        const idInput = document.getElementById('teknisiPicId');
+        const namaInput = document.getElementById('teknisiPicNama');
+        const departementInput = document.getElementById('teknisiPicDepartement');
+        const submitBtn = document.querySelector('#teknisiPicModal .btn-primary');
+        
+        if (!form || !namaInput || !departementInput) {
+            throw new Error('Form elements not found');
+        }
+        
+        const nama = namaInput.value.trim();
+        const departement = departementInput.value;
+        const id = idInput.value ? parseInt(idInput.value) : null;
+        
+        // Validation
+        if (!nama) {
+            alert('Nama wajib diisi');
+            return;
+        }
+        
+        if (!departement) {
+            alert('Departement wajib dipilih');
+            return;
+        }
+        
+        const data = {
+            nama: nama,
+            departement: departement
+        };
+        
+        const headers = getAuthHeadersGlobal();
+        const originalText = submitBtn ? submitBtn.textContent : 'Simpan';
+        
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Menyimpan...';
+        }
+        
+        let response;
+        let result;
+        
+        try {
+            if (id) {
+                // Update
+                response = await fetch(`/api/teknisi-pic/${id}`, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify(data)
+                });
+            } else {
+                // Create
+                response = await fetch('/api/teknisi-pic', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(data)
+                });
+            }
+            
+            result = await response.json();
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        }
+        
+        if (result.success) {
+            alert(id ? 'Teknisi PIC berhasil diperbarui' : 'Teknisi PIC berhasil ditambahkan');
+            closeTeknisiPicModal();
+            loadTeknisiPicData();
+        } else {
+            throw new Error(result.message || 'Failed to save teknisi PIC');
+        }
+    } catch (error) {
+        console.error('Error saving teknisi PIC:', error);
+        alert('Gagal menyimpan teknisi PIC: ' + error.message);
+    }
+}
+
+// Edit teknisi PIC
+function editTeknisiPic(id) {
+    openTeknisiPicModal(id);
+}
+
+// Delete teknisi PIC
+async function deleteTeknisiPic(id, nama) {
+    if (!confirm(`Apakah Anda yakin ingin menghapus teknisi PIC "${nama}"?`)) {
+        return;
+    }
+    
+    try {
+        const headers = getAuthHeadersGlobal();
+        const response = await fetch(`/api/teknisi-pic/${id}`, {
+            method: 'DELETE',
+            headers: headers
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('Teknisi PIC berhasil dihapus');
+            loadTeknisiPicData();
+        } else {
+            throw new Error(result.message || 'Failed to delete teknisi PIC');
+        }
+    } catch (error) {
+        console.error('Error deleting teknisi PIC:', error);
+        alert('Gagal menghapus teknisi PIC: ' + error.message);
+    }
+}
+
+// Expose functions to window for global access
+window.closeTeknisiPicModal = closeTeknisiPicModal;
+window.submitTeknisiPicForm = submitTeknisiPicForm;
+window.editTeknisiPic = editTeknisiPic;
+window.deleteTeknisiPic = deleteTeknisiPic;

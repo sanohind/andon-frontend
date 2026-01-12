@@ -1828,7 +1828,10 @@ class DashboardManager {
                 </div>
                 <div style="text-align: left; margin-top: 20px;">
                     <label for="forwardPhoto" style="display: block; margin-bottom: 8px; font-weight: bold; color: #495057;">Foto (Opsional):</label>
-                    <input type="file" id="forwardPhoto" accept="image/*" capture="environment" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="forwardPhoto" accept="image/*" capture="environment" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+                        <button type="button" id="openCameraBtn" style="padding: 8px 16px; background-color: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95rem; font-weight: 500; white-space: nowrap; transition: background-color 0.2s ease, opacity 0.2s ease;">📷 Buka Kamera</button>
+                    </div>
                     <small style="color: #6c757d; display: block; margin-top: 5px;">Format: JPG, PNG, atau GIF (max 5MB)</small>
                     <div id="photoPreview" style="margin-top: 10px; display: none;">
                         <img id="photoPreviewImg" src="" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 4px; border: 1px solid #ced4da; margin-top: 10px;">
@@ -1851,46 +1854,86 @@ class DashboardManager {
                 let pollInterval = null;
                 
                 if (forwardMessageField) {
+                    // Check if there's already a poll interval running (prevent multiple intervals)
+                    if (forwardMessageField._pollInterval) {
+                        clearInterval(forwardMessageField._pollInterval);
+                        forwardMessageField._pollInterval = null;
+                    }
+                    
+                    // Remove old event listeners if they exist
+                    if (forwardMessageField._inputHandler) {
+                        forwardMessageField.removeEventListener('input', forwardMessageField._inputHandler);
+                    }
+                    if (forwardMessageField._pasteHandler) {
+                        forwardMessageField.removeEventListener('paste', forwardMessageField._pasteHandler);
+                    }
+                    if (forwardMessageField._focusHandler) {
+                        forwardMessageField.removeEventListener('focus', forwardMessageField._focusHandler);
+                    }
+                    if (forwardMessageField._blurHandler) {
+                        forwardMessageField.removeEventListener('blur', forwardMessageField._blurHandler);
+                    }
+                    
                     // Disable tombol forward secara default
+                    let lastButtonState = null;
                     const updateButtonState = () => {
-                        const button = Swal.getConfirmButton() || document.querySelector('.swal2-confirm');
+                        const button = Swal.getConfirmButton();
+                        if (!button) return;
+                        
                         const value = (forwardMessageField.value || '').trim();
-                        if (button) {
-                            if (value.length > 0) {
+                        const shouldEnable = value.length > 0;
+                        
+                        // Only update if state changed to prevent unnecessary DOM manipulation
+                        if (lastButtonState === shouldEnable) return;
+                        lastButtonState = shouldEnable;
+                        
+                        if (shouldEnable) {
                                 button.disabled = false;
                                 button.removeAttribute('disabled');
                                 button.removeAttribute('aria-disabled');
-                                button.style.cssText += 'opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;';
+                            button.style.opacity = '1';
+                            button.style.pointerEvents = 'auto';
+                            button.style.cursor = 'pointer';
                                 button.classList.remove('swal2-disabled', 'swal2-deny');
                             } else {
                                 button.disabled = true;
                                 button.style.opacity = '0.5';
                                 button.style.pointerEvents = 'none';
                                 button.classList.add('swal2-disabled');
-                            }
                         }
                     };
 
-                    forwardMessageField.addEventListener('focus', function() {
+                    const focusHandler = function() {
                         this.style.borderColor = '#0A2856';
                         this.style.boxShadow = '0 0 0 3px rgba(10, 40, 86, 0.1)';
-                    });
-                    forwardMessageField.addEventListener('blur', function() {
+                    };
+                    
+                    const blurHandler = function() {
                         this.style.borderColor = '#ced4da';
                         this.style.boxShadow = 'none';
-                    });
+                    };
                     
                     // Event listener untuk input dan paste
-                    const inputHandler = () => updateButtonState();
-                    const pasteHandler = () => setTimeout(updateButtonState, 10);
+                    const inputHandler = () => {
+                        lastButtonState = null; // Reset to force update
+                        updateButtonState();
+                    };
+                    const pasteHandler = () => {
+                        setTimeout(() => {
+                            lastButtonState = null; // Reset to force update
+                            updateButtonState();
+                        }, 10);
+                    };
                     
+                    forwardMessageField.addEventListener('focus', focusHandler);
+                    forwardMessageField.addEventListener('blur', blurHandler);
                     forwardMessageField.addEventListener('input', inputHandler);
                     forwardMessageField.addEventListener('paste', pasteHandler);
                     
-                    // Polling untuk memastikan button state selalu update
+                    // Polling dengan interval yang lebih lama untuk mengurangi flicker
                     pollInterval = setInterval(() => {
                         updateButtonState();
-                    }, 100);
+                    }, 300);
                     
                     // Initial check
                     updateButtonState();
@@ -1899,6 +1942,8 @@ class DashboardManager {
                     forwardMessageField._pollInterval = pollInterval;
                     forwardMessageField._inputHandler = inputHandler;
                     forwardMessageField._pasteHandler = pasteHandler;
+                    forwardMessageField._focusHandler = focusHandler;
+                    forwardMessageField._blurHandler = blurHandler;
                 }
 
                 // Handle foto upload dan preview
@@ -1908,7 +1953,7 @@ class DashboardManager {
                 const removePhotoBtn = document.getElementById('removePhotoBtn');
 
                 if (photoInput) {
-                    photoInput.addEventListener('change', function(e) {
+                    const photoChangeHandler = function(e) {
                         const file = e.target.files[0];
                         if (file) {
                             // Validasi ukuran file (max 5MB)
@@ -1932,17 +1977,376 @@ class DashboardManager {
                                 photoPreview.style.display = 'block';
                             };
                             reader.readAsDataURL(file);
+                        } else {
+                            // If no file selected, hide preview
+                            photoPreview.style.display = 'none';
+                            photoPreviewImg.src = '';
                         }
-                    });
+                    };
+                    
+                    // Remove old listener if exists
+                    if (photoInput._changeHandler) {
+                        photoInput.removeEventListener('change', photoInput._changeHandler);
+                    }
+                    
+                    photoInput.addEventListener('change', photoChangeHandler);
+                    photoInput._changeHandler = photoChangeHandler;
                 }
 
                 if (removePhotoBtn) {
-                    removePhotoBtn.addEventListener('click', function() {
+                    const removePhotoHandler = function() {
                         photoInput.value = '';
                         photoPreview.style.display = 'none';
                         photoPreviewImg.src = '';
-                    });
+                        // Clear the files property
+                        if (photoInput.files && photoInput.files.length > 0) {
+                            const dataTransfer = new DataTransfer();
+                            photoInput.files = dataTransfer.files;
+                        }
+                    };
+                    
+                    // Remove old listener if exists
+                    if (removePhotoBtn._clickHandler) {
+                        removePhotoBtn.removeEventListener('click', removePhotoBtn._clickHandler);
                 }
+                    
+                    removePhotoBtn.addEventListener('click', removePhotoHandler);
+                    removePhotoBtn._clickHandler = removePhotoHandler;
+                }
+
+                // Handle camera button
+                const openCameraBtn = document.getElementById('openCameraBtn');
+                let cameraBtnHoverEnterHandler = null;
+                let cameraBtnHoverLeaveHandler = null;
+                let cameraBtnClickHandler = null;
+                
+                if (openCameraBtn) {
+                    // Add hover effect
+                    cameraBtnHoverEnterHandler = function() {
+                        this.style.backgroundColor = '#0052a3';
+                    };
+                    cameraBtnHoverLeaveHandler = function() {
+                        this.style.backgroundColor = '#0066cc';
+                    };
+                    cameraBtnClickHandler = function() {
+                        openCameraModal(photoInput, photoPreview, photoPreviewImg);
+                    };
+                    
+                    openCameraBtn.addEventListener('mouseenter', cameraBtnHoverEnterHandler);
+                    openCameraBtn.addEventListener('mouseleave', cameraBtnHoverLeaveHandler);
+                    openCameraBtn.addEventListener('click', cameraBtnClickHandler);
+                    
+                    // Store handlers for cleanup
+                    openCameraBtn._hoverEnterHandler = cameraBtnHoverEnterHandler;
+                    openCameraBtn._hoverLeaveHandler = cameraBtnHoverLeaveHandler;
+                    openCameraBtn._clickHandler = cameraBtnClickHandler;
+                }
+
+                // Function to open camera modal
+                const openCameraModal = (photoInput, photoPreview, photoPreviewImg) => {
+                    let stream = null;
+                    let video = null;
+                    let canvas = null;
+                    let photoCaptured = false;
+
+                    Swal.fire({
+                        title: 'Akses Kamera',
+                        html: `
+                            <div style="text-align: center;">
+                                <video id="cameraVideo" autoplay playsinline style="width: 100%; max-width: 640px; height: auto; border-radius: 8px; background: #000; display: none;"></video>
+                                <canvas id="cameraCanvas" style="display: none;"></canvas>
+                                <div id="cameraError" style="color: #dc3545; margin-top: 10px; display: none;"></div>
+                                <div id="cameraLoading" style="margin-top: 20px;">
+                                    <p>Meminta akses kamera...</p>
+                                </div>
+                            </div>
+                        `,
+                        showCancelButton: true,
+                        confirmButtonText: 'Ambil Foto',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#0066cc',
+                        cancelButtonColor: '#6c757d',
+                        width: '700px',
+                        allowOutsideClick: false,
+                        didOpen: async () => {
+                            video = document.getElementById('cameraVideo');
+                            canvas = document.getElementById('cameraCanvas');
+                            const cameraError = document.getElementById('cameraError');
+                            const cameraLoading = document.getElementById('cameraLoading');
+                            const captureBtn = Swal.getConfirmButton();
+
+                            if (!captureBtn) return;
+
+                            // Disable capture button initially
+                            captureBtn.disabled = true;
+                            captureBtn.style.opacity = '0.5';
+                            captureBtn.style.pointerEvents = 'none';
+
+                            try {
+                                // Request camera access
+                                stream = await navigator.mediaDevices.getUserMedia({
+                                    video: {
+                                        facingMode: 'environment', // Use back camera if available
+                                        width: { ideal: 1280 },
+                                        height: { ideal: 720 }
+                                    },
+                                    audio: false
+                                });
+
+                                // Success - show video
+                                video.srcObject = stream;
+                                video.style.display = 'block';
+                                cameraLoading.style.display = 'none';
+                                
+                                // Enable capture button
+                                captureBtn.disabled = false;
+                                captureBtn.style.opacity = '1';
+                                captureBtn.style.pointerEvents = 'auto';
+
+                                // Wait for video to be ready
+                                video.onloadedmetadata = () => {
+                                    video.play().catch(err => {
+                                        console.error('Error playing video:', err);
+                                    });
+                                };
+                            } catch (error) {
+                                console.error('Error accessing camera:', error);
+                                cameraLoading.style.display = 'none';
+                                cameraError.style.display = 'block';
+                                
+                                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                                    cameraError.textContent = 'Akses kamera ditolak. Silakan izinkan akses kamera di pengaturan browser Anda.';
+                                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                                    cameraError.textContent = 'Kamera tidak ditemukan. Pastikan perangkat Anda memiliki kamera.';
+                                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                                    cameraError.textContent = 'Kamera sedang digunakan oleh aplikasi lain.';
+                                } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+                                    cameraError.textContent = 'Kamera tidak mendukung resolusi yang diminta.';
+                                } else {
+                                    cameraError.textContent = 'Tidak dapat mengakses kamera: ' + (error.message || 'Error tidak diketahui');
+                                }
+                            }
+                        },
+                        preConfirm: () => {
+                            if (!video || !canvas || photoCaptured) {
+                                Swal.showValidationMessage('Video kamera belum siap. Tunggu sebentar dan coba lagi.');
+                                return false;
+                            }
+
+                            // Check if video is ready
+                            if (!video.videoWidth || !video.videoHeight || video.readyState < 2) {
+                                Swal.showValidationMessage('Video kamera belum siap. Tunggu sebentar dan coba lagi.');
+                                return false;
+                            }
+
+                            try {
+                                // Set canvas size to match video
+                                canvas.width = video.videoWidth;
+                                canvas.height = video.videoHeight;
+
+                                // Draw video frame to canvas
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                                // Convert canvas to blob, then to File
+                                return new Promise((resolve) => {
+                                    canvas.toBlob((blob) => {
+                                        if (!blob) {
+                                            Swal.showValidationMessage('Gagal mengambil foto');
+                                            resolve(false);
+                                            return;
+                                        }
+
+                                        // Create File object from blob
+                                        const file = new File([blob], `camera_photo_${Date.now()}.jpg`, {
+                                            type: 'image/jpeg',
+                                            lastModified: Date.now()
+                                        });
+
+                                        // Validate file size (max 5MB)
+                                        if (file.size > 5 * 1024 * 1024) {
+                                            Swal.showValidationMessage('Foto terlalu besar. Maksimal 5MB.');
+                                            resolve(false);
+                                            return;
+                                        }
+
+                                        photoCaptured = true;
+                                        resolve(file);
+                                    }, 'image/jpeg', 0.92); // Use JPEG with quality 0.92
+                                });
+                            } catch (error) {
+                                console.error('Error capturing photo:', error);
+                                Swal.showValidationMessage('Gagal mengambil foto: ' + (error.message || 'Error tidak diketahui'));
+                                return false;
+                            }
+                        },
+                        willClose: () => {
+                            // Stop camera stream
+                            if (stream) {
+                                stream.getTracks().forEach(track => {
+                                    track.stop();
+                                });
+                                stream = null;
+                            }
+                            
+                            // Clean up
+                            if (video && video.srcObject) {
+                                video.srcObject = null;
+                            }
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed && result.value) {
+                            const capturedFile = result.value;
+                            
+                            // Modal kamera sudah ditutup, sekarang update file di modal konfirmasi
+                            // Use setTimeout to ensure modal kamera is fully closed and main modal is visible
+                            setTimeout(() => {
+                                try {
+                                    // Get elements again from main modal (they might have been recreated)
+                                    const mainPhotoInput = document.getElementById('forwardPhoto');
+                                    const mainPhotoPreview = document.getElementById('photoPreview');
+                                    const mainPhotoPreviewImg = document.getElementById('photoPreviewImg');
+                                    
+                                    if (!mainPhotoInput) {
+                                        console.error('Photo input not found in main modal');
+                                        return;
+                                    }
+
+                                    // Create a FileList-like object and set it to the input
+                                    if (typeof DataTransfer !== 'undefined') {
+                                        const dataTransfer = new DataTransfer();
+                                        dataTransfer.items.add(capturedFile);
+                                        mainPhotoInput.files = dataTransfer.files;
+                                    } else {
+                                        // Fallback for older browsers - use Object.defineProperty
+                                        Object.defineProperty(mainPhotoInput, 'files', {
+                                            value: [capturedFile],
+                                            writable: false
+                                        });
+                                    }
+
+                                    // Update preview directly to ensure it shows immediately
+                                    // Also trigger change event to ensure handler runs
+                                    const updatePreview = () => {
+                                        const currentPhotoInput = document.getElementById('forwardPhoto');
+                                        const currentPhotoPreview = document.getElementById('photoPreview');
+                                        const currentPhotoPreviewImg = document.getElementById('photoPreviewImg');
+                                        
+                                        if (currentPhotoInput && currentPhotoPreview && currentPhotoPreviewImg) {
+                                            // Update preview directly
+                                            const reader = new FileReader();
+                                            reader.onload = function(event) {
+                                                currentPhotoPreviewImg.src = event.target.result;
+                                                currentPhotoPreview.style.display = 'block';
+                                                
+                                                // Show success message
+                                                const existingMsg = document.getElementById('camera-success-notification');
+                                                if (existingMsg) {
+                                                    existingMsg.remove();
+                                                }
+                                                
+                                                const successMsg = document.createElement('div');
+                                                successMsg.id = 'camera-success-notification';
+                                                successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; display: flex; align-items: center; gap: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; animation: slideIn 0.3s ease;';
+                                                successMsg.innerHTML = `
+                                                    <span style="font-size: 20px;">✓</span>
+                                                    <span>Foto berhasil diambil dan tersimpan</span>
+                                                `;
+                                                
+                                                // Add animation style if not exists
+                                                if (!document.getElementById('camera-notification-style')) {
+                                                    const style = document.createElement('style');
+                                                    style.id = 'camera-notification-style';
+                                                    style.textContent = `
+                                                        @keyframes slideIn {
+                                                            from {
+                                                                transform: translateX(100%);
+                                                                opacity: 0;
+                                                            }
+                                                            to {
+                                                                transform: translateX(0);
+                                                                opacity: 1;
+                                                            }
+                                                        }
+                                                    `;
+                                                    document.head.appendChild(style);
+                                                }
+                                                
+                                                document.body.appendChild(successMsg);
+                                                
+                                                // Remove message after 2 seconds
+                                                setTimeout(() => {
+                                                    if (successMsg && successMsg.parentNode) {
+                                                        successMsg.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                                                        successMsg.style.transform = 'translateX(100%)';
+                                                        successMsg.style.opacity = '0';
+                                                        setTimeout(() => {
+                                                            if (successMsg && successMsg.parentNode) {
+                                                                successMsg.parentNode.removeChild(successMsg);
+                                                            }
+                                                        }, 300);
+                                                    }
+                                                }, 2000);
+                                            };
+                                            reader.onerror = function() {
+                                                console.error('Error reading captured file');
+                                                // Fallback: trigger change event
+                                                const changeEvent = new Event('change', { bubbles: true });
+                                                currentPhotoInput.dispatchEvent(changeEvent);
+                                            };
+                                            reader.readAsDataURL(capturedFile);
+                                            
+                                            // Also trigger change event as backup
+                                            setTimeout(() => {
+                                                const changeEvent = new Event('change', { bubbles: true });
+                                                currentPhotoInput.dispatchEvent(changeEvent);
+                                            }, 50);
+                                        } else {
+                                            // Fallback: trigger change event if preview elements not found
+                                            const fallbackInput = document.getElementById('forwardPhoto');
+                                            if (fallbackInput) {
+                                                const changeEvent = new Event('change', { bubbles: true });
+                                                fallbackInput.dispatchEvent(changeEvent);
+                                            }
+                                        }
+                                    };
+                                    
+                                    // Try to update preview immediately
+                                    updatePreview();
+                                    
+                                    // Also try again after a short delay in case DOM is not ready
+                                    setTimeout(updatePreview, 150);
+                                } catch (error) {
+                                    console.error('Error setting captured file:', error);
+                                    
+                                    // Show error message
+                                    const errorMsg = document.createElement('div');
+                                    errorMsg.id = 'camera-error-notification';
+                                    errorMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #dc3545; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10000; display: flex; align-items: center; gap: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; animation: slideIn 0.3s ease;';
+                                    errorMsg.innerHTML = `
+                                        <span style="font-size: 20px;">✕</span>
+                                        <span>Gagal menambahkan foto. Silakan coba lagi atau gunakan upload file.</span>
+                                    `;
+                                    document.body.appendChild(errorMsg);
+                                    
+                                    // Remove message after 3 seconds
+                                    setTimeout(() => {
+                                        if (errorMsg && errorMsg.parentNode) {
+                                            errorMsg.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                                            errorMsg.style.transform = 'translateX(100%)';
+                                            errorMsg.style.opacity = '0';
+                                            setTimeout(() => {
+                                                if (errorMsg && errorMsg.parentNode) {
+                                                    errorMsg.parentNode.removeChild(errorMsg);
+                                                }
+                                            }, 300);
+                                        }
+                                    }, 3000);
+                                }
+                            }, 100); // Increased timeout to ensure modal transition completes
+                        }
+                    });
+                };
             },
             willClose: () => {
                 // Cleanup polling interval saat modal ditutup
@@ -1952,15 +2356,58 @@ class DashboardManager {
                         // Hapus event listeners
                         if (forwardMessageField._inputHandler) {
                             forwardMessageField.removeEventListener('input', forwardMessageField._inputHandler);
+                            forwardMessageField._inputHandler = null;
                         }
                         if (forwardMessageField._pasteHandler) {
                             forwardMessageField.removeEventListener('paste', forwardMessageField._pasteHandler);
+                            forwardMessageField._pasteHandler = null;
                         }
                         // Clear interval
                         if (forwardMessageField._pollInterval) {
                             clearInterval(forwardMessageField._pollInterval);
                             forwardMessageField._pollInterval = null;
                         }
+                    }
+                    
+                    // Cleanup camera button event listeners
+                    const openCameraBtn = document.getElementById('openCameraBtn');
+                    if (openCameraBtn) {
+                        if (openCameraBtn._hoverEnterHandler) {
+                            openCameraBtn.removeEventListener('mouseenter', openCameraBtn._hoverEnterHandler);
+                            openCameraBtn._hoverEnterHandler = null;
+                        }
+                        if (openCameraBtn._hoverLeaveHandler) {
+                            openCameraBtn.removeEventListener('mouseleave', openCameraBtn._hoverLeaveHandler);
+                            openCameraBtn._hoverLeaveHandler = null;
+                        }
+                        if (openCameraBtn._clickHandler) {
+                            openCameraBtn.removeEventListener('click', openCameraBtn._clickHandler);
+                            openCameraBtn._clickHandler = null;
+                        }
+                    }
+                    
+                    // Cleanup photo input event listener if exists
+                    const photoInput = document.getElementById('forwardPhoto');
+                    if (photoInput && photoInput._changeHandler) {
+                        photoInput.removeEventListener('change', photoInput._changeHandler);
+                        photoInput._changeHandler = null;
+                    }
+                    
+                    // Cleanup remove photo button event listener if exists
+                    const removePhotoBtn = document.getElementById('removePhotoBtn');
+                    if (removePhotoBtn && removePhotoBtn._clickHandler) {
+                        removePhotoBtn.removeEventListener('click', removePhotoBtn._clickHandler);
+                        removePhotoBtn._clickHandler = null;
+                    }
+                    
+                    // Also cleanup focus/blur handlers for message field
+                    if (forwardMessageField && forwardMessageField._focusHandler) {
+                        forwardMessageField.removeEventListener('focus', forwardMessageField._focusHandler);
+                        forwardMessageField._focusHandler = null;
+                    }
+                    if (forwardMessageField && forwardMessageField._blurHandler) {
+                        forwardMessageField.removeEventListener('blur', forwardMessageField._blurHandler);
+                        forwardMessageField._blurHandler = null;
                     }
                 } catch (e) {
                     console.warn('Error during modal cleanup:', e);

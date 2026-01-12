@@ -1156,6 +1156,89 @@ app.delete('/api/users/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Teknisi PIC routes - only accessible by admin
+app.get('/api/teknisi-pic', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/teknisi-pic`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Get teknisi PIC proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.post('/api/teknisi-pic', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/teknisi-pic`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    console.error('Create teknisi PIC proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.put('/api/teknisi-pic/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.put(
+      `${LARAVEL_API_BASE}/teknisi-pic/${req.params.id}`,
+      req.body,
+      {
+        headers: {
+          'Authorization': `Bearer ${req.user.token || req.session.token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Update teknisi PIC proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
+app.delete('/api/teknisi-pic/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak' });
+  }
+  try {
+    const response = await axios.delete(
+      `${LARAVEL_API_BASE}/teknisi-pic/${req.params.id}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${req.user.token || req.session.token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Delete teknisi PIC proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+
 // RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN & MANAGEMENT)
 app.get('/inspect-tables', requireAuth, async (req, res) => {
   if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');

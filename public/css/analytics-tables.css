@@ -91,7 +91,8 @@
 }
 
 .forward-analytics-table-container,
-.ticketing-analytics-table-container {
+.ticketing-analytics-table-container,
+.teknisi-pic-table-container {
     overflow-x: auto;
     overflow-y: visible;
     border-radius: var(--border-radius);
@@ -105,33 +106,47 @@
 }
 
 .forward-analytics-table-container::-webkit-scrollbar,
-.ticketing-analytics-table-container::-webkit-scrollbar {
+.ticketing-analytics-table-container::-webkit-scrollbar,
+.teknisi-pic-table-container::-webkit-scrollbar {
     height: 8px;
 }
 
 .forward-analytics-table-container::-webkit-scrollbar-track,
-.ticketing-analytics-table-container::-webkit-scrollbar-track {
+.ticketing-analytics-table-container::-webkit-scrollbar-track,
+.teknisi-pic-table-container::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 4px;
 }
 
 .forward-analytics-table-container::-webkit-scrollbar-thumb,
-.ticketing-analytics-table-container::-webkit-scrollbar-thumb {
+.ticketing-analytics-table-container::-webkit-scrollbar-thumb,
+.teknisi-pic-table-container::-webkit-scrollbar-thumb {
     background: var(--primary-color);
     border-radius: 4px;
 }
 
 .forward-analytics-table,
-.ticketing-analytics-table {
+.ticketing-analytics-table,
+.teknisi-pic-table {
     width: 100%;
-    min-width: 1400px;
     border-collapse: collapse;
     background: white;
     font-size: 0.85rem;
 }
 
+.forward-analytics-table,
+.ticketing-analytics-table {
+    min-width: 1400px;
+}
+
+.teknisi-pic-table {
+    min-width: 600px;
+    border: none;
+}
+
 .forward-analytics-table th,
-.ticketing-analytics-table th {
+.ticketing-analytics-table th,
+.teknisi-pic-table th {
     background: #f8f9fa;
     padding: 0.75rem 0.5rem;
     text-align: left;
@@ -146,46 +161,53 @@
 }
 
 .forward-analytics-table th.sortable,
-.ticketing-analytics-table th.sortable {
+.ticketing-analytics-table th.sortable,
+.teknisi-pic-table th.sortable {
     cursor: pointer;
     user-select: none;
     transition: background-color 0.2s ease;
 }
 
 .forward-analytics-table th.sortable:hover,
-.ticketing-analytics-table th.sortable:hover {
+.ticketing-analytics-table th.sortable:hover,
+.teknisi-pic-table th.sortable:hover {
     background: #e9ecef;
 }
 
 .forward-analytics-table th.sortable i,
-.ticketing-analytics-table th.sortable i {
+.ticketing-analytics-table th.sortable i,
+.teknisi-pic-table th.sortable i {
     margin-left: 0.5rem;
     opacity: 0.5;
     transition: opacity 0.2s ease;
 }
 
 .forward-analytics-table th.sortable:hover i,
-.ticketing-analytics-table th.sortable:hover i {
+.ticketing-analytics-table th.sortable:hover i,
+.teknisi-pic-table th.sortable:hover i {
     opacity: 1;
 }
 
 .forward-analytics-table th.sortable.asc i::before,
-.ticketing-analytics-table th.sortable.asc i::before {
+.ticketing-analytics-table th.sortable.asc i::before,
+.teknisi-pic-table th.sortable.asc i::before {
     content: "\f0de";
     opacity: 1;
 }
 
 .forward-analytics-table th.sortable.desc i::before,
-.ticketing-analytics-table th.sortable.desc i::before {
+.ticketing-analytics-table th.sortable.desc i::before,
+.teknisi-pic-table th.sortable.desc i::before {
     content: "\f0dd";
     opacity: 1;
 }
 
 .forward-analytics-table td,
-.ticketing-analytics-table td {
+.ticketing-analytics-table td,
+.teknisi-pic-table td {
     padding: 0.75rem 0.5rem;
     border-bottom: 1px solid #e9ecef;
-    vertical-align: top;
+    vertical-align: middle;
 }
 
 .ticketing-analytics-table {
@@ -349,16 +371,96 @@
     font-weight: 600;
 }
 
-.ticketing-analytics-table tbody tr:hover {
+/* Teknisi PIC Section - Same style as forward and ticketing */
+.teknisi-pic-section {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.teknisi-pic-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.ticketing-analytics-table tbody tr:hover,
+.teknisi-pic-table tbody tr:hover {
     background-color: #f8f9fa;
 }
 
-.ticketing-analytics-table tbody tr:nth-child(even) {
+.ticketing-analytics-table tbody tr:nth-child(even),
+.teknisi-pic-table tbody tr:nth-child(even) {
     background-color: #f8f9fa;
 }
 
-.ticketing-analytics-table tbody tr:nth-child(even):hover {
+.ticketing-analytics-table tbody tr:nth-child(even):hover,
+.teknisi-pic-table tbody tr:nth-child(even):hover {
     background-color: #e9ecef;
+}
+
+/* Teknisi PIC Action Buttons - Same style as ticketing table */
+.teknisi-pic-table .btn-edit,
+.teknisi-pic-table .btn-delete {
+    background-color: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    margin: 0 0.25rem;
+    padding: 0;
+}
+
+.teknisi-pic-table .btn-edit {
+    background-color: var(--primary-color);
+}
+
+.teknisi-pic-table .btn-edit:hover {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+}
+
+.teknisi-pic-table .btn-delete {
+    background-color: #dc3545;
+}
+
+.teknisi-pic-table .btn-delete:hover {
+    background-color: #bb2d3b;
+    transform: translateY(-1px);
+}
+
+.teknisi-pic-table .departement-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.teknisi-pic-table .departement-badge.maintenance {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.teknisi-pic-table .departement-badge.quality {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.teknisi-pic-table .departement-badge.engineering {
+    background: #e2e3ff;
+    color: #2f327d;
 }
 
 /* Status badges for ticketing */
@@ -445,6 +547,12 @@
     
     .ticketing-analytics-table th,
     .ticketing-analytics-table td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.8rem;
+    }
+    
+    .teknisi-pic-table th,
+    .teknisi-pic-table td {
         padding: 0.5rem 0.25rem;
         font-size: 0.8rem;
     }
