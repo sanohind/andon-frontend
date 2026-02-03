@@ -563,13 +563,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (button.classList.contains('btn-set-target')) {
             setTargetAddress.value = address;
-            targetQuantityInput.value = '';
+            // Populate with existing value if available
+            const existingTarget = row.dataset.targetQuantity;
+            targetQuantityInput.value = existingTarget || '';
             setTargetModal.classList.add('show');
         }
 
         if (button.classList.contains('btn-set-cycle')) {
             setCycleAddress.value = address;
-            cycleTimeInput.value = '';
+            // Populate with existing value if available
+            const existingCycle = row.dataset.cycleTime;
+            cycleTimeInput.value = existingCycle || '';
             setCycleModal.classList.add('show');
         }
 
@@ -577,8 +581,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (button.classList.contains('btn-set-cycle-threshold')) {
             setCycleThresholdAddress.value = address;
-            warningCycleCountInput.value = '';
-            problemCycleCountInput.value = '';
+            // Populate with existing values if available
+            const existingWarning = row.dataset.warningCycle;
+            const existingProblem = row.dataset.problemCycle;
+            warningCycleCountInput.value = existingWarning || '';
+            problemCycleCountInput.value = existingProblem || '';
             setCycleThresholdModal.classList.add('show');
         }
     });
@@ -607,6 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || 'Gagal menyimpan target.');
             setTargetModal.classList.remove('show');
+            // Update data attribute on the row so next time modal opens, it shows the saved value
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) row.dataset.targetQuantity = val;
             alert('Target tersimpan.');
         } catch (err) {
             alert(`Error: ${err.message}`);
@@ -627,6 +637,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || 'Gagal menyimpan cycle time.');
             setCycleModal.classList.remove('show');
+            // Update data attribute on the row so next time modal opens, it shows the saved value
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) row.dataset.cycleTime = val;
             alert('Cycle time tersimpan.');
         } catch (err) {
             alert(`Error: ${err.message}`);
@@ -682,6 +695,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(json.message || 'Gagal menyimpan cycle threshold.');
             }
             setCycleThresholdModal.classList.remove('show');
+            // Update data attributes on the row so next time modal opens, it shows the saved values
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) {
+                row.dataset.warningCycle = warningCycleCount;
+                row.dataset.problemCycle = problemCycleCount;
+            }
             alert('Cycle threshold tersimpan.');
         } catch (err) {
             console.error('Error saving cycle threshold:', err);

@@ -474,7 +474,7 @@
                     <tbody>
                         <% if (tableList && tableList.length > 0) { %>
                             <% tableList.forEach(table => { %>
-                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>">
+                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>" data-target-quantity="<%= table.target_quantity || '' %>" data-cycle-time="<%= table.cycle_time || '' %>" data-warning-cycle="<%= table.warning_cycle_count || '' %>" data-problem-cycle="<%= table.problem_cycle_count || '' %>">
                                     <td>
                                         <span class="table-name-clickable" data-address="<%= table.address %>">
                                             <%= table.name %>
