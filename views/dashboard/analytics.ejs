@@ -119,20 +119,50 @@
             <div class="charts-section">
                 <div class="chart-card quantity-chart-card">
                     <div class="chart-card-header">
-                        <h3>Perbandingan Quantity Target vs Aktual</h3>
-                        <div class="chart-controls">
-                            <label for="divisionQuantitySelect">Pilih Divisi</label>
-                            <select id="divisionQuantitySelect" class="line-select">
-                                <option value="">Memuat data...</option>
-                            </select>
+                        <h3>Perbandingan Quantity</h3>
+                        <div class="chart-controls chart-controls-compact">
+                            <div class="chart-control-group">
+                                <label for="quantityPeriodSelect">Periode</label>
+                                <select id="quantityPeriodSelect" class="line-select line-select-short">
+                                    <option value="daily" selected>Harian</option>
+                                    <option value="monthly">Bulanan</option>
+                                    <option value="yearly">Tahunan</option>
+                                </select>
+                            </div>
+                            <div class="chart-control-group" id="quantityDateGroup">
+                                <label for="quantityDateInput">Tanggal</label>
+                                <input type="date" id="quantityDateInput" class="line-select line-select-short" title="Pilih tanggal">
+                            </div>
+                            <div class="chart-control-group" id="quantityMonthGroup" style="display: none;">
+                                <label for="quantityMonthInput">Bulan</label>
+                                <input type="month" id="quantityMonthInput" class="line-select line-select-short" title="Pilih bulan">
+                            </div>
+                            <div class="chart-control-group" id="quantityYearGroup" style="display: none;">
+                                <label for="quantityYearInput">Tahun</label>
+                                <input type="number" id="quantityYearInput" class="line-select line-select-short" min="2020" max="2030" placeholder="Tahun" title="Pilih tahun">
+                            </div>
+                            <div class="chart-control-group">
+                                <label for="quantityShiftSelect">Shift</label>
+                                <select id="quantityShiftSelect" class="line-select line-select-short">
+                                    <option value="pagi" selected>Pagi</option>
+                                    <option value="malam">Malam</option>
+                                </select>
+                            </div>
+                            <div class="chart-control-group">
+                                <label for="divisionQuantitySelect">Divisi</label>
+                                <select id="divisionQuantitySelect" class="line-select line-select-short">
+                                    <option value="">Memuat...</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
-                    <div id="quantityChartsContainer">
-                        <!-- Charts akan ditambahkan secara dinamis per line -->
-                    </div>
+                    <div class="quantity-chart-body">
+                        <div id="quantityChartsContainer" class="quantity-charts-by-line" style="display: none;"></div>
                         <div class="chart-empty-state" id="lineQuantityEmptyState" style="display: none;">
                             <i class="fas fa-database"></i>
-                        <p>Belum ada data produksi untuk divisi ini.</p>
+                            <p>Belum ada data produksi untuk opsi yang dipilih.</p>
+                            <p class="chart-empty-state-hint">Ubah tanggal, shift, atau divisi untuk melihat data.</p>
+                        </div>
                     </div>
                 </div>
                 <div class="chart-card">

@@ -1100,6 +1100,40 @@ body {
     min-width: 180px;
 }
 
+.chart-controls-compact {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.chart-controls-compact .chart-control-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.chart-controls-compact .chart-control-group label {
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+
+.chart-controls-compact .line-select-short,
+.line-select-short {
+    min-width: auto;
+    width: auto;
+    max-width: 120px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.line-select-short[type="number"] {
+    max-width: 80px;
+}
+
+.line-select-short[type="date"],
+.line-select-short[type="month"] {
+    max-width: 140px;
+}
+
 .chart-summary {
     display: flex;
     gap: 1.5rem;
@@ -1131,6 +1165,34 @@ body {
 
 .quantity-chart-card {
     grid-column: span 2;
+}
+
+.quantity-chart-body {
+    position: relative;
+    min-height: 200px;
+    margin-top: 1rem;
+}
+
+.quantity-chart-body .chart-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px dashed #d1d5db;
+    border-radius: var(--border-radius);
+    color: #6b7280;
+    text-align: center;
+    padding: 1rem;
+}
+
+.quantity-chart-body .chart-empty-state .chart-empty-state-hint {
+    font-size: 0.85rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
 }
 
 .chart-empty-state {

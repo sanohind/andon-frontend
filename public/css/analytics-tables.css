@@ -698,11 +698,15 @@
 }
 
 /* Line Quantity Charts Styles */
-#quantityChartsContainer {
+.quantity-charts-by-line {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
+}
+
+.quantity-charts-by-line .line-quantity-chart-item {
+    min-height: 280px;
 }
 
 .line-quantity-chart-item {

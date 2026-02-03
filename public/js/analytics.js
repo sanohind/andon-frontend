@@ -15,6 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // DOM references for quantity comparison chart
     const divisionQuantitySelect = document.getElementById('divisionQuantitySelect');
+    const quantityPeriodSelect = document.getElementById('quantityPeriodSelect');
+    const quantityDateInput = document.getElementById('quantityDateInput');
+    const quantityMonthInput = document.getElementById('quantityMonthInput');
+    const quantityYearInput = document.getElementById('quantityYearInput');
+    const quantityDateGroup = document.getElementById('quantityDateGroup');
+    const quantityMonthGroup = document.getElementById('quantityMonthGroup');
+    const quantityYearGroup = document.getElementById('quantityYearGroup');
+    const quantityShiftSelect = document.getElementById('quantityShiftSelect');
     const quantityChartsContainer = document.getElementById('quantityChartsContainer');
     const lineQuantityEmptyState = document.getElementById('lineQuantityEmptyState');
 
@@ -146,17 +154,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function updateQuantityPeriodVisibility() {
+        const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+        if (quantityDateGroup) quantityDateGroup.style.display = period === 'daily' ? 'flex' : 'none';
+        if (quantityMonthGroup) quantityMonthGroup.style.display = period === 'monthly' ? 'flex' : 'none';
+        if (quantityYearGroup) quantityYearGroup.style.display = period === 'yearly' ? 'flex' : 'none';
+    }
+
     async function fetchLineQuantityAnalytics(divisionOverride) {
         if (!showCharts || !chartConfigs.lineQuantity) return;
 
-        const [startDate, endDate] = getEnsuredDateRange();
+        const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+        const selectedShift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+
         const params = new URLSearchParams({
-            start_date: startDate,
-            end_date: endDate
+            period: period,
+            shift: selectedShift
         });
-        // Gunakan divisionOverride jika ada, jika tidak gunakan value dari select, jika tidak ada kirim undefined
-        const selectedDivision = divisionOverride !== undefined 
-            ? divisionOverride 
+
+        if (period === 'daily') {
+            const v = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+            params.append('date', v);
+        } else if (period === 'monthly') {
+            const v = (quantityMonthInput && quantityMonthInput.value) || moment().format('YYYY-MM');
+            params.append('month', v);
+        } else {
+            const v = (quantityYearInput && quantityYearInput.value) || moment().format('YYYY');
+            params.append('year', v);
+        }
+
+        const selectedDivision = divisionOverride !== undefined
+            ? divisionOverride
             : (divisionQuantitySelect && divisionQuantitySelect.value ? divisionQuantitySelect.value : undefined);
         if (selectedDivision) {
             params.append('division', selectedDivision);
@@ -178,36 +206,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const { divisions = [], division, lines = [] } = result.data;
 
-
             if (divisionQuantitySelect && Array.isArray(divisions) && divisions.length > 0) {
-                // Simpan value yang sedang dipilih sebelum update
                 const currentValue = divisionQuantitySelect.value;
-                
-                // Tentukan value yang akan dipilih:
-                // 1. Jika divisionOverride ada dan valid, gunakan itu (user baru memilih)
-                // 2. Jika currentValue valid, pertahankan (user sudah memilih sebelumnya)
-                // 3. Jika division dari response valid, gunakan itu
-                // 4. Default ke divisi pertama
                 let selectedValue = null;
-                
-                // Prioritas 1: divisionOverride (dari user selection)
                 if (divisionOverride !== undefined && divisionOverride !== null && divisions.includes(divisionOverride)) {
                     selectedValue = divisionOverride;
-                }
-                // Prioritas 2: currentValue (pertahankan pilihan user sebelumnya)
-                else if (currentValue && divisions.includes(currentValue)) {
+                } else if (currentValue && divisions.includes(currentValue)) {
                     selectedValue = currentValue;
-                }
-                // Prioritas 3: division dari response
-                else if (division && divisions.includes(division)) {
+                } else if (division && divisions.includes(division)) {
                     selectedValue = division;
-                }
-                // Prioritas 4: default ke divisi pertama
-                else if (divisions.length > 0) {
+                } else if (divisions.length > 0) {
                     selectedValue = divisions[0];
                 }
-                
-                // Update options
                 divisionQuantitySelect.innerHTML = '';
                 divisions.forEach((div) => {
                     const option = document.createElement('option');
@@ -215,19 +225,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     option.textContent = div;
                     divisionQuantitySelect.appendChild(option);
                 });
-                
-                // Set value yang dipilih - hanya jika ada value yang valid
                 if (selectedValue) {
                     divisionQuantitySelect.value = selectedValue;
-            }
+                }
             }
 
-            const hasLines = Array.isArray(lines) && lines.length > 0;
+            const hasLines = Array.isArray(lines) && lines.length > 0 && lines.some(l => l.machines && l.machines.length > 0);
             toggleLineQuantityEmptyState(!hasLines);
 
             if (hasLines) {
-                // Pastikan kita menggunakan data lines yang benar
-                updateLineQuantityCharts(lines);
+                updateLineQuantityCharts(lines, result.data.filter || {});
             } else {
                 clearLineQuantityCharts();
             }
@@ -239,139 +246,120 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function clearLineQuantityCharts() {
-        if (!chartConfigs.lineQuantity || !chartConfigs.lineQuantity.charts) {
-            if (quantityChartsContainer) {
-                quantityChartsContainer.innerHTML = '';
-            }
-            return;
+        if (chartConfigs.lineQuantity && chartConfigs.lineQuantity.charts) {
+            Object.values(chartConfigs.lineQuantity.charts).forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                }
+            });
+            chartConfigs.lineQuantity.charts = {};
         }
-        
-        // Destroy all existing charts
-        Object.values(chartConfigs.lineQuantity.charts).forEach(chart => {
-            if (chart && typeof chart.destroy === 'function') {
-                chart.destroy();
-            }
-        });
-        chartConfigs.lineQuantity.charts = {};
-        
-        // Clear container
+    }
+
+    function toggleLineQuantityEmptyState(showEmpty) {
+        if (lineQuantityEmptyState) {
+            lineQuantityEmptyState.style.display = showEmpty ? 'flex' : 'none';
+        }
         if (quantityChartsContainer) {
-            quantityChartsContainer.innerHTML = '';
+            quantityChartsContainer.style.display = showEmpty ? 'none' : 'block';
         }
     }
 
-    function toggleLineQuantityEmptyState(show) {
-        if (!lineQuantityEmptyState) return;
-        lineQuantityEmptyState.style.display = show ? 'flex' : 'none';
-    }
+    function updateLineQuantityCharts(linesData, filterInfo) {
+        if (!chartConfigs.lineQuantity || !quantityChartsContainer) return;
 
-    function updateLineQuantityCharts(linesData) {
-        if (!chartConfigs.lineQuantity || !quantityChartsContainer) {
-            return;
-        }
-        
-        // Clear existing charts first
-        clearLineQuantityCharts();
-        
         if (!Array.isArray(linesData) || linesData.length === 0) {
+            toggleLineQuantityEmptyState(true);
+            clearLineQuantityCharts();
             return;
         }
+
+        const filterLabel = filterInfo.filter_label || '';
+        const shiftLabel = filterInfo.shift_label || '';
+
+        toggleLineQuantityEmptyState(false);
+        clearLineQuantityCharts();
+        quantityChartsContainer.innerHTML = '';
+        quantityChartsContainer.className = 'quantity-charts-by-line';
+        quantityChartsContainer.style.display = 'grid';
 
         linesData.forEach((lineData) => {
-            const lineName = lineData.line_name;
-            const target = Number(lineData.total_target) || 0;
-            const actual = Number(lineData.total_actual) || 0;
+            const lineName = lineData.line_name || 'Unknown';
+            const machines = lineData.machines || [];
+            if (machines.length === 0) return;
 
-            // Create chart container for this line
-            const chartCard = document.createElement('div');
-            chartCard.className = 'line-quantity-chart-item';
-            chartCard.innerHTML = `
+            const labels = machines.map(m => m.name);
+            const targets = machines.map(m => Number(m.target_quantity) || 0);
+            const actuals = machines.map(m => Number(m.actual_quantity) || 0);
+
+            const chartId = `lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const card = document.createElement('div');
+            card.className = 'line-quantity-chart-item';
+            card.innerHTML = `
                 <div class="line-chart-header">
                     <h4>Line: ${lineName}</h4>
-                    <div class="line-chart-summary">
-                        <div class="summary-item">
-                            <span>Target</span>
-                            <strong>${formatQuantityValue(target)}</strong>
-                        </div>
-                        <div class="summary-item">
-                            <span>Aktual</span>
-                            <strong>${formatQuantityValue(actual)}</strong>
-                        </div>
-                    </div>
+                    <div class="line-chart-summary">${filterLabel} ${shiftLabel}</div>
                 </div>
-                <div class="chart-wrapper" style="height: 300px;">
-                    <canvas id="lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}"></canvas>
+                <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
+                    <canvas id="${chartId}"></canvas>
                 </div>
             `;
-            
-            quantityChartsContainer.appendChild(chartCard);
+            quantityChartsContainer.appendChild(card);
 
-            // Create chart
-            const canvasId = `lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const canvas = document.getElementById(canvasId);
+            const canvas = document.getElementById(chartId);
             if (!canvas) return;
 
-            const ctx = canvas.getContext('2d');
-            const chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                    labels: ['Perbandingan'],
+            const chart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
                     datasets: [
                         {
                             label: 'Target',
-                            data: [target],
+                            data: targets,
                             backgroundColor: '#c7d2fe',
-                    borderRadius: 6,
-                    maxBarThickness: 80
+                            borderRadius: 6,
+                            maxBarThickness: 28
                         },
                         {
                             label: 'Aktual',
-                            data: [actual],
+                            data: actuals,
                             backgroundColor: '#4c6ef5',
                             borderRadius: 6,
-                            maxBarThickness: 80
+                            maxBarThickness: 28
                         }
                     ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                        legend: { 
-                            display: true,
-                            position: 'top'
-                        },
-                    tooltip: {
-                        callbacks: {
-                            label(context) {
-                                const rawValue = typeof context.parsed === 'object'
-                                    ? context.parsed.y
-                                    : context.parsed;
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(context) {
+                                    const rawValue = typeof context.parsed === 'object'
+                                        ? context.parsed.x
+                                        : context.parsed;
                                     return `${context.dataset.label}: ${formatQuantityValue(rawValue)}`;
+                                }
                             }
                         }
-                    }
-                },
-                scales: {
+                    },
+                    scales: {
                         x: {
-                            stacked: false
-                        },
-                    y: {
-                        beginAtZero: true,
+                            beginAtZero: true,
                             stacked: false,
-                        ticks: {
-                            callback: (value) => formatQuantityValue(value)
-                        }
+                            ticks: { callback: (v) => formatQuantityValue(v) }
+                        },
+                        y: { stacked: false }
                     }
                 }
-            }
             });
 
-            // Store chart reference
-            if (!chartConfigs.lineQuantity.charts) {
-                chartConfigs.lineQuantity.charts = {};
-            }
-            chartConfigs.lineQuantity.charts[lineName] = chart;
+            if (!chartConfigs.lineQuantity.charts) chartConfigs.lineQuantity.charts = {};
+            chartConfigs.lineQuantity.charts[chartId] = chart;
         });
     }
 
@@ -448,27 +436,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (showTables) {
                     fetchTicketingData(startDate, endDate);
                 }
-                if (showCharts) {
-                    const selectedDivision = divisionQuantitySelect ? divisionQuantitySelect.value : undefined;
-                    if (selectedDivision) {
-                        fetchLineQuantityAnalytics(selectedDivision);
-                    } else {
-                        fetchLineQuantityAnalytics();
-                    }
-                }
             });
         },
     });
 
     if (divisionQuantitySelect) {
         divisionQuantitySelect.addEventListener('change', function() {
-            const selectedDivision = this.value;
-            if (selectedDivision) {
-                fetchLineQuantityAnalytics(selectedDivision);
-            } else {
-                fetchLineQuantityAnalytics();
-            }
+            fetchLineQuantityAnalytics(this.value || undefined);
         });
+    }
+
+    if (quantityPeriodSelect) {
+        quantityPeriodSelect.addEventListener('change', function() {
+            updateQuantityPeriodVisibility();
+            fetchLineQuantityAnalytics();
+        });
+    }
+
+    if (quantityDateInput) {
+        quantityDateInput.addEventListener('change', fetchLineQuantityAnalytics);
+    }
+
+    if (quantityMonthInput) {
+        quantityMonthInput.addEventListener('change', fetchLineQuantityAnalytics);
+    }
+
+    if (quantityYearInput) {
+        quantityYearInput.addEventListener('change', fetchLineQuantityAnalytics);
+    }
+
+    if (quantityShiftSelect) {
+        quantityShiftSelect.addEventListener('change', fetchLineQuantityAnalytics);
     }
 
     // Helper untuk mengambil rentang tanggal yang sedang dipilih
@@ -1364,6 +1362,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchTicketingData(thirtyDaysAgo, today);
     }
     if (showCharts) {
+        updateQuantityPeriodVisibility();
+        if (quantityDateInput) quantityDateInput.value = moment().format('YYYY-MM-DD');
+        if (quantityMonthInput) quantityMonthInput.value = moment().format('YYYY-MM');
+        if (quantityYearInput) quantityYearInput.value = moment().format('YYYY');
         fetchLineQuantityAnalytics();
     }
 });

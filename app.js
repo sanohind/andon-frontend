@@ -783,17 +783,13 @@ app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req,
 // Endpoint untuk line quantity comparison analytics
 app.get('/api/dashboard/analytics/line-quantity', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date, division } = req.query;
+    const { period, date, month, year, shift, division } = req.query;
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-quantity`, {
       headers: {
         'Authorization': `Bearer ${req.user.token || req.session.token}`,
         'Accept': 'application/json'
       },
-      params: {
-        start_date,
-        end_date,
-        division
-      }
+      params: { period, date, month, year, shift, division }
     });
     res.json(response.data);
   } catch (error) {
