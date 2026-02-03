@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const userLine = userDataEl ? userDataEl.getAttribute('data-line') : null;
     const userDivision = userDataEl ? userDataEl.getAttribute('data-division') : null;
     
-    // DOM references for quantity comparison chart
-    const divisionQuantitySelect = document.getElementById('divisionQuantitySelect');
+    // DOM references - global division selector (applies to entire analytics page)
+    const globalDivisionSelect = document.getElementById('globalDivisionSelect');
     const quantityPeriodSelect = document.getElementById('quantityPeriodSelect');
     const quantityDateInput = document.getElementById('quantityDateInput');
     const quantityMonthInput = document.getElementById('quantityMonthInput');
@@ -105,18 +105,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return quantityFormatter.format(Math.round(value));
     }
     
+    // Helper: get selected global division
+    function getSelectedDivision() {
+        return (globalDivisionSelect && globalDivisionSelect.value) ? globalDivisionSelect.value : null;
+    }
+
     // Fungsi untuk mengambil data dari backend
     async function fetchAnalyticsData(startDate, endDate) {
         if (startDate && endDate) {
             lastSelectedRange = { start: startDate, end: endDate };
         }
+        const division = getSelectedDivision();
         try {
-            // Build URL (manager tidak bisa akses halaman ini)
-            let analyticsUrl = `/api/dashboard/analytics?start_date=${startDate}&end_date=${endDate}`;
-            
+            const qs = (path, start, end, div) => {
+                const p = new URLSearchParams({ start_date: start, end_date: end });
+                if (div) p.set('division', div);
+                return `${path}?${p.toString()}`;
+            };
+
             // Fetch basic analytics data (hanya jika showCharts)
             if (showCharts) {
-                const analyticsResponse = await fetch(analyticsUrl, {
+                const analyticsResponse = await fetch(qs('/api/dashboard/analytics', startDate, endDate, division), {
                     headers: getAuthHeaders()
                 });
                 if (!analyticsResponse.ok) {
@@ -125,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const analyticsResult = await analyticsResponse.json();
 
                 if (analyticsResult.success) {
-                    // Update UI dengan data analytics utama terlebih dahulu
                     updateUI(analyticsResult.data);
                 } else {
                     console.error('Analytics API Error:', analyticsResult.message);
@@ -135,8 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fetch detailed forward analytics data untuk tabel (hanya jika showTables)
             if (showTables) {
                 try {
-                    let forwardUrl = `/api/dashboard/analytics/detailed-forward?start_date=${startDate}&end_date=${endDate}`;
-                    const forwardResp = await fetch(forwardUrl, {
+                    const forwardResp = await fetch(qs('/api/dashboard/analytics/detailed-forward', startDate, endDate, division), {
                         headers: getAuthHeaders()
                     });
                     if (forwardResp.ok) {
@@ -161,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (quantityYearGroup) quantityYearGroup.style.display = period === 'yearly' ? 'flex' : 'none';
     }
 
-    async function fetchLineQuantityAnalytics(divisionOverride) {
+    async function fetchLineQuantityAnalytics() {
         if (!showCharts || !chartConfigs.lineQuantity) return;
 
         const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
@@ -183,9 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
             params.append('year', v);
         }
 
-        const selectedDivision = divisionOverride !== undefined
-            ? divisionOverride
-            : (divisionQuantitySelect && divisionQuantitySelect.value ? divisionQuantitySelect.value : undefined);
+        const selectedDivision = getSelectedDivision();
         if (selectedDivision) {
             params.append('division', selectedDivision);
         }
@@ -204,31 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(result.message || 'Invalid line quantity response');
             }
 
-            const { divisions = [], division, lines = [] } = result.data;
-
-            if (divisionQuantitySelect && Array.isArray(divisions) && divisions.length > 0) {
-                const currentValue = divisionQuantitySelect.value;
-                let selectedValue = null;
-                if (divisionOverride !== undefined && divisionOverride !== null && divisions.includes(divisionOverride)) {
-                    selectedValue = divisionOverride;
-                } else if (currentValue && divisions.includes(currentValue)) {
-                    selectedValue = currentValue;
-                } else if (division && divisions.includes(division)) {
-                    selectedValue = division;
-                } else if (divisions.length > 0) {
-                    selectedValue = divisions[0];
-                }
-                divisionQuantitySelect.innerHTML = '';
-                divisions.forEach((div) => {
-                    const option = document.createElement('option');
-                    option.value = div;
-                    option.textContent = div;
-                    divisionQuantitySelect.appendChild(option);
-                });
-                if (selectedValue) {
-                    divisionQuantitySelect.value = selectedValue;
-                }
-            }
+            const { lines = [] } = result.data;
 
             const hasLines = Array.isArray(lines) && lines.length > 0 && lines.some(l => l.machines && l.machines.length > 0);
             toggleLineQuantityEmptyState(!hasLines);
@@ -440,9 +421,37 @@ document.addEventListener('DOMContentLoaded', () => {
         },
     });
 
-    if (divisionQuantitySelect) {
-        divisionQuantitySelect.addEventListener('change', function() {
-            fetchLineQuantityAnalytics(this.value || undefined);
+    // Load divisions for global selector (from divisions-lines API)
+    async function loadGlobalDivisions() {
+        if (!globalDivisionSelect) return;
+        try {
+            const resp = await fetch('/api/divisions-lines', { credentials: 'include', headers: getAuthHeaders() });
+            if (!resp.ok) return;
+            const json = await resp.json();
+            const divisions = (json.success && json.data && Array.isArray(json.data)) ? json.data : [];
+            const divisionNames = divisions.map(d => (d && d.name) ? d.name : String(d));
+            globalDivisionSelect.innerHTML = '<option value="">Semua Divisi</option>';
+            divisionNames.filter(Boolean).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                globalDivisionSelect.appendChild(opt);
+            });
+            if (divisionNames.length > 0) {
+                globalDivisionSelect.value = divisionNames[0];
+            }
+        } catch (e) {
+            console.warn('Could not load divisions:', e);
+            globalDivisionSelect.innerHTML = '<option value="">Semua Divisi</option>';
+        }
+    }
+
+    if (globalDivisionSelect) {
+        globalDivisionSelect.addEventListener('change', function() {
+            const [start, end] = getEnsuredDateRange();
+            fetchAnalyticsData(start, end);
+            if (showTables) fetchTicketingData(start, end);
+            if (showCharts) fetchLineQuantityAnalytics();
         });
     }
 
@@ -1007,8 +1016,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startDate && endDate) {
             lastSelectedRange = { start: startDate, end: endDate };
         }
+        const division = getSelectedDivision();
+        const ticketingParams = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        if (division) ticketingParams.set('division', division);
         try {
-            const response = await fetch(`/api/dashboard/analytics/ticketing?start_date=${startDate}&end_date=${endDate}`, {
+            const response = await fetch(`/api/dashboard/analytics/ticketing?${ticketingParams.toString()}`, {
                 headers: getAuthHeaders()
             });
             if (!response.ok) {
@@ -1298,14 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshForwardBtn.addEventListener('click', function() {
             const [start, end] = getEnsuredDateRange();
             fetchAnalyticsData(start, end);
-            if (showCharts) {
-                const selectedDivision = divisionQuantitySelect ? divisionQuantitySelect.value : undefined;
-                if (selectedDivision) {
-                    fetchLineQuantityAnalytics(selectedDivision);
-                } else {
-                    fetchLineQuantityAnalytics();
-                }
-            }
+            if (showCharts) fetchLineQuantityAnalytics();
         });
     }
 
@@ -1356,18 +1361,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const today = moment().format('YYYY-MM-DD');
     picker.setDateRange(thirtyDaysAgo, today);
     lastSelectedRange = { start: thirtyDaysAgo, end: today };
-    // Pastikan langsung fetch data untuk range default
-    fetchAnalyticsData(thirtyDaysAgo, today);
-    if (showTables) {
-        fetchTicketingData(thirtyDaysAgo, today);
-    }
-    if (showCharts) {
-        updateQuantityPeriodVisibility();
-        if (quantityDateInput) quantityDateInput.value = moment().format('YYYY-MM-DD');
-        if (quantityMonthInput) quantityMonthInput.value = moment().format('YYYY-MM');
-        if (quantityYearInput) quantityYearInput.value = moment().format('YYYY');
-        fetchLineQuantityAnalytics();
-    }
+
+    (async function initAnalytics() {
+        await loadGlobalDivisions();
+        fetchAnalyticsData(thirtyDaysAgo, today);
+        if (showTables) {
+            fetchTicketingData(thirtyDaysAgo, today);
+        }
+        if (showCharts) {
+            updateQuantityPeriodVisibility();
+            if (quantityDateInput) quantityDateInput.value = moment().format('YYYY-MM-DD');
+            if (quantityMonthInput) quantityMonthInput.value = moment().format('YYYY-MM');
+            if (quantityYearInput) quantityYearInput.value = moment().format('YYYY');
+            fetchLineQuantityAnalytics();
+        }
+    })();
 });
 
 // Helper function to get cookie value (global scope)

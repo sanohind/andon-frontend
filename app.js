@@ -758,16 +758,17 @@ app.get('/api/dashboard/analytics/duration', requireAuthAPI, async (req, res) =>
 // Endpoint untuk detailed forward analytics
 app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, division } = req.query;
+    const params = { start_date, end_date };
+    if (division !== undefined && division !== null && String(division).trim() !== '') {
+      params.division = String(division).trim();
+    }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/detailed-forward`, {
       headers: {
         'Authorization': `Bearer ${req.user.token || req.session.token}`,
         'Accept': 'application/json'
       },
-      params: {
-        start_date,
-        end_date
-      }
+      params
     });
     res.json(response.data);
   } catch (error) {
@@ -805,16 +806,17 @@ app.get('/api/dashboard/analytics/line-quantity', requireAuthAPI, async (req, re
 // Endpoint untuk analytics umum (harus didefinisikan setelah route yang lebih spesifik)
 app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, division } = req.query;
+    const params = { start_date, end_date };
+    if (division !== undefined && division !== null && String(division).trim() !== '') {
+      params.division = String(division).trim();
+    }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics`, {
       headers: {
         'Authorization': `Bearer ${req.user.token || req.session.token}`,
         'Accept': 'application/json'
       },
-      params: { // Meneruskan query parameter ke Laravel
-        start_date,
-        end_date
-      }
+      params
     });
     res.json(response.data);
   } catch (error) {
@@ -2441,16 +2443,17 @@ app.get('/api/dashboard/ticketing/technicians', requireAuthAPI, async (req, res)
 
 app.get('/api/dashboard/analytics/ticketing', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date } = req.query;
-    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/ticketing/data`, {
+    const { start_date, end_date, division } = req.query;
+    const params = { start_date, end_date };
+    if (division !== undefined && division !== null && String(division).trim() !== '') {
+      params.division = String(division).trim();
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/ticketing`, {
       headers: {
         'Authorization': `Bearer ${req.user.token || req.session.token}`,
         'Accept': 'application/json'
       },
-      params: {
-        start_date,
-        end_date
-      }
+      params
     });
     res.json(response.data);
   } catch (error) {

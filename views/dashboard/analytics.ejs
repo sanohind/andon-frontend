@@ -81,7 +81,15 @@
 
             <div class="page-header">
                 <h2>Analytics Dashboard</h2>
-                <input type="text" id="date-range-picker" placeholder="Pilih Rentang Tanggal" />
+                <div class="page-header-controls">
+                    <div class="page-header-control-group">
+                        <label for="globalDivisionSelect">Divisi</label>
+                        <select id="globalDivisionSelect" class="page-header-select" title="Pilih divisi untuk filter data">
+                            <option value="">Memuat...</option>
+                        </select>
+                    </div>
+                    <input type="text" id="date-range-picker" placeholder="Pilih Rentang Tanggal" />
+                </div>
             </div>
 
             <% if (['admin', 'management'].includes(user.role)) { %>
@@ -148,12 +156,6 @@
                                     <option value="malam">Malam</option>
                                 </select>
                             </div>
-                            <div class="chart-control-group">
-                                <label for="divisionQuantitySelect">Divisi</label>
-                                <select id="divisionQuantitySelect" class="line-select line-select-short">
-                                    <option value="">Memuat...</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
                     <div class="quantity-chart-body">
@@ -161,7 +163,7 @@
                         <div class="chart-empty-state" id="lineQuantityEmptyState" style="display: none;">
                             <i class="fas fa-database"></i>
                             <p>Belum ada data produksi untuk opsi yang dipilih.</p>
-                            <p class="chart-empty-state-hint">Ubah tanggal, shift, atau divisi untuk melihat data.</p>
+                            <p class="chart-empty-state-hint">Ubah divisi, tanggal, atau shift untuk melihat data.</p>
                         </div>
                     </div>
                 </div>

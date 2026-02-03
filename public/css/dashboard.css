@@ -1012,6 +1012,33 @@ body {
     margin: 0;
 }
 
+.page-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.page-header-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.page-header-control-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.page-header-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 0.95rem;
+    min-width: 160px;
+}
+
 /* Penyesuaian Style untuk Filter Tanggal */
 #date-range-picker {
     padding: 0.75rem 1rem;
@@ -1227,6 +1254,9 @@ body {
         flex-direction: column;
         align-items: stretch;
         text-align: center;
+    }
+    .page-header-controls {
+        justify-content: center;
     }
     .charts-section {
         grid-template-columns: 1fr;
