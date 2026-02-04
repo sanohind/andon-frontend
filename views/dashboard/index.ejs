@@ -48,6 +48,12 @@
                             <span><%= user.name %></span>
                         </div>
                         <div class="nav-links"> 
+                            <% if (user.line_name) { %>
+                                <a href="/realtime-oee?<%= new URLSearchParams({ line_name: user.line_name }).toString() %>" class="analytics-link" title="Production Monitoring">
+                                    <i class="fas fa-tv"></i>
+                                    <span>Production Monitoring</span>
+                                </a>
+                            <% } %>
                             <% if (user.role === 'admin' || user.role === 'management') { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>
@@ -100,7 +106,7 @@
 
     <main class="dashboard-main">
         <div class="container">
-            <% if (typeof lineFilter !== 'undefined' && lineFilter) { %>
+            <% if (typeof lineFilter !== 'undefined' && lineFilter && user.role !== 'leader') { %>
                 <div style="margin-bottom: 1rem; display:flex; align-items:center; justify-content: space-between; gap: 0.75rem;">
                     <a href="/divisions" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; text-decoration: none; border-radius: 4px; font-weight: 600; transition: all 0.3s ease;">
                         <i class="fas fa-arrow-left"></i>

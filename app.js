@@ -199,8 +199,8 @@ function in_array(needle, haystack) {
 
 app.get('/', requireAuth, async (req, res) => {
   try {
-    // Get line filter from query parameter
-    const lineFilter = req.query.line;
+    // Get line filter from query parameter (atau line leader jika leader akses tanpa param)
+    const lineFilter = req.query.line || (req.user?.role === 'leader' && req.user?.line_name ? req.user.line_name : null);
     
     // Ambil data dashboard dari Laravel dengan konteks role/division
     // PERBAIKAN: Kirim lineFilter sebagai query parameter untuk filtering di backend

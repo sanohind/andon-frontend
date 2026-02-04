@@ -90,6 +90,11 @@
     gap: 8px;
 }
 
+.rt-cell.rt-header.rt-header-centered {
+    justify-content: center;
+    gap: 8px;
+}
+
 .rt-header-name {
     overflow: hidden;
     text-overflow: ellipsis;

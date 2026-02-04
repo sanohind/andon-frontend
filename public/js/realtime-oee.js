@@ -183,9 +183,9 @@ document.addEventListener('DOMContentLoaded', () => {
       cells.push(`<div class="rt-cell rt-header rt-label"></div>`);
       block.forEach((m) => {
         cells.push(`
-          <div class="rt-cell rt-header" data-addr="${m.address}">
-            <span class="rt-dot ok" data-dot="${m.address}"></span>
+          <div class="rt-cell rt-header rt-header-centered" data-addr="${m.address}">
             <span class="rt-header-name">${m.name}</span>
+            <span class="rt-dot ok" data-dot="${m.address}"></span>
           </div>
         `);
       });
@@ -250,15 +250,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const st = machineLookup.get(addr) || {};
       const metrics = metricsByAddress.get(addr) || {};
 
-      // init per machine state
+      // Track downtime start for current problem (per machine)
       if (!machineState.has(addr)) {
-        machineState.set(addr, { runtimeSeconds: 0, lastShiftKey: shiftKey, downtimeStartIso: null });
+        machineState.set(addr, { lastShiftKey: shiftKey, downtimeStartIso: null });
       }
       const state = machineState.get(addr);
 
-      // shift change -> reset
+      // shift change -> reset downtime tracking
       if (state.lastShiftKey !== shiftKey) {
-        state.runtimeSeconds = 0;
         state.downtimeStartIso = null;
         state.lastShiftKey = shiftKey;
       }
@@ -270,20 +269,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const isWarning = statusNorm === 'warning';
       const isDowntimeActive = isProblem && isDowntimeProblemType(problemType);
 
-      // Determine downtime start timestamp: use st.timestamp when available, clipped to shiftStart
+      // Downtime start timestamp: use st.timestamp when available, clipped to shiftStart
+      let downtimeSec = 0;
       if (isDowntimeActive) {
         const tsRaw = st.timestamp || st.problem_timestamp || null;
         const ts = tsRaw ? moment.tz(tsRaw, ['YYYY-MM-DD HH:mm:ss', moment.ISO_8601], SHIFT_TZ) : null;
         const start = ts && ts.isValid() ? moment.max(ts, shiftStart) : shiftStart;
         if (!state.downtimeStartIso) state.downtimeStartIso = start.toISOString();
+        const ds = moment(state.downtimeStartIso);
+        downtimeSec = Math.max(0, now.diff(ds, 'seconds'));
       } else {
         state.downtimeStartIso = null;
       }
 
-      // Update runtime accumulator: add 1s if not downtime
-      if (!isDowntimeActive) {
-        state.runtimeSeconds += 1;
-      }
+      // Run-time: compute from wall clock (persists across refresh)
+      // elapsed since shift start minus downtime
+      const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
+      const runtimeSeconds = Math.max(0, elapsedSinceShiftStart - downtimeSec);
 
       // Values
       const cycle = safeNumber(metrics.cycle_time);
@@ -291,13 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const idealQty = computeIdealQty(cycle);
       const oee = computeOee(actualQty, cycle);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
-
-      // downtime displayed (current only)
-      let downtimeSec = 0;
-      if (state.downtimeStartIso) {
-        const ds = moment(state.downtimeStartIso);
-        downtimeSec = Math.max(0, now.diff(ds, 'seconds'));
-      }
 
       // write to DOM for each block cell
       blocks.forEach((block, blockIdx) => {
@@ -311,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('ideal', String(idealQty));
         setText('total', String(actualQty));
         setText('ng', '0');
-        setText('runtime', fmtHHMMSS(state.runtimeSeconds));
+        setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('downtime', fmtHHMMSS(downtimeSec));
         setText('oee', (oee == null) ? '-' : oee.toFixed(2));
         setText('target', (target == null) ? '-' : String(target));
