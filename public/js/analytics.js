@@ -515,17 +515,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const ts = (period === 'daily')
             ? (params?.date || '-')
             : (filterInfo?.filter_label || '-');
+        const shiftRaw = params?.shift || 'pagi';
+        const shiftLabel = shiftRaw === 'malam' ? 'Malam' : 'Pagi';
 
         const rows = [];
         let id = 1;
         lineData.machines.forEach(m => {
-            rows.push([id++, m.name || '-', ts, Number(m.target_quantity) || 0, Number(m.actual_quantity) || 0]);
+            rows.push([
+                id++,
+                m.name || '-',
+                shiftLabel,
+                ts,
+                Number(m.target_quantity) || 0,
+                Number(m.actual_quantity) || 0
+            ]);
         });
         if (!rows.length) {
             alert('Tidak ada data untuk diunduh.');
             return;
         }
-        const headers = ['ID', 'Nama Mesin', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Quantity');
