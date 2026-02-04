@@ -407,6 +407,29 @@
         </div>
     </main>
 
+    <!-- Modal: Quantity per Jam (Line Chart per Mesin) -->
+    <div class="modal" id="quantityHourlyModal" style="display: none;">
+        <div class="modal-content quantity-hourly-modal-content">
+            <div class="modal-header">
+                <h3 id="quantityHourlyModalTitle">Quantity per Jam</h3>
+                <button type="button" class="modal-close" id="quantityHourlyModalClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="quantityHourlyChartEmpty" class="chart-empty-state" style="display: none;">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Tidak ada data hourly untuk mesin ini pada tanggal dan shift yang dipilih.</p>
+                </div>
+                <div id="quantityHourlyChartLoading" style="display: none; text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p>Memuat data...</p>
+                </div>
+                <div class="chart-wrapper" id="quantityHourlyChartWrapper" style="height: 320px; display: none;">
+                    <canvas id="quantityHourlyChartCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Teknisi PIC Modal -->
     <div class="modal" id="teknisiPicModal" style="display: none;">
         <div class="modal-content" style="max-width: 500px;">

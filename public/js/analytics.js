@@ -168,6 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (quantityYearGroup) quantityYearGroup.style.display = period === 'yearly' ? 'flex' : 'none';
     }
 
+    let lastLineQuantityData = null;
+    let lastLineQuantityFilter = null;
+    let lastLineQuantityParams = null;
+
     async function fetchLineQuantityAnalytics() {
         if (!showCharts || !chartConfigs.lineQuantity) return;
 
@@ -210,6 +214,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const { lines = [] } = result.data;
+            lastLineQuantityData = lines;
+            lastLineQuantityFilter = result.data.filter || {};
+            lastLineQuantityParams = { period, date: params.get('date'), month: params.get('month'), year: params.get('year'), shift: selectedShift };
 
             const hasLines = Array.isArray(lines) && lines.length > 0 && lines.some(l => l.machines && l.machines.length > 0);
             toggleLineQuantityEmptyState(!hasLines);
@@ -280,6 +287,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="line-chart-header">
                     <h4>Line: ${lineName}</h4>
                     <div class="line-chart-summary">${filterLabel} ${shiftLabel}</div>
+                    <button class="btn btn-secondary btn-sm" data-line-export="${chartId}" type="button" title="Download Excel">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
                 </div>
                 <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
                     <canvas id="${chartId}"></canvas>
@@ -323,6 +333,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: (evt, activeEls) => {
+                        if (!activeEls.length) return;
+                        const hit = activeEls[0];
+                        const isBar = hit.datasetIndex === 1;
+                        if (!isBar) return;
+                        const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+                        if (period !== 'daily') {
+                            alert('Pilih periode Harian untuk melihat grafik quantity per jam.');
+                            return;
+                        }
+                        const machines = chart.quantityChartMachines;
+                        const dataIndex = hit.index;
+                        if (!machines || !machines[dataIndex]) return;
+                        const machine = machines[dataIndex];
+                        const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                        const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                        openQuantityHourlyModal(machine.name, machine.address, date, shift);
+                    },
                     plugins: {
                         legend: { display: true, position: 'top' },
                         tooltip: {
@@ -351,9 +379,158 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            chart.quantityChartMachines = machines;
+            chart.quantityChartLineData = lineData;
+
             if (!chartConfigs.lineQuantity.charts) chartConfigs.lineQuantity.charts = {};
             chartConfigs.lineQuantity.charts[chartId] = chart;
+
+            const exportBtn = card.querySelector(`[data-line-export="${chartId}"]`);
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => exportLineQuantityExcel(lineData, lastLineQuantityParams, lastLineQuantityFilter));
+            }
         });
+    }
+
+    let quantityHourlyChartInstance = null;
+
+    async function openQuantityHourlyModal(machineName, machineAddress, date, shift) {
+        const modal = document.getElementById('quantityHourlyModal');
+        const titleEl = document.getElementById('quantityHourlyModalTitle');
+        const emptyEl = document.getElementById('quantityHourlyChartEmpty');
+        const loadingEl = document.getElementById('quantityHourlyChartLoading');
+        const wrapperEl = document.getElementById('quantityHourlyChartWrapper');
+        const canvas = document.getElementById('quantityHourlyChartCanvas');
+        if (!modal || !titleEl || !canvas) return;
+
+        if (quantityHourlyChartInstance) {
+            quantityHourlyChartInstance.destroy();
+            quantityHourlyChartInstance = null;
+        }
+
+        titleEl.textContent = `Quantity per Jam - ${machineName}`;
+        emptyEl.style.display = 'none';
+        const emptyMsg = emptyEl.querySelector('p');
+        if (emptyMsg) emptyMsg.textContent = 'Tidak ada data hourly untuk mesin ini pada tanggal dan shift yang dipilih.';
+        wrapperEl.style.display = 'none';
+        loadingEl.style.display = 'block';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.classList.add('show');
+
+        try {
+            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+            const res = await fetch(`/api/dashboard/analytics/quantity-hourly?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            loadingEl.style.display = 'none';
+
+            if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                emptyEl.style.display = 'flex';
+                wrapperEl.style.display = 'none';
+                return;
+            }
+
+            const labels = json.data.map(d => d.snapshot_at);
+            const quantities = json.data.map(d => d.quantity);
+
+            wrapperEl.style.display = 'block';
+            const ctx = canvas.getContext('2d');
+            quantityHourlyChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Quantity',
+                        data: quantities,
+                        borderColor: '#4c6ef5',
+                        backgroundColor: 'rgba(76, 110, 245, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#4c6ef5'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(c) { return `Quantity: ${formatQuantityValue(c.parsed.y)}`; }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Waktu' },
+                            ticks: { maxRotation: 45, minRotation: 0 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Quantity' },
+                            ticks: { callback: v => formatQuantityValue(v) }
+                        }
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('Fetch quantity hourly:', err);
+            loadingEl.style.display = 'none';
+            emptyEl.style.display = 'flex';
+            emptyEl.querySelector('p').textContent = 'Gagal memuat data. Coba lagi.';
+        }
+    }
+
+    function closeQuantityHourlyModal() {
+        const modal = document.getElementById('quantityHourlyModal');
+        if (quantityHourlyChartInstance) {
+            quantityHourlyChartInstance.destroy();
+            quantityHourlyChartInstance = null;
+        }
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    }
+
+    (function initQuantityHourlyModal() {
+        const closeBtn = document.getElementById('quantityHourlyModalClose');
+        const modal = document.getElementById('quantityHourlyModal');
+        if (closeBtn) closeBtn.addEventListener('click', closeQuantityHourlyModal);
+        if (modal) {
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeQuantityHourlyModal(); });
+        }
+    })();
+
+    function exportLineQuantityExcel(lineData, params, filterInfo) {
+        if (!lineData || !Array.isArray(lineData.machines)) {
+            alert('Data tidak tersedia untuk line ini.');
+            return;
+        }
+        const period = params?.period || 'daily';
+        const ts = (period === 'daily')
+            ? (params?.date || '-')
+            : (filterInfo?.filter_label || '-');
+
+        const rows = [];
+        let id = 1;
+        lineData.machines.forEach(m => {
+            rows.push([id++, m.name || '-', ts, Number(m.target_quantity) || 0, Number(m.actual_quantity) || 0]);
+        });
+        if (!rows.length) {
+            alert('Tidak ada data untuk diunduh.');
+            return;
+        }
+        const headers = ['ID', 'Nama Mesin', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Quantity');
+        const fileName = `quantity_line_${(lineData.line_name || 'line').replace(/\\s+/g, '_')}_${ts.replace(/\\s+/g, '_')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
     }
 
     // Fungsi untuk memperbarui semua elemen UI

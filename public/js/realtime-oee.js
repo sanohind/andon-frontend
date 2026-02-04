@@ -90,6 +90,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${hh}:${mm}:${ss}`;
   }
 
+  const runtimePauseStorage = {
+    key(addr, shiftKey) {
+      return `rt_runtime_pause_${addr}_${shiftKey}`;
+    },
+    load(addr, shiftKey) {
+      try {
+        const raw = localStorage.getItem(this.key(addr, shiftKey));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.shiftKey === shiftKey && typeof parsed.value === 'number') return parsed.value;
+      } catch (_) { /* ignore */ }
+      return null;
+    },
+    save(addr, shiftKey, value) {
+      try {
+        localStorage.setItem(this.key(addr, shiftKey), JSON.stringify({ shiftKey, value }));
+      } catch (_) { /* ignore */ }
+    },
+    clear(addr, shiftKey) {
+      try { localStorage.removeItem(this.key(addr, shiftKey)); } catch (_) { /* ignore */ }
+    }
+  };
+
   function safeNumber(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -233,24 +256,42 @@ document.addEventListener('DOMContentLoaded', () => {
       const st = machineLookup.get(addr) || {};
       const metrics = metricsByAddress.get(addr) || {};
 
-      // Track downtime start for current problem (per machine)
+      // Track downtime + runtime-pause state (per machine)
       if (!machineState.has(addr)) {
-        machineState.set(addr, { lastShiftKey: shiftKey, downtimeStartIso: null });
+        machineState.set(addr, {
+          lastShiftKey: shiftKey,
+          downtimeStartIso: null,
+          runtimePauseStartIso: null,
+          runtimePauseAccumSeconds: 0,
+          pausedValue: runtimePauseStorage.load(addr, shiftKey)
+        });
       }
       const state = machineState.get(addr);
 
-      // shift change -> reset downtime tracking
+      // shift change -> reset tracking
       if (state.lastShiftKey !== shiftKey) {
         state.downtimeStartIso = null;
+        state.runtimePauseStartIso = null;
+        state.runtimePauseAccumSeconds = 0;
+        state.pausedValue = null;
+        runtimePauseStorage.clear(addr, state.lastShiftKey);
         state.lastShiftKey = shiftKey;
       }
 
       // Determine downtime active (only for machine/quality/engineering)
       const problemType = st.problem_type || st.tipe_problem || '';
-      const statusNorm = String(st.status || '').toLowerCase(); // normal|warning|problem
+      const statusNorm = String(st.status || '').toLowerCase(); // normal|warning|problem|idle (varies)
       const isProblem = statusNorm === 'problem';
       const isWarning = statusNorm === 'warning';
       const isDowntimeActive = isProblem && isDowntimeProblemType(problemType);
+      const isIdle = statusNorm === 'idle' || st.is_idle === true || String(st.machine_state || '').toLowerCase() === 'idle';
+
+      // Runtime should PAUSE for:
+      // - idle, or
+      // - cycle-time threshold problem (usually warning), or
+      // - problem that is NOT downtime type (problem without machine/quality/engineering)
+      // Downtime timer remains only for machine/quality/engineering.
+      const isRuntimePaused = isIdle || (isWarning && !isDowntimeActive) || (isProblem && !isDowntimeActive);
 
       // Downtime start timestamp: use st.timestamp when available, clipped to shiftStart
       let downtimeSec = 0;
@@ -265,10 +306,39 @@ document.addEventListener('DOMContentLoaded', () => {
         state.downtimeStartIso = null;
       }
 
+      // Track runtime pause start/accum (does NOT affect downtime display)
+      if (isRuntimePaused) {
+        if (!state.runtimePauseStartIso) {
+          state.runtimePauseStartIso = now.toISOString();
+        }
+      } else if (state.runtimePauseStartIso) {
+        const ps = moment(state.runtimePauseStartIso);
+        state.runtimePauseAccumSeconds += Math.max(0, now.diff(ps, 'seconds'));
+        state.runtimePauseStartIso = null;
+      }
+
+      const runtimePauseSecCurrent = state.runtimePauseStartIso
+        ? Math.max(0, now.diff(moment(state.runtimePauseStartIso), 'seconds'))
+        : 0;
+      const runtimePauseTotalSec = Math.max(0, (state.runtimePauseAccumSeconds || 0) + runtimePauseSecCurrent);
+
       // Run-time: compute from wall clock (persists across refresh)
-      // elapsed since shift start minus downtime
+      // elapsed since shift start minus downtime minus runtime-pause (idle / cycle-time threshold)
       const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
-      const runtimeSeconds = Math.max(0, elapsedSinceShiftStart - downtimeSec);
+      const runtimeRaw = Math.max(0, elapsedSinceShiftStart - downtimeSec - runtimePauseTotalSec);
+
+      // Freeze runtime when paused, restore across refresh
+      if (isRuntimePaused) {
+        if (state.pausedValue == null) {
+          state.pausedValue = runtimeRaw;
+          runtimePauseStorage.save(addr, shiftKey, state.pausedValue);
+        }
+      } else if (state.pausedValue != null) {
+        state.pausedValue = null;
+        runtimePauseStorage.clear(addr, shiftKey);
+      }
+
+      const runtimeSeconds = (state.pausedValue != null) ? state.pausedValue : runtimeRaw;
 
       // Values
       const cycle = safeNumber(metrics.cycle_time);

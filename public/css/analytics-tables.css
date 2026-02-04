@@ -771,3 +771,9 @@
     }
 }
 
+/* Modal Quantity per Jam (Line Chart) */
+.quantity-hourly-modal-content {
+    max-width: 720px;
+    width: 92%;
+}
+
