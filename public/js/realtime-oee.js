@@ -210,23 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     boardEl.innerHTML = `<div class="rt-oee-blocks">${blocksHtml}</div>`;
-    fitToViewport();
-  }
-
-  function fitToViewport() {
-    // scale the board so it fits without scroll
-    if (!boardEl) return;
-    const viewport = document.querySelector('.rt-oee-viewport');
-    if (!viewport) return;
-    const vw = viewport.clientWidth;
-    const vh = viewport.clientHeight;
-    // Temporarily reset
-    boardEl.style.transform = 'scale(1)';
-    const rect = boardEl.getBoundingClientRect();
-    const scaleX = vw / rect.width;
-    const scaleY = vh / rect.height;
-    const scale = Math.min(1, scaleX, scaleY);
-    boardEl.style.transform = `scale(${scale})`;
   }
 
   function updateValues() {
@@ -308,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('downtime', fmtHHMMSS(downtimeSec));
-        setText('oee', (oee == null) ? '-' : oee.toFixed(2));
+        setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
         setText('target', (target == null) ? '-' : String(target));
       });
 
@@ -394,7 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.textContent = nowTz().format('HH:mm:ss');
   }, 1000);
 
-  window.addEventListener('resize', () => fitToViewport());
 
   (async function init() {
     await loadMetrics();

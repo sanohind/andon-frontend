@@ -12,8 +12,8 @@
 }
 
 .rt-oee-body {
-    height: 100vh;
-    overflow: hidden; /* no scrolling */
+    min-height: 100vh;
+    overflow: auto;
     background: #ffffff; /* match other pages */
 }
 
@@ -24,14 +24,14 @@
 }
 
 .rt-oee-main {
-    height: calc(100vh - var(--header-height, 96px));
-    overflow: hidden;
+    min-height: calc(100vh - var(--header-height, 96px));
+    overflow: visible;
 }
 
 .rt-oee-viewport {
-    height: 100%;
+    min-height: 200px;
     padding: 0.75rem 1rem;
-    overflow: hidden;
+    overflow: auto;
     background: #ffffff;
 }
 
