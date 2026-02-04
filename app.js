@@ -313,6 +313,15 @@ app.get('/analytics', requireAuth, (req, res) => {
   });
 });
 
+// Real-time production monitoring (OEE board) - accessible by ALL authenticated users (including leader)
+app.get('/realtime-oee', requireAuth, (req, res) => {
+  res.render('dashboard/realtime-oee', {
+    title: 'Real-time Production Monitoring',
+    user: req.user,
+    lineFilter: (req.query && (req.query.line_name || req.query.line)) ? String(req.query.line_name || req.query.line) : null
+  });
+});
+
 
 // Auth Routes - Login Page
 app.get('/login', (req, res) => {

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/realtime-oee.css">
+</head>
+<body class="rt-oee-body" data-line-filter="<%= lineFilter ? lineFilter : '' %>">
+    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display:none;"></div>
+
+    <header class="dashboard-header rt-oee-header">
+        <div class="container rt-oee-header-container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/image/Logo sanoh 2 2.png" alt="Sanoh Logo" class="logo-img">
+                    <h1 class="dashboard-title">Andon Dashboard</h1>
+                </div>
+                <div class="status-info">
+                    <div class="top-row-info">
+                        <% if (typeof lineFilter !== 'undefined' && lineFilter) { %>
+                            <a href="/?line=<%= encodeURIComponent(lineFilter) %>" class="back-button" style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.35rem 0.6rem; background: var(--primary-color); color:white; text-decoration:none; border-radius: 6px; font-weight:700; font-size: 0.85rem;">
+                                <i class="fas fa-arrow-left"></i>
+                                <span>Kembali ke Dashboard Line</span>
+                            </a>
+                        <% } else { %>
+                            <a href="/" class="back-button" style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.35rem 0.6rem; background: var(--primary-color); color:white; text-decoration:none; border-radius: 6px; font-weight:700; font-size: 0.85rem;">
+                                <i class="fas fa-arrow-left"></i>
+                                <span>Kembali ke Dashboard</span>
+                            </a>
+                        <% } %>
+                        <div class="user-info">
+                            <i class="fas fa-user"></i>
+                            <span><%= user.name %></span>
+                        </div>
+                        <form method="POST" action="/logout" style="display: inline;">
+                            <button type="submit" class="logout-btn" title="Logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="bottom-row-status">
+                        <div class="connection-status" id="connectionStatus">
+                            <i class="fas fa-wifi"></i>
+                            <span>Connected</span>
+                        </div>
+                        <div class="current-time">
+                            <span id="currentTime">--:--:--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="rt-oee-main">
+        <div class="rt-oee-viewport">
+            <div class="rt-oee-board" id="rtOeeBoard">
+                <!-- blocks inserted by JS -->
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment-timezone/builds/moment-timezone-with-data.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/header-common.js"></script>
+    <script src="/js/realtime-oee.js"></script>
+</body>
+</html>
+
