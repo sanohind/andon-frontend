@@ -296,23 +296,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     labels: labels,
                     datasets: [
                         {
+                            type: 'line',
                             label: 'Target',
                             data: targets,
-                            backgroundColor: '#c7d2fe',
-                            borderRadius: 6,
-                            maxBarThickness: 28
+                            borderColor: '#e67700',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0,
+                            pointRadius: 5,
+                            pointBackgroundColor: '#e67700',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 1,
+                            yAxisID: 'y'
                         },
                         {
+                            type: 'bar',
                             label: 'Aktual',
                             data: actuals,
                             backgroundColor: '#4c6ef5',
                             borderRadius: 6,
-                            maxBarThickness: 28
+                            maxBarThickness: 36,
+                            yAxisID: 'y'
                         }
                     ]
                 },
                 options: {
-                    indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
@@ -321,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             callbacks: {
                                 label(context) {
                                     const rawValue = typeof context.parsed === 'object'
-                                        ? context.parsed.x
+                                        ? (context.parsed.y != null ? context.parsed.y : context.parsed.x)
                                         : context.parsed;
                                     return `${context.dataset.label}: ${formatQuantityValue(rawValue)}`;
                                 }
@@ -330,11 +338,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     scales: {
                         x: {
-                            beginAtZero: true,
-                            stacked: false,
-                            ticks: { callback: (v) => formatQuantityValue(v) }
+                            display: true,
+                            title: { display: false },
+                            ticks: { maxRotation: 45, minRotation: 0 }
                         },
-                        y: { stacked: false }
+                        y: {
+                            beginAtZero: true,
+                            title: { display: false },
+                            ticks: { callback: (v) => formatQuantityValue(v) }
+                        }
                     }
                 }
             });
