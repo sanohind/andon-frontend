@@ -71,48 +71,32 @@ io.use(async (socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
   
   if (!token) {
-    console.error('❌ Socket authentication failed: No token provided');
-    return next(new Error('Authentication error: No token'));
+    return next(new Error('Authentication error'));
   }
   
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
       token: token
-    }, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000 // 10 second timeout
     });
     
-    if (response.data.valid && response.data.user) {
+    if (response.data.valid) {
       socket.user = {
         ...response.data.user,
-        line_name: response.data.user.line_name || null, // Manager mungkin tidak punya line_name
-        division: response.data.user.division || null // Manager punya division
+        line_name: response.data.user.line_name // PASTIKAN INI ADA
       };
       
       console.log('🔐 Socket user authenticated:', {
         id: socket.user.id,
         role: socket.user.role,
-        line_name: socket.user.line_name,
-        division: socket.user.division
+        line_name: socket.user.line_name
       });
       
       next();
     } else {
-      console.error('❌ Socket authentication failed: Invalid token response', response.data);
       next(new Error('Invalid token'));
     }
   } catch (error) {
-    console.error('❌ Socket authentication error:', {
-      message: error.message,
-      code: error.code,
-      response: error.response?.data,
-      role: socket.handshake.auth?.role || 'unknown'
-    });
-    next(new Error('Authentication failed: ' + (error.message || 'Unknown error')));
+    next(new Error('Authentication failed'));
   }
 });
 
@@ -219,10 +203,13 @@ app.get('/', requireAuth, async (req, res) => {
     const lineFilter = req.query.line || (req.user?.role === 'leader' && req.user?.line_name ? req.user.line_name : null);
     
     // Ambil data dashboard dari Laravel dengan konteks role/division
-    // PERBAIKAN: Kirim lineFilter sebagai query parameter untuk filtering di backend
+    // Manager: kirim role & division agar backend filter sesuai divisi (tanpa gantung koneksi)
     const queryParams = {};
     if (lineFilter) {
       queryParams.line_name = lineFilter;
+    }
+    if (req.user?.role === 'manager' && req.user?.division) {
+      queryParams.division = req.user.division;
     }
     const queryString = Object.keys(queryParams).length > 0 
       ? '?' + new URLSearchParams(queryParams).toString() 
@@ -557,18 +544,17 @@ app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
     const userRole = (req.user && req.user.role) || req.headers['x-user-role'] || '';
     const userDivision = (req.user && req.user.division) || req.headers['x-user-division'] || '';
-    // PERBAIKAN: Ambil line_name dari query parameter untuk filtering
     const lineName = req.query.line_name || req.headers['x-line-name'] || '';
-    
-    // Build query string
+
+    // Manager: kirim division agar Laravel filter tanpa gantung token/socket
     const queryParams = {};
-    if (lineName) {
-      queryParams.line_name = lineName;
-    }
-    const queryString = Object.keys(queryParams).length > 0 
-      ? '?' + new URLSearchParams(queryParams).toString() 
+    if (lineName) queryParams.line_name = lineName;
+    if (userRole === 'manager' && userDivision) queryParams.division = userDivision;
+
+    const queryString = Object.keys(queryParams).length > 0
+      ? '?' + new URLSearchParams(queryParams).toString()
       : '';
-    
+
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status${queryString}`, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
@@ -1665,55 +1651,20 @@ app.delete('/api/part-configurations/:id', requireAuthAPI, async (req, res) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id, {
-    role: socket.user?.role,
-    division: socket.user?.division,
-    line_name: socket.user?.line_name
-  });
+  console.log('Client connected:', socket.id);
   activeConnections.add(socket.id);
 
-  // PERBAIKAN: Handle error untuk manager yang mungkin tidak punya line_name
-  if (socket.user && socket.user.role === 'manager') {
-    if (!socket.user.division) {
-      console.warn('⚠️ Manager connected without division:', socket.user);
-      socket.emit('error', { 
-        message: 'Manager user missing division information. Please contact administrator.' 
-      });
-    }
-  }
-
   // Send initial data when client connects
-  try {
-    fetchAndEmitDashboardData(socket);
-  } catch (error) {
-    console.error('Error sending initial data to socket:', error);
-    socket.emit('error', { 
-      message: 'Failed to load initial dashboard data. Please refresh the page.' 
-    });
-  }
+  fetchAndEmitDashboardData(socket);
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id, {
-      role: socket.user?.role
-    });
+    console.log('Client disconnected:', socket.id);
     activeConnections.delete(socket.id);
   });
 
   // Handle manual refresh request
   socket.on('requestUpdate', () => {
-    try {
-      fetchAndEmitDashboardData(socket);
-    } catch (error) {
-      console.error('Error handling requestUpdate:', error);
-      socket.emit('error', { 
-        message: 'Failed to refresh data. Please try again.' 
-      });
-    }
-  });
-
-  // Handle socket errors
-  socket.on('error', (error) => {
-    console.error('Socket error for client:', socket.id, error);
+    fetchAndEmitDashboardData(socket);
   });
 });
 
@@ -1771,32 +1722,14 @@ async function fetchAndEmitDashboardData(socket = null) {
             // Emit dashboardUpdate dengan filtering berdasarkan user role
             if (socket && socket.user) {
                 // Untuk single socket dengan user info, kirim data yang sudah difilter
-                try {
-                    const filteredData = filterDataForUser(socket.user, dataToEmit);
-                    socket.emit('dashboardUpdate', { success: true, data: filteredData });
-                } catch (error) {
-                    console.error('Error filtering data for user:', error, socket.user);
-                    // Kirim data kosong jika filtering gagal untuk mencegah crash
-                    socket.emit('dashboardUpdate', { 
-                        success: true, 
-                        data: {
-                            machine_statuses_by_line: {},
-                            active_problems: [],
-                            new_problems: []
-                        }
-                    });
-                }
+                const filteredData = filterDataForUser(socket.user, dataToEmit);
+                socket.emit('dashboardUpdate', { success: true, data: filteredData });
             } else {
                 // Untuk broadcast ke semua client, filter untuk setiap user
                 io.sockets.sockets.forEach((clientSocket) => {
                     if (clientSocket.user) {
-                        try {
-                            const filteredData = filterDataForUser(clientSocket.user, dataToEmit);
-                            clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
-                        } catch (error) {
-                            console.error('Error filtering data for user:', error, clientSocket.user);
-                            // Skip jika filtering gagal
-                        }
+                        const filteredData = filterDataForUser(clientSocket.user, dataToEmit);
+                        clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
                     }
                 });
             }
@@ -1892,16 +1825,6 @@ function filterDataForUser(user, data) {
             };
         case 'manager':
             // Manager: batasi data hanya pada line yang sesuai divisinya
-            // PERBAIKAN: Handle jika user.division tidak ada atau null
-            if (!user.division) {
-                console.warn('Manager user has no division, returning empty data');
-                return {
-                    machine_statuses_by_line: {},
-                    active_problems: [],
-                    new_problems: []
-                };
-            }
-
             const divisionToLines = {
                 'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
                 'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
@@ -1909,15 +1832,6 @@ function filterDataForUser(user, data) {
             };
 
             const allowedLines = divisionToLines[user.division] || [];
-            
-            if (allowedLines.length === 0) {
-                console.warn(`No lines found for manager division: ${user.division}`);
-                return {
-                    machine_statuses_by_line: {},
-                    active_problems: [],
-                    new_problems: []
-                };
-            }
 
             // Filter machine statuses by allowed lines
             const ms = data.machine_statuses_by_line || {};

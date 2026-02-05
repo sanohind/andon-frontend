@@ -54,13 +54,7 @@
                                     <span>Production Monitoring</span>
                                 </a>
                             <% } %>
-                            <% if (user.role === 'manager') { %>
-                                <!-- Manager hanya bisa akses Analytics -->
-                                <a href="/analytics" class="analytics-link" title="Analytics">
-                                    <i class="fas fa-chart-line"></i>
-                                    <span>Analytics</span>
-                                </a>
-                            <% } else if (user.role === 'admin' || user.role === 'management') { %>
+                            <% if (user.role === 'admin' || user.role === 'management' || user.role === 'manager') { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>
@@ -81,6 +75,8 @@
                                     <i class="fas fa-table"></i>
                                     <span>Tables</span>
                                 </a>
+                            <% } else if (user.role === 'manager') { %>
+                                <!-- Manager tidak memiliki akses ke analytics -->
                             <% } else if (['maintenance', 'quality', 'engineering'].includes(user.role)) { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>

@@ -529,8 +529,6 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('connect_error', (error) => {
       console.warn('Socket connection error:', error);
       setConnection(false);
-      // PERBAIKAN: Load data immediately on connection error, then set up periodic reload
-      loadInitialStatus();
       // Start fallback immediately on connection error
       if (!fallbackIntervalId) {
         fallbackIntervalId = setInterval(() => {
@@ -542,13 +540,6 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }, 30000);
       }
-    });
-
-    socket.on('error', (error) => {
-      console.error('Socket error:', error);
-      setConnection(false);
-      // Load data immediately on socket error
-      loadInitialStatus();
     });
 
     socket.on('dashboardUpdate', (payload) => {
