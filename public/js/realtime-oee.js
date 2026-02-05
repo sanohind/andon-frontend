@@ -443,30 +443,104 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadInitialStatus() {
     try {
       const token = getCookieValue('auth_token');
+      const userDataEl = document.getElementById('userData');
+      const userRole = userDataEl ? userDataEl.dataset.role : null;
+      const userDivision = userDataEl ? userDataEl.dataset.division : null;
+      
       const qs = lineFilter ? `?${new URLSearchParams({ line_name: lineFilter }).toString()}` : '';
-      const res = await fetch(`/api/dashboard/status${qs}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-User-Role': userRole || '',
+        'X-User-Division': userDivision || '',
+        'X-Line-Name': lineFilter || ''
+      };
+      
+      const res = await fetch(`/api/dashboard/status${qs}`, { headers });
       const json = await res.json();
-      if (!res.ok || !json.success || !json.data) return;
+      if (!res.ok || !json.success || !json.data) {
+        console.warn('Failed to load initial status:', json.message || 'Unknown error');
+        return;
+      }
+      
+      // Ensure machine_statuses_by_line exists
+      if (!json.data.machine_statuses_by_line) {
+        console.warn('No machine_statuses_by_line in response');
+        json.data.machine_statuses_by_line = {};
+      }
+      
       lastStatusPayload = json.data;
       machinesFlat = flattenMachines(json.data.machine_statuses_by_line);
-      // Use 8 columns per block like screenshot
-      blocks = chunkMachines(machinesFlat, 8);
-      renderBoard();
+      
+      // Only render if we have machines
+      if (machinesFlat.length > 0) {
+        // Use 8 columns per block like screenshot
+        blocks = chunkMachines(machinesFlat, 8);
+        renderBoard();
+      } else {
+        console.warn('No machines found for current filter');
+        if (boardEl) {
+          boardEl.innerHTML = `<div style="color:#666; padding:12px; text-align:center;">Tidak ada mesin yang ditemukan untuk filter saat ini.</div>`;
+        }
+      }
     } catch (e) {
-      // ignore
+      console.error('Error loading initial status:', e);
     }
   }
+
+  let fallbackIntervalId = null;
 
   function initSocket() {
     const token = getCookieValue('auth_token');
     const socket = io({
-      auth: { token }
+      auth: { token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      timeout: 20000
     });
 
-    socket.on('connect', () => setConnection(true));
-    socket.on('disconnect', () => setConnection(false));
+    socket.on('connect', () => {
+      setConnection(true);
+      // Clear fallback interval if socket reconnects
+      if (fallbackIntervalId) {
+        clearInterval(fallbackIntervalId);
+        fallbackIntervalId = null;
+      }
+      // Reload initial status when socket connects to ensure fresh data
+      loadInitialStatus();
+    });
+    
+    socket.on('disconnect', () => {
+      setConnection(false);
+      // Fallback: reload data periodically when socket is disconnected
+      if (!fallbackIntervalId) {
+        fallbackIntervalId = setInterval(() => {
+          if (socket.connected) {
+            clearInterval(fallbackIntervalId);
+            fallbackIntervalId = null;
+          } else {
+            loadInitialStatus();
+          }
+        }, 30000); // Every 30 seconds
+      }
+    });
+
+    socket.on('connect_error', (error) => {
+      console.warn('Socket connection error:', error);
+      setConnection(false);
+      // Start fallback immediately on connection error
+      if (!fallbackIntervalId) {
+        fallbackIntervalId = setInterval(() => {
+          if (socket.connected) {
+            clearInterval(fallbackIntervalId);
+            fallbackIntervalId = null;
+          } else {
+            loadInitialStatus();
+          }
+        }, 30000);
+      }
+    });
 
     socket.on('dashboardUpdate', (payload) => {
       if (!payload || !payload.success || !payload.data) return;

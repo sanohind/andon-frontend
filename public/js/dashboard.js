@@ -169,10 +169,20 @@ class DashboardManager {
             this.loadStats(); 
         });
 
-		this.socket.on('disconnect', () => {
+        this.socket.on('disconnect', () => {
             console.log('❌ Disconnected from server');
             this.socketConnected = false;
 			this.refreshCompositeConnectionStatus();
+            // Immediately try fallback when disconnected
+            this.loadDashboardDataWithFallbackDetection();
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.warn('Socket connection error:', error);
+            this.socketConnected = false;
+            this.refreshCompositeConnectionStatus();
+            // Start fallback immediately on connection error
+            this.loadDashboardDataWithFallbackDetection();
         });
 
         this.socket.on('authError', (error) => {
@@ -360,9 +370,17 @@ class DashboardManager {
             // PERBAIKAN: Kirim lineFilter ke backend untuk filtering
             const token = this.getCookieValue('auth_token');
             const queryParams = {};
+            
+            // Build query params based on role
             if (this.lineFilter) {
                 queryParams.line_name = this.lineFilter;
+            } else if (this.userRole === 'leader' && this.userLineName) {
+                queryParams.line_name = this.userLineName;
+            } else if (this.userRole === 'manager' && this.userDivision) {
+                // Manager: filter by division
+                queryParams.division = this.userDivision;
             }
+            
             const queryString = Object.keys(queryParams).length > 0 
                 ? '?' + new URLSearchParams(queryParams).toString() 
                 : '';
@@ -373,12 +391,20 @@ class DashboardManager {
                     'Content-Type': 'application/json',
                     'X-User-Role': this.userRole || '',
                     'X-User-Division': this.userDivision || '',
-                    'X-Line-Name': this.lineFilter || ''
+                    'X-Line-Name': this.lineFilter || this.userLineName || ''
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
-            if (data.success) {
+            if (data.success && data.data) {
+                // Store filtered machine statuses
+                this.lastMachineStatuses = data.data.machine_statuses_by_line || {};
+                
                 // Load active problems using new endpoint
                 const activeProblems = await this.loadActiveProblems();
                 
@@ -429,10 +455,15 @@ class DashboardManager {
                     this.showProblemNotification(problem);
                 });
 
-                // Update UI
-                this.updateMachineStatuses(data.data.machine_statuses_by_line);
-                this.updateActiveProblems(activeProblems);
-                this.updateStatsFromDashboardData({...data.data, active_problems: activeProblems});
+                // Update UI - ensure data exists before updating
+                if (data.data && data.data.machine_statuses_by_line) {
+                    this.updateMachineStatuses(data.data.machine_statuses_by_line);
+                } else {
+                    console.warn('No machine_statuses_by_line in response data');
+                    this.updateMachineStatuses({});
+                }
+                this.updateActiveProblems(activeProblems || []);
+                this.updateStatsFromDashboardData({...data.data, active_problems: activeProblems || []});
                 try {
                     this.updateLastUpdateTime();
                 } catch (err) {
