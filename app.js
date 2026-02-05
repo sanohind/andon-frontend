@@ -203,13 +203,10 @@ app.get('/', requireAuth, async (req, res) => {
     const lineFilter = req.query.line || (req.user?.role === 'leader' && req.user?.line_name ? req.user.line_name : null);
     
     // Ambil data dashboard dari Laravel dengan konteks role/division
-    // Manager: kirim role & division agar backend filter sesuai divisi (tanpa gantung koneksi)
+    // PERBAIKAN: Kirim lineFilter sebagai query parameter untuk filtering di backend
     const queryParams = {};
     if (lineFilter) {
       queryParams.line_name = lineFilter;
-    }
-    if (req.user?.role === 'manager' && req.user?.division) {
-      queryParams.division = req.user.division;
     }
     const queryString = Object.keys(queryParams).length > 0 
       ? '?' + new URLSearchParams(queryParams).toString() 
@@ -544,17 +541,18 @@ app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
     const userRole = (req.user && req.user.role) || req.headers['x-user-role'] || '';
     const userDivision = (req.user && req.user.division) || req.headers['x-user-division'] || '';
+    // PERBAIKAN: Ambil line_name dari query parameter untuk filtering
     const lineName = req.query.line_name || req.headers['x-line-name'] || '';
-
-    // Manager: kirim division agar Laravel filter tanpa gantung token/socket
+    
+    // Build query string
     const queryParams = {};
-    if (lineName) queryParams.line_name = lineName;
-    if (userRole === 'manager' && userDivision) queryParams.division = userDivision;
-
-    const queryString = Object.keys(queryParams).length > 0
-      ? '?' + new URLSearchParams(queryParams).toString()
+    if (lineName) {
+      queryParams.line_name = lineName;
+    }
+    const queryString = Object.keys(queryParams).length > 0 
+      ? '?' + new URLSearchParams(queryParams).toString() 
       : '';
-
+    
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status${queryString}`, {
       headers: {
         'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
