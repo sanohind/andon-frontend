@@ -748,11 +748,12 @@ class DashboardManager {
             // Manager hanya melihat problem dari divisi mereka
             // Filter berdasarkan line_name karena data dari API tidak memiliki field division
             const divisionLineMapping = {
-                'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-                'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-                'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+                'brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+                'chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+                'nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
             };
-            const allowedLines = divisionLineMapping[this.userDivision] || [];
+            const divKey = String(this.userDivision || '').trim().toLowerCase();
+            const allowedLines = divisionLineMapping[divKey] || [];
             filteredProblems = filteredProblems.filter(problem => {
                 // Filter by line_name yang sesuai dengan divisi manager
                 return problem.line_name && allowedLines.includes(problem.line_name);

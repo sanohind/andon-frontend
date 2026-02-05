@@ -223,15 +223,17 @@ app.get('/', requireAuth, async (req, res) => {
 
     let machinesGroupedByLine = dashboardDataResponse.data?.data?.machine_statuses_by_line || {};
 
+    const normalizeKey = (v) => String(v || '').trim().toLowerCase();
+
     // Safety filter (render-time) untuk manager agar hanya melihat line sesuai divisi
     // Management melihat semua data seperti admin
     if (req.user && req.user.role === 'manager') {
       const divisionToLines = {
-        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+        brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
       };
-      const allowedLines = divisionToLines[req.user.division] || [];
+      const allowedLines = divisionToLines[normalizeKey(req.user.division)] || [];
       
       const filtered = {};
       Object.keys(machinesGroupedByLine).forEach((lineName) => {
@@ -1342,16 +1344,17 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
 
     // Filter for manager
     if (req.user.role === 'manager') {
+      const normalizeKey = (v) => String(v || '').trim().toLowerCase();
       const divisionToLines = {
-        'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+        brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+        chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+        nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
       };
-      const allowedLines = divisionToLines[req.user.division] || [];
+      const allowedLines = divisionToLines[normalizeKey(req.user.division)] || [];
       tableList = tableList.filter((t) => {
         const line = t.line_name || t.lineName || t.line;
         const division = t.division || null;
-        return (division && division === req.user.division) || (line && allowedLines.includes(line));
+        return (division && normalizeKey(division) === normalizeKey(req.user.division)) || (line && allowedLines.includes(line));
       });
     }
 
@@ -1823,13 +1826,14 @@ function filterDataForUser(user, data) {
             };
         case 'manager':
             // Manager: batasi data hanya pada line yang sesuai divisinya
+            const normalizeKey = (v) => String(v || '').trim().toLowerCase();
             const divisionToLines = {
-                'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-                'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-                'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
+                brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
+                chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
+                nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
             };
 
-            const allowedLines = divisionToLines[user.division] || [];
+            const allowedLines = divisionToLines[normalizeKey(user.division)] || [];
 
             // Filter machine statuses by allowed lines
             const ms = data.machine_statuses_by_line || {};
