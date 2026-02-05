@@ -747,6 +747,7 @@ class DashboardManager {
         } else if (this.userRole === 'manager' && this.userDivision) {
             // Manager hanya melihat problem dari divisi mereka
             // Filter berdasarkan line_name karena data dari API tidak memiliki field division
+            const normalizeKey = (v) => String(v || '').trim().toLowerCase();
             const divisionLineMapping = {
                 'brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
                 'chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
@@ -756,7 +757,7 @@ class DashboardManager {
             const allowedLines = divisionLineMapping[divKey] || [];
             filteredProblems = filteredProblems.filter(problem => {
                 // Filter by line_name yang sesuai dengan divisi manager
-                return problem.line_name && allowedLines.includes(problem.line_name);
+                return problem.line_name && allowedLines.some(l => normalizeKey(l) === normalizeKey(problem.line_name));
             });
         } else if (this.userRole === 'admin') {
             // Admin melihat semua problem (tidak perlu filter lagi jika sudah difilter by lineFilter)

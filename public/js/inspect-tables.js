@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addForm.closest('.form-container').style.display = 'none';
         }
         // Disable all action buttons
-        const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot, .btn-add-part-config, .btn-edit-part-config, .btn-delete-part-config');
+        const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-config-gear, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot, .btn-add-part-config, .btn-edit-part-config, .btn-delete-part-config');
         actionButtons.forEach(btn => {
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -69,6 +69,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetOtInput = document.getElementById('targetOtInput');
     const cancelSetOtBtn = document.getElementById('cancelSetOt');
     const cancelSetOtFooterBtn = document.getElementById('cancelSetOtFooter');
+
+    // Elements for Combined Config Modal
+    const configModal = document.getElementById('configModal');
+    const cancelConfigModalBtn = document.getElementById('cancelConfigModal');
+    const cancelConfigModalFooterBtn = document.getElementById('cancelConfigModalFooter');
+    const configMachineAddress = document.getElementById('configMachineAddress');
+
+    const configTargetForm = document.getElementById('configTargetForm');
+    const configTargetAddress = document.getElementById('configTargetAddress');
+    const configTargetQuantityInput = document.getElementById('configTargetQuantityInput');
+
+    const configCycleForm = document.getElementById('configCycleForm');
+    const configCycleAddress = document.getElementById('configCycleAddress');
+    const configCycleTimeInput = document.getElementById('configCycleTimeInput');
+
+    const configCycleThresholdForm = document.getElementById('configCycleThresholdForm');
+    const configCycleThresholdAddress = document.getElementById('configCycleThresholdAddress');
+    const configWarningCycleCountInput = document.getElementById('configWarningCycleCountInput');
+    const configProblemCycleCountInput = document.getElementById('configProblemCycleCountInput');
+
+    const configOtForm = document.getElementById('configOtForm');
+    const configOtAddress = document.getElementById('configOtAddress');
+    const configOtEnabledInput = document.getElementById('configOtEnabledInput');
+    const configOtDurationTypeInput = document.getElementById('configOtDurationTypeInput');
+    const configTargetOtInput = document.getElementById('configTargetOtInput');
 
     // Elements for Part Configuration Modal
     const partConfigModal = document.getElementById('partConfigModal');
@@ -517,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tableBody.addEventListener('click', async (e) => {
         const target = e.target;
         // Get the button element if clicked on icon
-        const button = target.closest('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot') || target;
+        const button = target.closest('.btn-edit, .btn-delete, .btn-config-gear, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot') || target;
         const row = button.closest('tr');
         
         // Skip if row doesn't have data-id (e.g., part-config-row)
@@ -607,6 +632,28 @@ document.addEventListener('DOMContentLoaded', () => {
             problemCycleCountInput.value = existingProblem || '';
             setCycleThresholdModal.classList.add('show');
         }
+
+        if (button.classList.contains('btn-config-gear')) {
+            // Populate combined modal from row dataset
+            if (configMachineAddress) configMachineAddress.value = address;
+
+            if (configTargetAddress) configTargetAddress.value = address;
+            if (configTargetQuantityInput) configTargetQuantityInput.value = row.dataset.targetQuantity || '';
+
+            if (configCycleAddress) configCycleAddress.value = address;
+            if (configCycleTimeInput) configCycleTimeInput.value = row.dataset.cycleTime || '';
+
+            if (configCycleThresholdAddress) configCycleThresholdAddress.value = address;
+            if (configWarningCycleCountInput) configWarningCycleCountInput.value = row.dataset.warningCycle || '';
+            if (configProblemCycleCountInput) configProblemCycleCountInput.value = row.dataset.problemCycle || '';
+
+            if (configOtAddress) configOtAddress.value = address;
+            if (configOtEnabledInput) configOtEnabledInput.checked = row.dataset.otEnabled === '1';
+            if (configOtDurationTypeInput) configOtDurationTypeInput.value = row.dataset.otDurationType || '';
+            if (configTargetOtInput) configTargetOtInput.value = row.dataset.targetOt != null && row.dataset.targetOt !== '' ? row.dataset.targetOt : '';
+
+            if (configModal) configModal.classList.add('show');
+        }
     });
 
     // Close handlers for Set Target/Set Cycle/Set Running Hour/Set Cycle Threshold
@@ -619,6 +666,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // running hour cancel handlers removed
     if (cancelSetCycleThresholdBtn) cancelSetCycleThresholdBtn.addEventListener('click', () => setCycleThresholdModal.classList.remove('show'));
     if (cancelSetCycleThresholdFooterBtn) cancelSetCycleThresholdFooterBtn.addEventListener('click', () => setCycleThresholdModal.classList.remove('show'));
+
+    // Close handlers for Combined Config Modal
+    if (cancelConfigModalBtn) cancelConfigModalBtn.addEventListener('click', () => configModal.classList.remove('show'));
+    if (cancelConfigModalFooterBtn) cancelConfigModalFooterBtn.addEventListener('click', () => configModal.classList.remove('show'));
 
     // Submit handlers for Set Target/Set Cycle
     if (setTargetForm) setTargetForm.addEventListener('submit', async (e) => {
@@ -747,6 +798,131 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (!res.ok) throw new Error(json.message || 'Gagal menyimpan pengaturan OT.');
             setOtModal.classList.remove('show');
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) {
+                row.dataset.otEnabled = ot_enabled ? '1' : '0';
+                row.dataset.otDurationType = ot_duration_type || '';
+                row.dataset.targetOt = target_ot != null ? target_ot : '';
+            }
+            alert('Pengaturan OT tersimpan.');
+        } catch (err) {
+            console.error('Error saving OT settings:', err);
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    // Submit handlers for Combined Config Modal
+    if (configTargetForm) configTargetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = configTargetAddress.value;
+        const val = parseInt(configTargetQuantityInput.value, 10);
+        if (Number.isNaN(val) || val < 0) return alert('Nilai tidak valid.');
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/target`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_quantity: val })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Gagal menyimpan target.');
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) row.dataset.targetQuantity = val;
+            alert('Target tersimpan.');
+        } catch (err) {
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    if (configCycleForm) configCycleForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = configCycleAddress.value;
+        const val = parseInt(configCycleTimeInput.value, 10);
+        if (Number.isNaN(val) || val < 0) return alert('Nilai tidak valid.');
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/cycle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cycle_time: val })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Gagal menyimpan cycle time.');
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) row.dataset.cycleTime = val;
+            alert('Cycle time tersimpan.');
+        } catch (err) {
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    if (configCycleThresholdForm) configCycleThresholdForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = configCycleThresholdAddress.value;
+        const warningCycleCount = parseInt(configWarningCycleCountInput.value, 10);
+        const problemCycleCount = parseInt(configProblemCycleCountInput.value, 10);
+        if (Number.isNaN(warningCycleCount) || warningCycleCount < 1) {
+            return alert('Warning Cycle Count harus >= 1.');
+        }
+        if (Number.isNaN(problemCycleCount) || problemCycleCount < 1) {
+            return alert('Problem Cycle Count harus >= 1.');
+        }
+        if (problemCycleCount < warningCycleCount) {
+            return alert('Problem Cycle Count harus >= Warning Cycle Count.');
+        }
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/cycle-threshold`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    warning_cycle_count: warningCycleCount,
+                    problem_cycle_count: problemCycleCount
+                })
+            });
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                console.error('Non-JSON response received:', text);
+                throw new Error('Server returned non-JSON response. Please check server logs.');
+            }
+            const json = await res.json();
+            if (!res.ok) {
+                if (json.errors) {
+                    const errorMessages = Object.values(json.errors).flat().join(', ');
+                    throw new Error(errorMessages || json.message || 'Gagal menyimpan cycle threshold.');
+                }
+                throw new Error(json.message || 'Gagal menyimpan cycle threshold.');
+            }
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) {
+                row.dataset.warningCycle = warningCycleCount;
+                row.dataset.problemCycle = problemCycleCount;
+            }
+            alert('Cycle threshold tersimpan.');
+        } catch (err) {
+            console.error('Error saving cycle threshold:', err);
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    if (configOtForm) configOtForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = configOtAddress.value;
+        const ot_enabled = !!configOtEnabledInput.checked;
+        const ot_duration_type = ot_enabled ? (configOtDurationTypeInput.value || null) : null;
+        const target_ot = ot_enabled && configTargetOtInput.value !== '' ? parseInt(configTargetOtInput.value, 10) : null;
+        if (ot_enabled && !ot_duration_type) {
+            return alert('Pilih durasi OT jika OT diaktifkan.');
+        }
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/ot-settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ ot_enabled, ot_duration_type, target_ot })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Gagal menyimpan pengaturan OT.');
             const row = document.querySelector(`tr[data-address="${address}"]`);
             if (row) {
                 row.dataset.otEnabled = ot_enabled ? '1' : '0';

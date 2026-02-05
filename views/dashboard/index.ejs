@@ -111,17 +111,18 @@
         <div class="container">
             <% if (typeof lineFilter !== 'undefined' && lineFilter && user.role !== 'leader') { %>
                 <div style="margin-bottom: 1rem; display:flex; align-items:center; justify-content: space-between; gap: 0.75rem;">
-                    <a href="/divisions" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; text-decoration: none; border-radius: 4px; font-weight: 600; transition: all 0.3s ease;">
-                        <i class="fas fa-arrow-left"></i>
-                        <span>Kembali ke Divisi</span>
-                    </a>
-
-                    <% if (user.role === 'leader') { %>
-                        <a href="/realtime-oee?<%= new URLSearchParams({ line_name: lineFilter }).toString() %>" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #111827; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: all 0.3s ease;">
-                            <i class="fas fa-tv"></i>
-                            <span>Production Monitoring</span>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <a href="/divisions" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; text-decoration: none; border-radius: 4px; font-weight: 600; transition: all 0.3s ease;">
+                            <i class="fas fa-arrow-left"></i>
+                            <span>Kembali ke Divisi</span>
                         </a>
-                    <% } %>
+                        <% if (user.role !== 'leader') { %>
+                            <a href="/realtime-oee?<%= new URLSearchParams({ line_name: lineFilter }).toString() %>" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #111827; color: white; text-decoration: none; border-radius: 4px; font-weight: 700; transition: all 0.3s ease;">
+                                <i class="fas fa-tv"></i>
+                                <span>Production Monitoring</span>
+                            </a>
+                        <% } %>
+                    </div>
                 </div>
             <% } %>
             <div class="stats-section" id="globalStats">

@@ -237,7 +237,8 @@ app.get('/', requireAuth, async (req, res) => {
       
       const filtered = {};
       Object.keys(machinesGroupedByLine).forEach((lineName) => {
-        if (allowedLines.includes(lineName)) filtered[lineName] = machinesGroupedByLine[lineName];
+        const allowedKeys = new Set(allowedLines.map(normalizeKey));
+        if (allowedKeys.has(normalizeKey(lineName))) filtered[lineName] = machinesGroupedByLine[lineName];
       });
       machinesGroupedByLine = filtered;
     }
@@ -1350,11 +1351,11 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
         chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
         nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
       };
-      const allowedLines = divisionToLines[normalizeKey(req.user.division)] || [];
+      const allowedLineKeys = new Set((divisionToLines[normalizeKey(req.user.division)] || []).map(normalizeKey));
       tableList = tableList.filter((t) => {
         const line = t.line_name || t.lineName || t.line;
         const division = t.division || null;
-        return (division && normalizeKey(division) === normalizeKey(req.user.division)) || (line && allowedLines.includes(line));
+        return (division && normalizeKey(division) === normalizeKey(req.user.division)) || (line && allowedLineKeys.has(normalizeKey(line)));
       });
     }
 

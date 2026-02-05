@@ -87,7 +87,7 @@
             flex-wrap: wrap;
         }
         
-        .btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot {
+        .btn-edit, .btn-delete, .btn-config-gear, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot {
             padding: 8px 10px;
             border: none;
             border-radius: var(--border-radius);
@@ -103,17 +103,46 @@
             min-width: 36px;
             height: 36px;
         }
-        .btn-edit i, .btn-delete i, .btn-set-target i, .btn-set-cycle i, .btn-set-cycle-threshold i, .btn-set-ot i {
+        .btn-edit i, .btn-delete i, .btn-config-gear i, .btn-set-target i, .btn-set-cycle i, .btn-set-cycle-threshold i, .btn-set-ot i {
             font-size: 1em;
         }
         .btn-edit { background-color: #17a2b8; } /* Warna biru info */
         .btn-delete { background-color: var(--danger-color); }
+        .btn-config-gear { background-color: #6c757d; } /* Abu-abu */
         .btn-set-target { background-color: #28a745; } /* Hijau */
         .btn-set-cycle { background-color: #0d6efd; } /* Biru */
         .btn-set-cycle-threshold { background-color: #ff9800; } /* Oranye */
         .btn-set-ot { background-color: #d4a017; } /* Kuning/OT Lembur */
-        .btn-edit:hover, .btn-delete:hover, .btn-set-target:hover, .btn-set-cycle:hover, .btn-set-cycle-threshold:hover, .btn-set-ot:hover {
+        .btn-edit:hover, .btn-delete:hover, .btn-config-gear:hover, .btn-set-target:hover, .btn-set-cycle:hover, .btn-set-cycle-threshold:hover, .btn-set-ot:hover {
             opacity: 0.8;
+        }
+
+        /* Modal konfigurasi gabungan */
+        .config-section {
+            border: 1px solid #eef2f7;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+            background: #fafbfc;
+        }
+        .config-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .config-section .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        .config-section .config-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
         }
 
         /* Set OT modal: checkbox di sebelah kiri teks (satu baris, override .form-group label) */
@@ -520,17 +549,8 @@
                                             <button class="btn-delete" title="Hapus">
                                                 <i class="fas fa-trash"></i>
                                             </button>
-                                            <button class="btn-set-target" title="Set Target">
-                                                <i class="fas fa-bullseye"></i>
-                                            </button>
-                                            <button class="btn-set-cycle" title="Set Cycle">
-                                                <i class="fas fa-clock"></i>
-                                            </button>
-                                            <button class="btn-set-cycle-threshold" title="Set Cycle Threshold">
-                                                <i class="fas fa-exclamation-triangle"></i>
-                                            </button>
-                                            <button class="btn-set-ot" title="Set OT (Lembur)">
-                                                <i class="fas fa-moon"></i>
+                                            <button class="btn-config-gear" title="Konfigurasi">
+                                                <i class="fas fa-gear"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -648,6 +668,103 @@
         
     <!-- Set Cycle Modal -->
         <div class="modal-content" id="setCycleModalContent" style="display:none;"></div>
+    </div>
+
+    <!-- Combined Config Modal (Target + Cycle + Threshold + OT) -->
+    <div class="modal" id="configModal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3 style="display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-gear"></i>
+                    Konfigurasi Mesin
+                </h3>
+                <button type="button" class="modal-close" id="cancelConfigModal">×</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow:auto;">
+                <input type="hidden" id="configMachineAddress">
+
+                <div class="config-section">
+                    <h4><i class="fas fa-bullseye"></i> Set Target Quantity</h4>
+                    <form id="configTargetForm">
+                        <input type="hidden" id="configTargetAddress">
+                        <div class="form-group">
+                            <label for="configTargetQuantityInput">Target Quantity</label>
+                            <input type="number" id="configTargetQuantityInput" min="0" required>
+                        </div>
+                        <div class="config-actions">
+                            <button type="submit" class="btn btn-primary">Simpan Target</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="config-section">
+                    <h4><i class="fas fa-clock"></i> Set Cycle Time</h4>
+                    <form id="configCycleForm">
+                        <input type="hidden" id="configCycleAddress">
+                        <div class="form-group">
+                            <label for="configCycleTimeInput">Cycle Time (detik)</label>
+                            <input type="number" id="configCycleTimeInput" min="0" required>
+                        </div>
+                        <div class="config-actions">
+                            <button type="submit" class="btn btn-primary">Simpan Cycle</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="config-section">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Set Cycle Threshold</h4>
+                    <form id="configCycleThresholdForm">
+                        <input type="hidden" id="configCycleThresholdAddress">
+                        <div class="form-group">
+                            <label for="configWarningCycleCountInput">Warning Cycle Count</label>
+                            <input type="number" id="configWarningCycleCountInput" min="1" required>
+                            <small style="color: #666; display: block; margin-top: 5px;">Jumlah cycle time sebelum status menjadi warning (kuning)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="configProblemCycleCountInput">Problem Cycle Count</label>
+                            <input type="number" id="configProblemCycleCountInput" min="1" required>
+                            <small style="color: #666; display: block; margin-top: 5px;">Jumlah cycle time sebelum status menjadi problem (merah). Harus >= Warning Cycle Count</small>
+                        </div>
+                        <div class="config-actions">
+                            <button type="submit" class="btn btn-primary">Simpan Threshold</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="config-section">
+                    <h4><i class="fas fa-moon"></i> Set OT (Lembur)</h4>
+                    <form id="configOtForm">
+                        <input type="hidden" id="configOtAddress">
+                        <div class="form-group form-group-ot-checkbox">
+                            <label class="label-ot-checkbox" for="configOtEnabledInput">
+                                <input type="checkbox" id="configOtEnabledInput" name="ot_enabled" class="ot-checkbox-input">
+                                <span class="ot-checkbox-text">Aktifkan OT (Over Time / Lembur)</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="configOtDurationTypeInput">Durasi OT</label>
+                            <select id="configOtDurationTypeInput" name="ot_duration_type">
+                                <option value="">-- Pilih durasi --</option>
+                                <option value="2h_pagi">2 jam shift pagi</option>
+                                <option value="2h_malam">2 jam shift malam</option>
+                                <option value="3.5h_pagi">3,5 jam shift pagi</option>
+                            </select>
+                            <small style="color: #666;">OT aktif setelah jam shift reguler (pagi selesai 16:00, malam 05:00).</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="configTargetOtInput">Target OT (quantity)</label>
+                            <input type="number" id="configTargetOtInput" name="target_ot" min="0" placeholder="Target khusus untuk periode OT">
+                        </div>
+                        <div class="config-actions">
+                            <button type="submit" class="btn btn-primary">Simpan OT</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelConfigModalFooter" class="btn btn-secondary">Tutup</button>
+            </div>
+        </div>
     </div>
 
     <!-- Set Cycle Modal (separate) -->
