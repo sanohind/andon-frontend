@@ -180,13 +180,37 @@ class DashboardManager {
         this.socket.on('connect_error', (error) => {
             console.warn('Socket connection error:', error);
             this.socketConnected = false;
+            this.fallbackActive = true;
             this.refreshCompositeConnectionStatus();
             // Start fallback immediately on connection error
             this.loadDashboardDataWithFallbackDetection();
         });
 
+        this.socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            this.socketConnected = false;
+            this.fallbackActive = true;
+            this.refreshCompositeConnectionStatus();
+            // Try fallback on socket error
+            this.loadDashboardDataWithFallbackDetection();
+        });
+
         this.socket.on('authError', (error) => {
             console.error('Authentication error:', error);
+            this.socketConnected = false;
+            this.fallbackActive = true;
+            this.refreshCompositeConnectionStatus();
+            
+            // PERBAIKAN: Untuk manager, coba fallback dulu sebelum redirect
+            // Mungkin ini hanya masalah WebSocket, bukan session expired
+            if (this.userRole === 'manager') {
+                console.log('🔄 Manager WebSocket auth error, trying fallback...');
+                this.loadDashboardDataWithFallbackDetection();
+                // Jangan langsung redirect, biarkan fallback bekerja
+                return;
+            }
+            
+            // Untuk role lain, langsung redirect jika auth error
             this.showSweetAlert('error', 'Session Expired', 'Your session has expired. Please login again.', {
                 willClose: () => {
                     window.location.href = '/login';
