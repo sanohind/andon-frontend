@@ -50,7 +50,10 @@
                                     <span>Tables</span>
                                 </a>
                             <% } else if (user.role === 'manager') { %>
-                                <!-- Manager tidak memiliki akses ke analytics -->
+                                <a href="/analytics" class="analytics-link" title="Analytics">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Analytics</span>
+                                </a>
                             <% } else if (['maintenance', 'quality', 'engineering'].includes(user.role)) { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>

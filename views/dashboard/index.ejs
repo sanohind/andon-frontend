@@ -54,7 +54,7 @@
                                     <span>Production Monitoring</span>
                                 </a>
                             <% } %>
-                            <% if (user.role === 'admin' || user.role === 'management') { %>
+                            <% if (user.role === 'admin' || user.role === 'management' || user.role === 'manager') { %>
                                 <a href="/analytics" class="analytics-link" title="Analytics">
                                     <i class="fas fa-chart-line"></i>
                                     <span>Analytics</span>

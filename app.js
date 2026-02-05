@@ -302,9 +302,9 @@ app.get('/manage-lines', requireAuth, async (req, res) => {
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
-  // Allow admin, management, maintenance, quality, dan engineering (manager tidak bisa akses)
-  if (!['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(req.user.role)) {
-    return res.status(403).send('Akses Ditolak'); // atau redirect ke halaman utama
+  // Allow analytics untuk admin, management, maintenance, quality, engineering, dan manager
+  if (!['admin', 'management', 'maintenance', 'quality', 'engineering', 'manager'].includes(req.user.role)) {
+    return res.status(403).send('Akses Ditolak');
   }
 
   res.render('dashboard/analytics', {
@@ -793,7 +793,13 @@ app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req,
 // Endpoint untuk line quantity comparison analytics
 app.get('/api/dashboard/analytics/line-quantity', requireAuthAPI, async (req, res) => {
   try {
-    const { period, date, month, year, shift, division } = req.query;
+    const { period, date, month, year, shift } = req.query;
+    let { division } = req.query;
+
+    // Manager hanya boleh melihat analytics untuk divisinya sendiri
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-quantity`, {
       headers: {
         'Authorization': `Bearer ${req.user.token || req.session.token}`,
@@ -837,8 +843,14 @@ app.get('/api/dashboard/analytics/quantity-hourly', requireAuthAPI, async (req, 
 // Endpoint untuk analytics umum (harus didefinisikan setelah route yang lebih spesifik)
 app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date, division } = req.query;
+    const { start_date, end_date } = req.query;
+    let { division } = req.query;
     const params = { start_date, end_date };
+
+    // Manager hanya boleh melihat analytics untuk divisinya sendiri
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
     if (division !== undefined && division !== null && String(division).trim() !== '') {
       params.division = String(division).trim();
     }

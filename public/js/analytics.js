@@ -27,8 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lineQuantityEmptyState = document.getElementById('lineQuantityEmptyState');
 
     // Determine what to show based on role
-    // Manager tidak bisa akses halaman analytics, jadi tidak perlu di-handle di sini
-    const showCharts = ['admin', 'management'].includes(userRole);
+    const showCharts = ['admin', 'management', 'manager'].includes(userRole);
     const showTables = ['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(userRole);
 
     const quantityFormatter = new Intl.NumberFormat('id-ID');
@@ -622,6 +621,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load divisions for global selector (from divisions-lines API)
     async function loadGlobalDivisions() {
         if (!globalDivisionSelect) return;
+
+        // Manager: hanya boleh melihat divisinya sendiri
+        if (userRole === 'manager' && userDivision) {
+            globalDivisionSelect.innerHTML = '';
+            const opt = document.createElement('option');
+            opt.value = userDivision;
+            opt.textContent = userDivision;
+            globalDivisionSelect.appendChild(opt);
+            globalDivisionSelect.value = userDivision;
+            globalDivisionSelect.disabled = true;
+            return;
+        }
+
         try {
             const resp = await fetch('/api/divisions-lines', { credentials: 'include', headers: getAuthHeaders() });
             if (!resp.ok) return;

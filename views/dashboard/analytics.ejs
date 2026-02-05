@@ -49,6 +49,10 @@
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
                                 </a>
+                                <a href="/analytics" class="analytics-link" title="Analytics">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Analytics</span>
+                                </a>
                             <% } else if (['maintenance', 'quality', 'engineering'].includes(user.role)) { %>
                                 <a href="/divisions" class="analytics-link" title="Dashboard">
                                     <i class="fas fa-tachometer-alt"></i>
@@ -92,7 +96,7 @@
                 </div>
             </div>
 
-            <% if (['admin', 'management'].includes(user.role)) { %>
+            <% if (['admin', 'management', 'manager'].includes(user.role)) { %>
             <div class="stats-section">
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
