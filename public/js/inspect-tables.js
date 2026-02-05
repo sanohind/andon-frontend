@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addForm.closest('.form-container').style.display = 'none';
         }
         // Disable all action buttons
-        const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-add-part-config, .btn-edit-part-config, .btn-delete-part-config');
+        const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot, .btn-add-part-config, .btn-edit-part-config, .btn-delete-part-config');
         actionButtons.forEach(btn => {
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -59,6 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const problemCycleCountInput = document.getElementById('problemCycleCountInput');
     const cancelSetCycleThresholdBtn = document.getElementById('cancelSetCycleThreshold');
     const cancelSetCycleThresholdFooterBtn = document.getElementById('cancelSetCycleThresholdFooter');
+
+    // Elements for Set OT Modal
+    const setOtModal = document.getElementById('setOtModal');
+    const setOtForm = document.getElementById('setOtForm');
+    const setOtAddress = document.getElementById('setOtAddress');
+    const otEnabledInput = document.getElementById('otEnabledInput');
+    const otDurationTypeInput = document.getElementById('otDurationTypeInput');
+    const targetOtInput = document.getElementById('targetOtInput');
+    const cancelSetOtBtn = document.getElementById('cancelSetOt');
+    const cancelSetOtFooterBtn = document.getElementById('cancelSetOtFooter');
 
     // Elements for Part Configuration Modal
     const partConfigModal = document.getElementById('partConfigModal');
@@ -436,6 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === setCycleModal) setCycleModal.classList.remove('show');
         // running hour modal removed
         if (e.target === setCycleThresholdModal) setCycleThresholdModal.classList.remove('show');
+        if (e.target === setOtModal) setOtModal.classList.remove('show');
         if (e.target === partConfigModal) partConfigModal.classList.remove('show');
     });
 
@@ -506,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tableBody.addEventListener('click', async (e) => {
         const target = e.target;
         // Get the button element if clicked on icon
-        const button = target.closest('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold') || target;
+        const button = target.closest('.btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot') || target;
         const row = button.closest('tr');
         
         // Skip if row doesn't have data-id (e.g., part-config-row)
@@ -579,6 +590,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // btn-set-running-hour removed
 
+        if (button.classList.contains('btn-set-ot')) {
+            setOtAddress.value = address;
+            otEnabledInput.checked = row.dataset.otEnabled === '1';
+            if (otDurationTypeInput) otDurationTypeInput.value = row.dataset.otDurationType || '';
+            targetOtInput.value = row.dataset.targetOt != null && row.dataset.targetOt !== '' ? row.dataset.targetOt : '';
+            setOtModal.classList.add('show');
+        }
+
         if (button.classList.contains('btn-set-cycle-threshold')) {
             setCycleThresholdAddress.value = address;
             // Populate with existing values if available
@@ -595,6 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelSetTargetFooterBtn) cancelSetTargetFooterBtn.addEventListener('click', () => setTargetModal.classList.remove('show'));
     if (cancelSetCycleBtn) cancelSetCycleBtn.addEventListener('click', () => setCycleModal.classList.remove('show'));
     if (cancelSetCycleFooterBtn) cancelSetCycleFooterBtn.addEventListener('click', () => setCycleModal.classList.remove('show'));
+    if (cancelSetOtBtn) cancelSetOtBtn.addEventListener('click', () => setOtModal.classList.remove('show'));
+    if (cancelSetOtFooterBtn) cancelSetOtFooterBtn.addEventListener('click', () => setOtModal.classList.remove('show'));
     // running hour cancel handlers removed
     if (cancelSetCycleThresholdBtn) cancelSetCycleThresholdBtn.addEventListener('click', () => setCycleThresholdModal.classList.remove('show'));
     if (cancelSetCycleThresholdFooterBtn) cancelSetCycleThresholdFooterBtn.addEventListener('click', () => setCycleThresholdModal.classList.remove('show'));
@@ -704,6 +725,37 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Cycle threshold tersimpan.');
         } catch (err) {
             console.error('Error saving cycle threshold:', err);
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    if (setOtForm) setOtForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = setOtAddress.value;
+        const ot_enabled = !!otEnabledInput.checked;
+        const ot_duration_type = ot_enabled ? (otDurationTypeInput.value || null) : null;
+        const target_ot = ot_enabled && targetOtInput.value !== '' ? parseInt(targetOtInput.value, 10) : null;
+        if (ot_enabled && !ot_duration_type) {
+            return alert('Pilih durasi OT jika OT diaktifkan.');
+        }
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/ot-settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ ot_enabled, ot_duration_type, target_ot })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Gagal menyimpan pengaturan OT.');
+            setOtModal.classList.remove('show');
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) {
+                row.dataset.otEnabled = ot_enabled ? '1' : '0';
+                row.dataset.otDurationType = ot_duration_type || '';
+                row.dataset.targetOt = target_ot != null ? target_ot : '';
+            }
+            alert('Pengaturan OT tersimpan.');
+        } catch (err) {
+            console.error('Error saving OT settings:', err);
             alert(`Error: ${err.message}`);
         }
     });

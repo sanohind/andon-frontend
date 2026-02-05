@@ -118,10 +118,41 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(n) ? n : 0;
   }
 
-  function computeIdealQty(cycleSeconds) {
+  function getOtDurationSeconds(otDurationType) {
+    if (!otDurationType) return 0;
+    switch (String(otDurationType)) {
+      case '2h_pagi': case '2h_malam': return 2 * 3600;
+      case '3.5h_pagi': return Math.floor(3.5 * 3600);
+      default: return 0;
+    }
+  }
+
+  /** OT aktif jika: ot_enabled, jam sudah lewat akhir shift reguler (pagi 16:00, malam 05:00), dan masih dalam jendela OT (max 19:59 pagi, 06:59 malam). */
+  function isOtActive(metrics, now) {
+    if (!metrics || !metrics.ot_enabled || !metrics.ot_duration_type) return false;
+    const h = now.hour();
+    const m = now.minute();
+    const type = String(metrics.ot_duration_type);
+    if (type === '2h_pagi' || type === '3.5h_pagi') {
+      if (h < 16) return false;
+      if (h > 19) return false;
+      if (h === 19 && m >= 59) return false;
+      if (type === '2h_pagi' && (h > 18 || (h === 18 && m > 0))) return false;
+      if (type === '3.5h_pagi' && (h > 19 || (h === 19 && m >= 30))) return false;
+      return true;
+    }
+    if (type === '2h_malam') {
+      if (h >= 7) return false;
+      return (h > 5) || (h === 5 && m >= 0);
+    }
+    return false;
+  }
+
+  function computeIdealQty(cycleSeconds, otExtraSeconds = 0) {
     const c = safeNumber(cycleSeconds);
     if (c <= 0) return 0;
-    return Math.floor((RUNNING_HOUR * 3600) / c);
+    const totalSec = (RUNNING_HOUR * 3600) + safeNumber(otExtraSeconds);
+    return Math.floor(totalSec / c);
   }
 
   function computeOee(actualQty, cycleSeconds) {
@@ -340,12 +371,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const runtimeSeconds = (state.pausedValue != null) ? state.pausedValue : runtimeRaw;
 
-      // Values
       const cycle = safeNumber(metrics.cycle_time);
+      const otActive = isOtActive(metrics, now);
+      const otExtraSec = otActive ? getOtDurationSeconds(metrics.ot_duration_type) : 0;
+      const idealQty = computeIdealQty(cycle, otExtraSec);
       const actualQty = safeNumber(st.quantity);
-      const idealQty = computeIdealQty(cycle);
       const oee = computeOee(actualQty, cycle);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
+      const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
 
       // write to DOM for each block cell
       blocks.forEach((block, blockIdx) => {
@@ -355,14 +388,31 @@ document.addEventListener('DOMContentLoaded', () => {
           const el = document.getElementById(`b${blockIdx}_${rowKey}_${keyAddr}`);
           if (el) el.textContent = text;
         };
-
         setText('ideal', String(idealQty));
+        const idealEl = document.getElementById(`b${blockIdx}_ideal_${keyAddr}`);
+        if (idealEl) {
+          if (otActive) idealEl.classList.add('rt-ideal-ot');
+          else idealEl.classList.remove('rt-ideal-ot');
+        }
         setText('total', String(actualQty));
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('downtime', fmtHHMMSS(downtimeSec));
         setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
-        setText('target', (target == null) ? '-' : String(target));
+        const targetHtml = (target == null ? '-' : String(target)) +
+          (targetOt != null && metrics.ot_enabled
+            ? `<br><span class="rt-target-ot">${targetOt}</span>`
+            : '');
+        const targetEl = document.getElementById(`b${blockIdx}_target_${keyAddr}`);
+        if (targetEl) {
+          if (targetOt != null && metrics.ot_enabled) {
+            targetEl.innerHTML = (target != null ? String(target) : '-') + `<br><span class="rt-target-ot">${targetOt}</span>`;
+            targetEl.classList.add('rt-has-ot-target');
+          } else {
+            targetEl.textContent = (target == null) ? '-' : String(target);
+            targetEl.classList.remove('rt-has-ot-target');
+          }
+        }
       });
 
       // dot status

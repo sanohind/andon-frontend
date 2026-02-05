@@ -1475,6 +1475,25 @@ app.put('/api/inspection-tables/address/:address/cycle-threshold', requireAuthAP
   }
 });
 
+app.put('/api/inspection-tables/address/:address/ot-settings', requireAuthAPI, async (req, res) => {
+  if (req.user?.role === 'management') {
+    return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
+  }
+  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${encodeURIComponent(req.params.address)}/ot-settings`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
 app.put('/api/inspection-tables/address/:address', requireAuth, async (req, res) => {
   // Block write operations for management role
   if (req.user?.role === 'management') {

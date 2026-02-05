@@ -87,7 +87,7 @@
             flex-wrap: wrap;
         }
         
-        .btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold {
+        .btn-edit, .btn-delete, .btn-set-target, .btn-set-cycle, .btn-set-cycle-threshold, .btn-set-ot {
             padding: 8px 10px;
             border: none;
             border-radius: var(--border-radius);
@@ -103,16 +103,45 @@
             min-width: 36px;
             height: 36px;
         }
-        .btn-edit i, .btn-delete i, .btn-set-target i, .btn-set-cycle i, .btn-set-cycle-threshold i {
+        .btn-edit i, .btn-delete i, .btn-set-target i, .btn-set-cycle i, .btn-set-cycle-threshold i, .btn-set-ot i {
             font-size: 1em;
         }
         .btn-edit { background-color: #17a2b8; } /* Warna biru info */
         .btn-delete { background-color: var(--danger-color); }
         .btn-set-target { background-color: #28a745; } /* Hijau */
         .btn-set-cycle { background-color: #0d6efd; } /* Biru */
-        .btn-set-cycle-threshold { background-color: #ff9800; } /* Oranye, beda dengan Set Cycle */
-        .btn-edit:hover, .btn-delete:hover, .btn-set-target:hover, .btn-set-cycle:hover, .btn-set-cycle-threshold:hover {
+        .btn-set-cycle-threshold { background-color: #ff9800; } /* Oranye */
+        .btn-set-ot { background-color: #d4a017; } /* Kuning/OT Lembur */
+        .btn-edit:hover, .btn-delete:hover, .btn-set-target:hover, .btn-set-cycle:hover, .btn-set-cycle-threshold:hover, .btn-set-ot:hover {
             opacity: 0.8;
+        }
+
+        /* Set OT modal: checkbox di sebelah kiri teks (satu baris, override .form-group label) */
+        .form-group-ot-checkbox {
+            text-align: left;
+        }
+        .form-group-ot-checkbox .label-ot-checkbox {
+            display: inline-flex !important;
+            flex-direction: row !important;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            margin: 0;
+            margin-bottom: 0;
+            justify-content: flex-start;
+            width: auto;
+            max-width: 100%;
+            text-align: left;
+        }
+        .form-group-ot-checkbox .ot-checkbox-input {
+            flex-shrink: 0;
+            margin: 0;
+            width: 1.1em;
+            height: 1.1em;
+            vertical-align: middle;
+        }
+        .form-group-ot-checkbox .ot-checkbox-text {
+            user-select: none;
         }
 
         /* Styling untuk nama meja yang bisa diklik */
@@ -474,7 +503,7 @@
                     <tbody>
                         <% if (tableList && tableList.length > 0) { %>
                             <% tableList.forEach(table => { %>
-                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>" data-target-quantity="<%= table.target_quantity || '' %>" data-cycle-time="<%= table.cycle_time || '' %>" data-warning-cycle="<%= table.warning_cycle_count || '' %>" data-problem-cycle="<%= table.problem_cycle_count || '' %>">
+                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>" data-target-quantity="<%= table.target_quantity || '' %>" data-cycle-time="<%= table.cycle_time || '' %>" data-warning-cycle="<%= table.warning_cycle_count || '' %>" data-problem-cycle="<%= table.problem_cycle_count || '' %>" data-ot-enabled="<%= table.ot_enabled ? '1' : '0' %>" data-ot-duration-type="<%= table.ot_duration_type || '' %>" data-target-ot="<%= table.target_ot != null ? table.target_ot : '' %>">
                                     <td>
                                         <span class="table-name-clickable" data-address="<%= table.address %>">
                                             <%= table.name %>
@@ -499,6 +528,9 @@
                                             </button>
                                             <button class="btn-set-cycle-threshold" title="Set Cycle Threshold">
                                                 <i class="fas fa-exclamation-triangle"></i>
+                                            </button>
+                                            <button class="btn-set-ot" title="Set OT (Lembur)">
+                                                <i class="fas fa-moon"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -637,6 +669,45 @@
             <div class="modal-footer">
                 <button type="button" id="cancelSetCycleFooter" class="btn btn-secondary">Batal</button>
                 <button type="submit" form="setCycleForm" class="btn btn-primary">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set OT (Over Time / Lembur) Modal -->
+    <div class="modal" id="setOtModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Set OT (Lembur)</h3>
+                <button type="button" class="modal-close" id="cancelSetOt">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="setOtForm">
+                    <input type="hidden" id="setOtAddress">
+                    <div class="form-group form-group-ot-checkbox">
+                        <label class="label-ot-checkbox" for="otEnabledInput">
+                            <input type="checkbox" id="otEnabledInput" name="ot_enabled" class="ot-checkbox-input">
+                            <span class="ot-checkbox-text">Aktifkan OT (Over Time / Lembur)</span>
+                        </label>
+                    </div>
+                    <div class="form-group" id="otOptionsGroup">
+                        <label for="otDurationTypeInput">Durasi OT</label>
+                        <select id="otDurationTypeInput" name="ot_duration_type">
+                            <option value="">-- Pilih durasi --</option>
+                            <option value="2h_pagi">2 jam shift pagi</option>
+                            <option value="2h_malam">2 jam shift malam</option>
+                            <option value="3.5h_pagi">3,5 jam shift pagi</option>
+                        </select>
+                        <small style="color: #666;">OT aktif setelah jam shift reguler (pagi selesai 16:00, malam 05:00).</small>
+                    </div>
+                    <div class="form-group" id="otTargetGroup">
+                        <label for="targetOtInput">Target OT (quantity)</label>
+                        <input type="number" id="targetOtInput" name="target_ot" min="0" placeholder="Target khusus untuk periode OT">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelSetOtFooter" class="btn btn-secondary">Batal</button>
+                <button type="submit" form="setOtForm" class="btn btn-primary">Simpan</button>
             </div>
         </div>
     </div>

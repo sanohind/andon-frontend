@@ -278,6 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const labels = machines.map(m => m.name);
             const targets = machines.map(m => Number(m.target_quantity) || 0);
             const actuals = machines.map(m => Number(m.actual_quantity) || 0);
+            const actualsRegular = machines.map(m => Number(m.actual_quantity_regular) ?? Number(m.actual_quantity) ?? 0);
+            const actualsOt = machines.map(m => Number(m.actual_quantity_ot) ?? 0);
+            const targetsOt = machines.map(m => (m.ot_enabled && m.target_ot != null) ? Number(m.target_ot) : null);
+            const hasOt = targetsOt.some(t => t != null && t > 0);
 
             const chartId = `lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
             const card = document.createElement('div');
@@ -299,35 +303,77 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.getElementById(chartId);
             if (!canvas) return;
 
+            const datasets = [
+                {
+                    type: 'line',
+                    label: 'Target',
+                    data: targets,
+                    borderColor: '#e67700',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    tension: 0,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#e67700',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1,
+                    yAxisID: 'y'
+                }
+            ];
+            if (hasOt) {
+                datasets.push({
+                    type: 'line',
+                    label: 'Target OT',
+                    data: targetsOt,
+                    borderColor: '#d4a017',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [4, 2],
+                    tension: 0,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#d4a017',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1,
+                    yAxisID: 'y'
+                });
+            }
+            if (hasOt && actualsOt.some(v => v > 0)) {
+                datasets.push({
+                    type: 'bar',
+                    label: 'Aktual Reguler',
+                    data: actualsRegular,
+                    backgroundColor: '#4c6ef5',
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    maxBarThickness: 36,
+                    stack: 'actual',
+                    yAxisID: 'y'
+                });
+                datasets.push({
+                    type: 'bar',
+                    label: 'Aktual OT',
+                    data: actualsOt,
+                    backgroundColor: '#d4a017',
+                    borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
+                    maxBarThickness: 36,
+                    stack: 'actual',
+                    yAxisID: 'y'
+                });
+            } else {
+                datasets.push({
+                    type: 'bar',
+                    label: 'Aktual',
+                    data: actuals,
+                    backgroundColor: '#4c6ef5',
+                    borderRadius: 6,
+                    maxBarThickness: 36,
+                    yAxisID: 'y'
+                });
+            }
+
             const chart = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [
-                        {
-                            type: 'line',
-                            label: 'Target',
-                            data: targets,
-                            borderColor: '#e67700',
-                            backgroundColor: 'transparent',
-                            borderWidth: 2,
-                            tension: 0,
-                            pointRadius: 5,
-                            pointBackgroundColor: '#e67700',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Aktual',
-                            data: actuals,
-                            backgroundColor: '#4c6ef5',
-                            borderRadius: 6,
-                            maxBarThickness: 36,
-                            yAxisID: 'y'
-                        }
-                    ]
+                    datasets
                 },
                 options: {
                     responsive: true,
@@ -335,7 +381,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     onClick: (evt, activeEls) => {
                         if (!activeEls.length) return;
                         const hit = activeEls[0];
-                        const isBar = hit.datasetIndex === 1;
+                        const ds = chart.data.datasets[hit.datasetIndex];
+                        const isBar = ds && ds.type === 'bar';
                         if (!isBar) return;
                         const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
                         if (period !== 'daily') {
@@ -348,7 +395,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         const machine = machines[dataIndex];
                         const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
                         const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
-                        openQuantityHourlyModal(machine.name, machine.address, date, shift);
+                        openQuantityHourlyModal(
+                            machine.name,
+                            machine.address,
+                            date,
+                            shift,
+                            Number(machine.target_quantity) || 0
+                        );
                     },
                     plugins: {
                         legend: { display: true, position: 'top' },
@@ -371,6 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         y: {
                             beginAtZero: true,
+                            stacked: hasOt && actualsOt.some(v => v > 0),
                             title: { display: false },
                             ticks: { callback: (v) => formatQuantityValue(v) }
                         }
@@ -392,14 +446,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let quantityHourlyChartInstance = null;
+    let lastQuantityHourlyData = null;
+    let lastQuantityHourlyMeta = null;
 
-    async function openQuantityHourlyModal(machineName, machineAddress, date, shift) {
+    async function openQuantityHourlyModal(machineName, machineAddress, date, shift, targetPerShift) {
         const modal = document.getElementById('quantityHourlyModal');
         const titleEl = document.getElementById('quantityHourlyModalTitle');
         const emptyEl = document.getElementById('quantityHourlyChartEmpty');
         const loadingEl = document.getElementById('quantityHourlyChartLoading');
         const wrapperEl = document.getElementById('quantityHourlyChartWrapper');
         const canvas = document.getElementById('quantityHourlyChartCanvas');
+        const exportBtn = document.getElementById('quantityHourlyExportBtn');
         if (!modal || !titleEl || !canvas) return;
 
         if (quantityHourlyChartInstance) {
@@ -418,6 +475,14 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.style.justifyContent = 'center';
         modal.classList.add('show');
 
+        // Reset state export
+        lastQuantityHourlyData = null;
+        lastQuantityHourlyMeta = null;
+        if (exportBtn) {
+            exportBtn.style.display = 'none';
+            exportBtn.onclick = null;
+        }
+
         try {
             const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
             const res = await fetch(`/api/dashboard/analytics/quantity-hourly?${params.toString()}`, { headers: getAuthHeaders() });
@@ -430,26 +495,89 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            lastQuantityHourlyData = json.data;
+            lastQuantityHourlyMeta = {
+                machineName,
+                machineAddress,
+                date,
+                shift,
+                target: Number(targetPerShift) || 0
+            };
+
             const labels = json.data.map(d => d.snapshot_at);
             const quantities = json.data.map(d => d.quantity);
 
+            const parseHourFromLabel = (label) => {
+                if (!label) return -1;
+                const s = String(label);
+                const match = s.match(/(\d{1,2}):?\d{0,2}$/);
+                if (match) return parseInt(match[1], 10);
+                const parts = s.split(/\s+/);
+                if (parts.length >= 2) {
+                    const timePart = parts[1];
+                    const h = parseInt(timePart.split(':')[0], 10);
+                    return Number.isFinite(h) ? h : -1;
+                }
+                return -1;
+            };
+
+            const isPagi = shift === 'pagi';
+            const dataReguler = quantities.map((q, i) => {
+                const h = parseHourFromLabel(labels[i]);
+                if (h < 0) return q;
+                if (isPagi) return h < 16 ? q : null;
+                return (h >= 20 || h < 5) ? q : null;
+            });
+            const dataOt = quantities.map((q, i) => {
+                const h = parseHourFromLabel(labels[i]);
+                if (h < 0) return null;
+                if (isPagi) return h >= 16 ? q : null;
+                return (h >= 5 && h < 7) ? q : null;
+            });
+            const firstOtIdx = dataOt.findIndex(v => v != null);
+            if (firstOtIdx >= 0 && firstOtIdx < quantities.length) {
+                dataReguler[firstOtIdx] = quantities[firstOtIdx];
+            }
+            const hasOtData = dataOt.some(v => v != null && v > 0);
+
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
+            const hourlyDatasets = [
+                {
+                    label: 'Aktual Reguler',
+                    data: dataReguler,
+                    borderColor: '#4c6ef5',
+                    backgroundColor: 'rgba(76, 110, 245, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#4c6ef5',
+                    segment: { borderColor: '#4c6ef5' }
+                }
+            ];
+            if (hasOtData) {
+                hourlyDatasets.push({
+                    label: 'Aktual OT',
+                    data: dataOt,
+                    borderColor: '#d4a017',
+                    backgroundColor: 'rgba(212, 160, 23, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#d4a017',
+                    segment: { borderColor: '#d4a017' }
+                });
+            } else {
+                hourlyDatasets[0].label = 'Quantity';
+            }
+
             quantityHourlyChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels,
-                    datasets: [{
-                        label: 'Quantity',
-                        data: quantities,
-                        borderColor: '#4c6ef5',
-                        backgroundColor: 'rgba(76, 110, 245, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.2,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#4c6ef5'
-                    }]
+                    datasets: hourlyDatasets
                 },
                 options: {
                     responsive: true,
@@ -476,6 +604,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
+
+            if (exportBtn) {
+                exportBtn.style.display = 'inline-flex';
+                exportBtn.onclick = () => exportQuantityHourlyExcel();
+            }
         } catch (err) {
             console.error('Fetch quantity hourly:', err);
             loadingEl.style.display = 'none';
@@ -504,6 +637,42 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.addEventListener('click', (e) => { if (e.target === modal) closeQuantityHourlyModal(); });
         }
     })();
+
+    function exportQuantityHourlyExcel() {
+        if (!lastQuantityHourlyData || !Array.isArray(lastQuantityHourlyData) || !lastQuantityHourlyData.length) {
+            alert('Tidak ada data hourly untuk diunduh.');
+            return;
+        }
+        const meta = lastQuantityHourlyMeta || {};
+        const shiftRaw = meta.shift || 'pagi';
+        const shiftLabel = shiftRaw === 'malam' ? 'Malam' : 'Pagi';
+        const ts = meta.date || '-';
+        const target = Number(meta.target) || 0;
+
+        const rows = [];
+        let id = 1;
+        lastQuantityHourlyData.forEach(d => {
+            rows.push([
+                id++,
+                meta.machineName || '-',
+                shiftLabel,
+                d.snapshot_at || '-',
+                target,
+                Number(d.quantity) || 0
+            ]);
+        });
+        if (!rows.length) {
+            alert('Tidak ada data hourly untuk diunduh.');
+            return;
+        }
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'QuantityHourly');
+        const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
+        const fileName = `quantity_hourly_${safeName}_${ts}_${shiftLabel}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
 
     function exportLineQuantityExcel(lineData, params, filterInfo) {
         if (!lineData || !Array.isArray(lineData.machines)) {

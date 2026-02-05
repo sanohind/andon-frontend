@@ -123,6 +123,9 @@
 .rt-value.time { color: #0f172a; font-size: 1.25rem; }
 .rt-value.oee { color: var(--rt-yellow); font-size: 1.25rem; }
 .rt-value.target { color: var(--rt-green); font-size: 0.95rem; font-weight: 800; }
+.rt-value.ideal.rt-ideal-ot { color: #d4a017; }
+.rt-value.target .rt-target-ot { color: #d4a017; font-size: 0.85rem; font-weight: 700; display: block; margin-top: 2px; }
+.rt-value.target.rt-has-ot-target { line-height: 1.25; }
 
 /* Make it compact but readable */
 @media (max-width: 1366px) {
