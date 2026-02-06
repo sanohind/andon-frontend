@@ -16,6 +16,7 @@ class DivisionsManager {
         // Problem tracking for manager notifications
         this.problemStartTimes = new Map(); // Track when problems started for 15-minute notification
         this.sentLongDurationNotifications = new Set(); // Track which problems already got 15-min notification
+        this.divisionLineMapping = {}; // Dibangun dari divisions-lines API (divisi/line baru ikut terbaca)
         
         // Alert sound
         this.alertSound = null;
@@ -126,6 +127,16 @@ class DivisionsManager {
             console.log('Divisions data received:', result);
             
             if (result.success && result.data) {
+                // Bangun mapping divisi->line dari data API (divisi/line baru dari Manage Lines ikut terbaca)
+                const normalizeKey = (v) => String(v || '').trim().toLowerCase();
+                this.divisionLineMapping = {};
+                (result.data || []).forEach(d => {
+                    const divName = d.name;
+                    if (divName) {
+                        const lines = (d.lines || []).map(l => (typeof l === 'object' ? l.name : l)).filter(Boolean);
+                        this.divisionLineMapping[normalizeKey(divName)] = lines;
+                    }
+                });
                 this.renderDivisions(result.data);
             } else {
                 console.error('Invalid response format:', result);
@@ -335,15 +346,12 @@ class DivisionsManager {
                 // Filter based on user role
                 if (this.userRole === 'manager' && this.userDivision) {
                     // Manager only sees problems from their division
+                    // Mapping dinamis dari loadDivisions (divisi/line baru dari Manage Lines ikut terbaca)
+                    const normalizeKey = (v) => String(v || '').trim().toLowerCase();
+                    const divKey = normalizeKey(this.userDivision);
+                    const allowedLines = (this.divisionLineMapping && this.divisionLineMapping[divKey]) || [];
                     filteredProblems = result.data.filter(problem => {
-                        // Filter by division lines
-                        const divisionLineMapping = {
-                            'Brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-                            'Chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-                            'Nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-                        };
-                        const allowedLines = divisionLineMapping[this.userDivision] || [];
-                        return problem.line_name && allowedLines.includes(problem.line_name);
+                        return problem.line_name && allowedLines.some(l => normalizeKey(l) === normalizeKey(problem.line_name));
                     });
                 } else if (['maintenance', 'quality', 'engineering'].includes(this.userRole)) {
                     // Department users only see forwarded problems

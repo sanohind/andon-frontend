@@ -67,6 +67,42 @@ app.set('views', path.join(__dirname, 'views'));
 let activeConnections = new Set();
 let lastKnownProblems = new Set(); // Track problems by machine to detect new ones
 
+// Division-line mapping cache (dinamis dari database, bukan hardcode)
+// Digunakan untuk filter manager agar divisi/line baru yang ditambahkan via Manage Lines ikut terbaca
+let divisionLineMappingCache = { mapping: null, fetchedAt: 0 };
+const MAPPING_CACHE_TTL_MS = 60000; // 60 detik
+
+async function getDivisionLineMapping() {
+  const now = Date.now();
+  if (divisionLineMappingCache.mapping && (now - divisionLineMappingCache.fetchedAt) < MAPPING_CACHE_TTL_MS) {
+    return divisionLineMappingCache.mapping;
+  }
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/division-lines`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` }
+    });
+    const data = response.data?.data || response.data;
+    const divisions = Array.isArray(data) ? data : [];
+    const mapping = {};
+    const normalizeKey = (v) => String(v || '').trim().toLowerCase();
+    divisions.forEach((d) => {
+      const divName = d.name;
+      if (!divName) return;
+      const lines = (d.lines || []).map(l => (typeof l === 'object' ? l.name : l)).filter(Boolean);
+      mapping[normalizeKey(divName)] = lines;
+    });
+    divisionLineMappingCache = { mapping, fetchedAt: now };
+    return mapping;
+  } catch (err) {
+    console.error('Error fetching division-line mapping:', err.message);
+    return divisionLineMappingCache.mapping || {};
+  }
+}
+
+// Refresh mapping on startup dan setiap 60 detik
+setInterval(() => getDivisionLineMapping().catch(() => {}), MAPPING_CACHE_TTL_MS);
+getDivisionLineMapping().catch(() => {});
+
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
   
@@ -226,13 +262,9 @@ app.get('/', requireAuth, async (req, res) => {
     const normalizeKey = (v) => String(v || '').trim().toLowerCase();
 
     // Safety filter (render-time) untuk manager agar hanya melihat line sesuai divisi
-    // Management melihat semua data seperti admin
+    // Mapping dinamis dari database via API agar divisi/line baru dari Manage Lines ikut terbaca
     if (req.user && req.user.role === 'manager') {
-      const divisionToLines = {
-        brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-      };
+      const divisionToLines = await getDivisionLineMapping();
       const allowedLines = divisionToLines[normalizeKey(req.user.division)] || [];
       
       const filtered = {};
@@ -254,13 +286,20 @@ app.get('/', requireAuth, async (req, res) => {
       machinesGroupedByLine = filtered;
     }
 
+    // Untuk manager, kirim mapping ke view agar dashboard.js bisa filter problem list
+    let divisionLineMappingForView = null;
+    if (req.user && req.user.role === 'manager') {
+      divisionLineMappingForView = await getDivisionLineMapping();
+    }
+
     res.render('dashboard/index', {
       title: 'IoT Monitoring Dashboard',
       machinesByLine: machinesGroupedByLine,
       user: req.user,
       globalStats: {},
       moment: moment,
-      lineFilter: lineFilter || null
+      lineFilter: lineFilter || null,
+      divisionLineMapping: divisionLineMappingForView
     });
   } catch (error) {
     console.error('Error fetching dashboard data on initial load:', error.message);
@@ -1343,14 +1382,10 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
     // Handle the response format: { success:true, data:[...] } or array
     let tableList = response.data && response.data.data ? response.data.data : (response.data || []);
 
-    // Filter for manager
+    // Filter for manager - mapping dinamis dari database (divisi/line baru ikut terbaca)
     if (req.user.role === 'manager') {
       const normalizeKey = (v) => String(v || '').trim().toLowerCase();
-      const divisionToLines = {
-        brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-        chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-        nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-      };
+      const divisionToLines = await getDivisionLineMapping();
       const allowedLineKeys = new Set((divisionToLines[normalizeKey(req.user.division)] || []).map(normalizeKey));
       tableList = tableList.filter((t) => {
         const line = t.line_name || t.lineName || t.line;
@@ -1721,16 +1756,19 @@ async function fetchAndEmitDashboardData(socket = null) {
                 new_problems: newProblems
             };
 
+            // Mapping divisi->line dari database (untuk filter manager, termasuk divisi/line baru)
+            const divisionLineMapping = await getDivisionLineMapping();
+
             // Emit dashboardUpdate dengan filtering berdasarkan user role
             if (socket && socket.user) {
                 // Untuk single socket dengan user info, kirim data yang sudah difilter
-                const filteredData = filterDataForUser(socket.user, dataToEmit);
+                const filteredData = filterDataForUser(socket.user, dataToEmit, divisionLineMapping);
                 socket.emit('dashboardUpdate', { success: true, data: filteredData });
             } else {
                 // Untuk broadcast ke semua client, filter untuk setiap user
                 io.sockets.sockets.forEach((clientSocket) => {
                     if (clientSocket.user) {
-                        const filteredData = filterDataForUser(clientSocket.user, dataToEmit);
+                        const filteredData = filterDataForUser(clientSocket.user, dataToEmit, divisionLineMapping);
                         clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
                     }
                 });
@@ -1804,7 +1842,7 @@ async function fetchAndEmitDashboardData(socket = null) {
     }
 }
 
-function filterDataForUser(user, data) {
+function filterDataForUser(user, data, divisionLineMapping) {
     if (!user || !user.role) {
         return {
             machine_statuses_by_line: {},
@@ -1826,15 +1864,11 @@ function filterDataForUser(user, data) {
                 new_problems: []
             };
         case 'manager': {
-            // Manager: batasi data hanya pada line yang sesuai divisinya (normalisasi nama line)
+            // Manager: batasi data hanya pada line yang sesuai divisinya
+            // Mapping dinamis dari database via getDivisionLineMapping() - divisi/line baru ikut terbaca
             const normalizeKey = (v) => String(v || '').trim().toLowerCase();
-            const divisionToLines = {
-                brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-                chassis: ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-                nylon: ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-            };
-
-            const allowedLines = divisionToLines[normalizeKey(user.division)] || [];
+            const mapping = divisionLineMapping || {};
+            const allowedLines = mapping[normalizeKey(user.division)] || [];
             const allowedLineKeys = new Set(allowedLines.map(normalizeKey));
 
             // Filter machine statuses by allowed lines (pakai nama line yang dinormalisasi)

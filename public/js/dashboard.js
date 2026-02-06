@@ -25,6 +25,17 @@ class DashboardManager {
         this.userLineName = userDataElement ? userDataElement.dataset.line : null;
         this.userDivision = userDataElement ? userDataElement.dataset.division : null;
         
+        // Division-line mapping dinamis dari server (untuk manager, divisi/line baru dari Manage Lines ikut terbaca)
+        this.divisionLineMapping = {};
+        try {
+            const mappingEl = document.getElementById('divisionLineMappingData');
+            if (mappingEl && mappingEl.textContent) {
+                this.divisionLineMapping = JSON.parse(mappingEl.textContent);
+            }
+        } catch (e) {
+            console.warn('Error parsing division line mapping:', e);
+        }
+        
         // Safely parse machines data
         try {
             this.machines = dashboardDataElement && dashboardDataElement.dataset.machines 
@@ -742,17 +753,11 @@ class DashboardManager {
             });
         } else if (this.userRole === 'manager' && this.userDivision) {
             // Manager hanya melihat problem dari divisi mereka
-            // Filter berdasarkan line_name karena data dari API tidak memiliki field division
+            // Mapping dinamis dari server (divisi/line baru dari Manage Lines ikut terbaca)
             const normalizeKey = (v) => String(v || '').trim().toLowerCase();
-            const divisionLineMapping = {
-                'brazing': ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
-                'chassis': ['Cutting', 'Flaring', 'MF/TK', 'LRFD', 'Assy'],
-                'nylon': ['Injection/Extrude', 'Roda Dua', 'Roda Empat']
-            };
             const divKey = String(this.userDivision || '').trim().toLowerCase();
-            const allowedLines = divisionLineMapping[divKey] || [];
+            const allowedLines = (this.divisionLineMapping && this.divisionLineMapping[divKey]) || [];
             filteredProblems = filteredProblems.filter(problem => {
-                // Filter by line_name yang sesuai dengan divisi manager
                 return problem.line_name && allowedLines.some(l => normalizeKey(l) === normalizeKey(problem.line_name));
             });
         } else if (this.userRole === 'admin') {

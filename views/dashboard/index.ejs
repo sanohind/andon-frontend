@@ -20,6 +20,9 @@
 </head>
 <body style="visibility: visible; display: block; opacity: 1;">
     <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display: none;"></div>
+    <% if (user.role === 'manager' && typeof divisionLineMapping === 'object' && divisionLineMapping) { %>
+    <script type="application/json" id="divisionLineMappingData"><%- JSON.stringify(divisionLineMapping) %></script>
+    <% } %>
     <%
         const flatMachines = [];
         Object.keys(machinesByLine || {}).forEach(lineKey => {
