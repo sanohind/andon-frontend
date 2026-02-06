@@ -447,10 +447,6 @@ class DashboardManager {
             activeProblems = activeProblems.filter(problem => {
                 return problem.line_name && problem.line_name.toString() === this.userLineName.toString();
             });
-        } else if (this.userRole === 'manager' && this.userDivision) {
-            activeProblems = activeProblems.filter(problem => {
-                return problem.division && problem.division.toString() === this.userDivision.toString();
-            });
         }
         // Untuk role lain (admin, maintenance, quality, engineering) tidak difilter
         

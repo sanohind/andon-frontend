@@ -1825,8 +1825,8 @@ function filterDataForUser(user, data) {
                 active_problems: filteredActiveProblems,
                 new_problems: []
             };
-        case 'manager':
-            // Manager: batasi data hanya pada line yang sesuai divisinya
+        case 'manager': {
+            // Manager: batasi data hanya pada line yang sesuai divisinya (normalisasi nama line)
             const normalizeKey = (v) => String(v || '').trim().toLowerCase();
             const divisionToLines = {
                 brazing: ['Leak Test Inspection', 'Support', 'Hand Bending', 'Welding'],
@@ -1835,24 +1835,28 @@ function filterDataForUser(user, data) {
             };
 
             const allowedLines = divisionToLines[normalizeKey(user.division)] || [];
+            const allowedLineKeys = new Set(allowedLines.map(normalizeKey));
 
-            // Filter machine statuses by allowed lines
+            // Filter machine statuses by allowed lines (pakai nama line yang dinormalisasi)
             const ms = data.machine_statuses_by_line || {};
             const filteredMs = {};
             Object.keys(ms).forEach(lineName => {
-                if (allowedLines.includes(lineName)) {
+                if (allowedLineKeys.has(normalizeKey(lineName))) {
                     filteredMs[lineName] = ms[lineName];
                 }
             });
 
-            // Filter active problems by allowed lines
-            const ap = (data.active_problems || []).filter(p => allowedLines.includes(p.line_name));
+            // Filter active problems by allowed lines (berdasarkan line_name)
+            const ap = (data.active_problems || []).filter(p => 
+                p.line_name && allowedLineKeys.has(normalizeKey(p.line_name))
+            );
 
             return {
                 machine_statuses_by_line: filteredMs,
                 active_problems: ap,
                 new_problems: []
             };
+        }
 
         case 'leader':
             // Leader hanya melihat problem dari line mereka
