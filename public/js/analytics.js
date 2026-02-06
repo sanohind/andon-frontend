@@ -506,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const labels = json.data.map(d => d.snapshot_at);
             const quantities = json.data.map(d => d.quantity);
+            const otEnabled = !!json.ot_enabled;
 
             const parseHourFromLabel = (label) => {
                 if (!label) return -1;
@@ -522,29 +523,35 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const isPagi = shift === 'pagi';
+            // Reguler: pagi sampai 15:58 (hour<=15), malam sampai 04:58 (hour>=20 atau hour<=4)
+            // OT: pagi dari 16:58 (hour>=16), malam dari 05:58 (hour 5-6). Hanya jika ot_enabled.
+            const isRegulerHour = (h) => {
+                if (h < 0) return true;
+                if (isPagi) return h <= 15;
+                return h >= 20 || h <= 4;
+            };
+            const isOtHour = (h) => {
+                if (h < 0) return false;
+                if (isPagi) return h >= 16;
+                return h >= 5 && h <= 6;
+            };
+
             const dataReguler = quantities.map((q, i) => {
                 const h = parseHourFromLabel(labels[i]);
-                if (h < 0) return q;
-                if (isPagi) return h < 16 ? q : null;
-                return (h >= 20 || h < 5) ? q : null;
+                if (!otEnabled) return q; // Semua aktual reguler jika OT tidak diaktifkan
+                return isRegulerHour(h) ? q : null;
             });
-            const dataOt = quantities.map((q, i) => {
+            const dataOt = otEnabled ? quantities.map((q, i) => {
                 const h = parseHourFromLabel(labels[i]);
-                if (h < 0) return null;
-                if (isPagi) return h >= 16 ? q : null;
-                return (h >= 5 && h < 7) ? q : null;
-            });
-            const firstOtIdx = dataOt.findIndex(v => v != null);
-            if (firstOtIdx >= 0 && firstOtIdx < quantities.length) {
-                dataReguler[firstOtIdx] = quantities[firstOtIdx];
-            }
-            const hasOtData = dataOt.some(v => v != null && v > 0);
+                return isOtHour(h) ? q : null;
+            }) : null;
+            const hasOtData = otEnabled && dataOt && dataOt.some(v => v != null && v > 0);
 
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
             const hourlyDatasets = [
                 {
-                    label: 'Aktual Reguler',
+                    label: otEnabled ? 'Aktual Reguler' : 'Quantity',
                     data: dataReguler,
                     borderColor: '#4c6ef5',
                     backgroundColor: 'rgba(76, 110, 245, 0.1)',
@@ -556,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     segment: { borderColor: '#4c6ef5' }
                 }
             ];
-            if (hasOtData) {
+            if (hasOtData && dataOt) {
                 hourlyDatasets.push({
                     label: 'Aktual OT',
                     data: dataOt,
@@ -569,8 +576,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointBackgroundColor: '#d4a017',
                     segment: { borderColor: '#d4a017' }
                 });
-            } else {
-                hourlyDatasets[0].label = 'Quantity';
             }
 
             quantityHourlyChartInstance = new Chart(ctx, {
