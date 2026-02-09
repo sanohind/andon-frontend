@@ -393,12 +393,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const isDowntimeActive = isProblem && isDowntimeProblemType(problemType);
       const isIdle = statusNorm === 'idle' || st.is_idle === true || String(st.machine_state || '').toLowerCase() === 'idle';
 
-      // Runtime should PAUSE for:
-      // - idle, or
-      // - cycle-time threshold problem (usually warning), or
-      // - problem that is NOT downtime type (problem without machine/quality/engineering)
-      // Downtime timer remains only for machine/quality/engineering.
-      const isRuntimePaused = isIdle || (isWarning && !isDowntimeActive) || (isProblem && !isDowntimeActive);
+      // Runtime harus PAUSE hanya ketika:
+      // - idle
+      // - problem (termasuk yang bertipe downtime: machine/quality/engineering)
+      // Warning dibiarkan tetap menghitung runtime.
+      // Downtime timer tetap berjalan terpisah untuk problem downtime.
+      const isRuntimePaused = isIdle || isProblem;
 
       // Downtime start timestamp: use st.timestamp when available, clipped to shiftStart
       let downtimeSec = 0;
@@ -430,8 +430,9 @@ document.addEventListener('DOMContentLoaded', () => {
         : 0;
       const runtimePauseTotalSec = Math.max(0, (state.runtimePauseAccumSeconds || 0) + runtimePauseSecCurrent);
 
-      // Run-time: compute from wall clock (persists across refresh)
-      // elapsed since shift start minus downtime minus runtime-pause (idle / cycle-time threshold)
+      // Run-time: hitung dari jam dinding (persist antar refresh)
+      // elapsed sejak awal shift dikurangi downtime dan runtime-pause.
+      // Tidak lagi dikunci oleh Running Hour; berhenti murni saat idle/problem.
       const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
       const runtimeRaw = Math.max(0, elapsedSinceShiftStart - downtimeSec - runtimePauseTotalSec);
 
@@ -450,8 +451,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const cycle = safeNumber(metrics.cycle_time);
       const actualQty = safeNumber(st.quantity);
-      const runningHourSec = computeRunningHourSeconds(now, shiftStart, shift);
       // Ideal Qty = Running Hour (real time, nanti dikurangi jam istirahat) / Cycle Time
+      const runningHourSec = computeRunningHourSeconds(now, shiftStart, shift);
       const idealQty = computeIdealQty(cycle, runningHourSec);
       const oee = computeOee(actualQty, idealQty);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;

@@ -663,6 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 shiftLabel,
                 d.snapshot_at || '-',
                 target,
+                Number(d.ideal_quantity ?? 0) || 0,
                 Number(d.quantity) || 0
             ]);
         });
@@ -670,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Tidak ada data hourly untuk diunduh.');
             return;
         }
-        const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityHourly');
