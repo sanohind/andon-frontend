@@ -256,14 +256,23 @@ class DashboardManager {
         // Modal close events
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
-                this.closeModal();
+                if (e.target.id === 'leaderSetOtModal') {
+                    this.closeLeaderSetOtModal();
+                } else {
+                    this.closeModal();
+                }
             }
         });
 
         // Keyboard events
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.closeModal();
+                const leaderModal = document.getElementById('leaderSetOtModal');
+                if (leaderModal && leaderModal.classList.contains('show')) {
+                    this.closeLeaderSetOtModal();
+                } else {
+                    this.closeModal();
+                }
             }
         });
 
@@ -276,6 +285,79 @@ class DashboardManager {
                 this.loadDashboardData();
             }
         });
+
+        // Leader: Set OT modal
+        const leaderSetOtModal = document.getElementById('leaderSetOtModal');
+        const leaderSetOtModalClose = document.getElementById('leaderSetOtModalClose');
+        const leaderSetOtModalCancel = document.getElementById('leaderSetOtModalCancel');
+        const leaderSetOtForm = document.getElementById('leaderSetOtForm');
+        if (leaderSetOtModal) {
+            if (leaderSetOtModalClose) leaderSetOtModalClose.addEventListener('click', () => this.closeLeaderSetOtModal());
+            if (leaderSetOtModalCancel) leaderSetOtModalCancel.addEventListener('click', () => this.closeLeaderSetOtModal());
+            leaderSetOtModal.addEventListener('click', (e) => { if (e.target === leaderSetOtModal) this.closeLeaderSetOtModal(); });
+            if (leaderSetOtForm) leaderSetOtForm.addEventListener('submit', (e) => this.submitLeaderSetOt(e));
+        }
+    }
+
+    openLeaderSetOtForMachine(address, machineName) {
+        const modal = document.getElementById('leaderSetOtModal');
+        const addressEl = document.getElementById('leaderSetOtAddress');
+        const labelWrap = document.getElementById('leaderSetOtMachineLabelWrap');
+        const labelEl = document.getElementById('leaderSetOtMachineLabel');
+        if (!modal || !addressEl) return;
+        addressEl.value = (address || '').trim();
+        if (labelWrap) labelWrap.style.display = 'block';
+        if (labelEl) labelEl.textContent = machineName || address || 'Mesin';
+        const enabledInput = document.getElementById('leaderSetOtEnabledInput');
+        const durationInput = document.getElementById('leaderSetOtDurationTypeInput');
+        const targetInput = document.getElementById('leaderSetOtTargetInput');
+        if (enabledInput) enabledInput.checked = false;
+        if (durationInput) durationInput.value = '';
+        if (targetInput) targetInput.value = '';
+        modal.classList.add('show');
+    }
+
+    closeLeaderSetOtModal() {
+        const modal = document.getElementById('leaderSetOtModal');
+        if (modal) modal.classList.remove('show');
+    }
+
+    async submitLeaderSetOt(e) {
+        e.preventDefault();
+        const addressEl = document.getElementById('leaderSetOtAddress');
+        const address = (addressEl && addressEl.value || '').trim();
+        if (!address) {
+            alert('Data mesin tidak valid.');
+            return;
+        }
+        const ot_enabled = !!document.getElementById('leaderSetOtEnabledInput').checked;
+        const ot_duration_type = ot_enabled ? (document.getElementById('leaderSetOtDurationTypeInput').value || null) : null;
+        const target_ot = ot_enabled && document.getElementById('leaderSetOtTargetInput').value !== '' ? parseInt(document.getElementById('leaderSetOtTargetInput').value, 10) : null;
+        if (ot_enabled && !ot_duration_type) {
+            alert('Pilih durasi OT jika OT diaktifkan.');
+            return;
+        }
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/ot-settings`, {
+                method: 'PUT',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify({ ot_enabled, ot_duration_type, target_ot })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                alert(data.message || 'Gagal menyimpan pengaturan OT.');
+                return;
+            }
+            this.closeLeaderSetOtModal();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Pengaturan OT telah disimpan.' });
+            } else {
+                alert('Pengaturan OT telah disimpan.');
+            }
+        } catch (err) {
+            console.error('Leader Set OT error:', err);
+            alert('Gagal menyimpan pengaturan OT.');
+        }
     }
 
     async loadDashboardData() {
@@ -1156,6 +1238,10 @@ class DashboardManager {
                 const machineStatus = await this.getCurrentMachineStatus(machine, machineLine);
                 console.log('Machine status received:', machineStatus);
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
+                const setOtBtn = modalBody.querySelector('.btn-leader-set-ot-detail');
+                if (setOtBtn && machineStatus && machineStatus.address) {
+                    setOtBtn.addEventListener('click', () => this.openLeaderSetOtForMachine(machineStatus.address, machine));
+                }
             }
         } catch (error) {
             console.error('Error loading problem detail:', error);
@@ -1340,6 +1426,14 @@ class DashboardManager {
                 </ul>
 
                 ${messageBoxHTML}
+
+                ${this.userRole === 'leader' && (machineStatus.address || '') ? `
+                <div class="modal-detail-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+                    <button type="button" class="btn btn-leader-set-ot-detail">
+                        <i class="fas fa-moon"></i> Set OT (Lembur)
+                    </button>
+                </div>
+                ` : ''}
             </div>
         `;
     }
@@ -3734,6 +3828,12 @@ function showProblemDetail(machine, problemId = null, machineLine = null) {
 
 function closeModal() {
     dashboardManager.closeModal();
+}
+
+function openLeaderSetOtForMachine(machineAddress, machineName) {
+    if (dashboardManager) {
+        dashboardManager.openLeaderSetOtForMachine(machineAddress, machineName);
+    }
 }
 
 function resolveProblem() {

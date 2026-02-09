@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ? String(document.body.dataset.lineFilter).trim()
     : '';
 
-  const RUNNING_HOUR = 8; // fixed per requirement & existing OEE logic
   const SHIFT_TZ = 'Asia/Jakarta';
 
   // Maps
@@ -148,19 +147,28 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  function computeIdealQty(cycleSeconds, otExtraSeconds = 0) {
+  /** Ideal Qty = Run Time (detik) / Cycle Time. Berubah seiring bertambahnya Run Time. */
+  function computeIdealQty(cycleSeconds, runtimeSeconds) {
     const c = safeNumber(cycleSeconds);
+    const r = Math.max(0, safeNumber(runtimeSeconds));
     if (c <= 0) return 0;
-    const totalSec = (RUNNING_HOUR * 3600) + safeNumber(otExtraSeconds);
-    return Math.floor(totalSec / c);
+    return Math.floor(r / c);
   }
 
-  function computeOee(actualQty, cycleSeconds) {
-    const cycle = safeNumber(cycleSeconds);
+  /** OEE = (Actual Qty / Ideal Qty) * 100, dengan Ideal Qty = Run Time / Cycle Time. */
+  function computeOee(actualQty, idealQty) {
     const actual = safeNumber(actualQty);
-    if (cycle <= 0) return null;
-    const oee = ((actual * cycle) / (RUNNING_HOUR * 3600)) * 100;
+    const ideal = Math.max(0, safeNumber(idealQty));
+    if (ideal <= 0) return null;
+    const oee = (actual / ideal) * 100;
     return Number.isFinite(oee) ? oee : null;
+  }
+
+  /** Running Hour: waktu berjalan 07:00-16:00 (pagi) atau 20:00-05:00 (malam), tidak peduli Idle/Problem. */
+  function computeRunningHourSeconds(now, shiftStart) {
+    const maxSeconds = 9 * 3600; // 9 jam per shift (07-16 pagi, 20-05 malam)
+    const elapsed = Math.max(0, now.diff(shiftStart, 'seconds'));
+    return Math.min(elapsed, maxSeconds);
   }
 
   function normalizeProblemType(v) {
@@ -223,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { key: 'total', label: 'Total Product' },
       { key: 'ng', label: 'No-Good' },
       { key: 'runtime', label: 'Run-Time' },
-      { key: 'downtime', label: 'Down-Time' },
+      { key: 'runninghour', label: 'Running Hour' },
       { key: 'oee', label: 'OEE' },
       { key: 'target', label: 'Target' }
     ];
@@ -372,11 +380,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const runtimeSeconds = (state.pausedValue != null) ? state.pausedValue : runtimeRaw;
 
       const cycle = safeNumber(metrics.cycle_time);
-      const otActive = isOtActive(metrics, now);
-      const otExtraSec = otActive ? getOtDurationSeconds(metrics.ot_duration_type) : 0;
-      const idealQty = computeIdealQty(cycle, otExtraSec);
       const actualQty = safeNumber(st.quantity);
-      const oee = computeOee(actualQty, cycle);
+      const idealQty = computeIdealQty(cycle, runtimeSeconds);
+      const oee = computeOee(actualQty, idealQty);
+      const runningHourSec = computeRunningHourSeconds(now, shiftStart);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
       const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
 
@@ -389,15 +396,10 @@ document.addEventListener('DOMContentLoaded', () => {
           if (el) el.textContent = text;
         };
         setText('ideal', String(idealQty));
-        const idealEl = document.getElementById(`b${blockIdx}_ideal_${keyAddr}`);
-        if (idealEl) {
-          if (otActive) idealEl.classList.add('rt-ideal-ot');
-          else idealEl.classList.remove('rt-ideal-ot');
-        }
         setText('total', String(actualQty));
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
-        setText('downtime', fmtHHMMSS(downtimeSec));
+        setText('runninghour', fmtHHMMSS(runningHourSec));
         setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
         const targetHtml = (target == null ? '-' : String(target)) +
           (targetOt != null && metrics.ot_enabled
@@ -415,12 +417,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
 
-      // dot status
+      // dot status: problem (termasuk cycle time) -> red, idle/warning -> yellow, normal -> green (sesuai dashboard line)
       const dot = document.querySelector(`[data-dot="${CSS.escape(addr)}"]`);
       if (dot) {
         dot.classList.remove('ok', 'warn', 'bad');
-        if (isDowntimeActive) dot.classList.add('bad');
-        else if (isWarning) dot.classList.add('warn');
+        if (isProblem) dot.classList.add('bad');
+        else if (isIdle || isWarning) dot.classList.add('warn');
         else dot.classList.add('ok');
       }
     });

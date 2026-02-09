@@ -16,6 +16,33 @@
             display: block !important;
             opacity: 1 !important;
         }
+        .leader-set-ot-machine-name { margin: 0; font-weight: 600; color: var(--primary-color, #1a1a2e); }
+        .btn-leader-set-ot-detail {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.5rem 1rem; background: #d4a017; color: white;
+            border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+        }
+        .btn-leader-set-ot-detail:hover { opacity: 0.9; }
+        /* Set OT modal: checkbox satu baris */
+        .form-group-ot-checkbox { text-align: left; margin-bottom: 1rem; }
+        .form-group-ot-checkbox .label-ot-checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--dark-color, #333);
+            margin-bottom: 0;
+        }
+        .form-group-ot-checkbox .ot-checkbox-input {
+            width: auto;
+            min-width: 1.1rem;
+            height: 1.1rem;
+            margin: 0;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+        .form-group-ot-checkbox .ot-checkbox-text { user-select: none; }
     </style>
 </head>
 <body style="visibility: visible; display: block; opacity: 1;">
@@ -289,6 +316,49 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeTicketingModal()">Batal</button>
                 <button class="btn btn-primary" onclick="submitTicketingForm()">Simpan Ticketing</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set OT Modal (hanya untuk leader di dashboard line) -->
+    <div class="modal" id="leaderSetOtModal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-moon"></i> Set OT (Lembur)</h3>
+                <button type="button" class="modal-close" id="leaderSetOtModalClose">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="leaderSetOtForm">
+                    <div class="form-group" id="leaderSetOtMachineLabelWrap" style="display: none;">
+                        <label>Mesin</label>
+                        <p id="leaderSetOtMachineLabel" class="leader-set-ot-machine-name"></p>
+                    </div>
+                    <input type="hidden" id="leaderSetOtAddress">
+                    <div class="form-group form-group-ot-checkbox">
+                        <label class="label-ot-checkbox" for="leaderSetOtEnabledInput">
+                            <input type="checkbox" id="leaderSetOtEnabledInput" name="ot_enabled" class="ot-checkbox-input">
+                            <span class="ot-checkbox-text">Aktifkan OT (Over Time / Lembur)</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="leaderSetOtDurationTypeInput">Durasi OT</label>
+                        <select id="leaderSetOtDurationTypeInput" name="ot_duration_type">
+                            <option value="">-- Pilih durasi --</option>
+                            <option value="2h_pagi">2 jam shift pagi</option>
+                            <option value="2h_malam">2 jam shift malam</option>
+                            <option value="3.5h_pagi">3,5 jam shift pagi</option>
+                        </select>
+                        <small style="color: #666;">OT aktif setelah jam shift reguler (pagi selesai 16:00, malam 05:00).</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="leaderSetOtTargetInput">Target OT (quantity)</label>
+                        <input type="number" id="leaderSetOtTargetInput" name="target_ot" min="0" placeholder="Target khusus untuk periode OT">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="leaderSetOtModalCancel" class="btn btn-secondary">Batal</button>
+                <button type="submit" form="leaderSetOtForm" class="btn btn-primary">Simpan</button>
             </div>
         </div>
     </div>

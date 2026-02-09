@@ -1518,7 +1518,7 @@ app.put('/api/inspection-tables/address/:address/ot-settings', requireAuthAPI, a
   if (req.user?.role === 'management') {
     return res.status(403).json({ message: 'Role management hanya dapat melihat data, tidak dapat melakukan perubahan.' });
   }
-  if (!['admin', 'manager'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'manager', 'leader'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/inspection-tables/address/${encodeURIComponent(req.params.address)}/ot-settings`, req.body, {
       headers: {
