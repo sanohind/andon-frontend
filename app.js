@@ -1577,6 +1577,35 @@ app.post('/api/inspection-tables', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Break schedules (jam kerja & istirahat) - GET untuk semua auth, PUT hanya admin
+app.get('/api/break-schedules', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/break-schedules`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || req.user?.token || ''}`, 'Accept': 'application/json' }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+app.put('/api/break-schedules', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Hanya admin yang dapat mengatur jam istirahat.' });
+  }
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/break-schedules`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
 app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
     try {
         const machineName = req.params.name;

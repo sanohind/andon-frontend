@@ -387,6 +387,66 @@
             }
         }
 
+        /* Break schedule (admin only) */
+        .break-schedule-container h3 { margin-bottom: 16px; }
+        .break-schedule-scroll { overflow-x: auto; margin-bottom: 16px; }
+        .break-schedule-table {
+            width: 100%;
+            min-width: 960px;
+            border-collapse: collapse;
+            margin-bottom: 0;
+            font-size: 0.9em;
+            table-layout: fixed;
+        }
+        .break-schedule-table col.col-hari { width: 90px; }
+        .break-schedule-table col.col-shift { width: 70px; }
+        .break-schedule-table col.col-jam-kerja { width: 95px; }
+        .break-schedule-table col.col-istirahat { width: 170px; }
+        .break-schedule-table th,
+        .break-schedule-table td {
+            border: 1px solid #eef2f7;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        .break-schedule-table th {
+            background: #f8f9fc;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        .break-schedule-table td.break-cell-wrap {
+            padding: 6px 8px;
+        }
+        .break-schedule-table .break-cell-wrap .break-pair {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+        .break-schedule-table .break-cell-wrap input[type="time"] {
+            width: 75px;
+            min-width: 75px;
+            max-width: 75px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            box-sizing: border-box;
+            font-size: 0.9em;
+        }
+        .break-schedule-table .break-cell-wrap .break-pair span.dash { color: #999; font-weight: 700; }
+        .break-schedule-table td:not(.break-cell-wrap) input[type="time"] {
+            width: 100%;
+            min-width: 75px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            box-sizing: border-box;
+            font-size: 0.9em;
+        }
+        .break-schedule-table .break-cell-wrap.empty { color: #999; }
+        .break-schedule-actions { margin-top: 12px; }
+
     </style>
 </head>
 <body>
@@ -602,6 +662,46 @@
                     </tbody>
                 </table>
             </div>
+
+            <% if (user.role === 'admin') { %>
+            <div class="form-container break-schedule-container" id="breakScheduleSection" style="margin-top: 2rem;">
+                <h3><i class="fas fa-coffee"></i> Set Jam Istirahat</h3>
+                <div id="breakScheduleFormContainer" class="break-schedule-scroll">
+                    <table class="break-schedule-table" id="breakScheduleTable">
+                        <colgroup>
+                            <col class="col-hari">
+                            <col class="col-shift">
+                            <col class="col-jam-kerja">
+                            <col class="col-jam-kerja">
+                            <col class="col-istirahat">
+                            <col class="col-istirahat">
+                            <col class="col-istirahat">
+                            <col class="col-istirahat">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Hari</th>
+                                <th>Shift</th>
+                                <th>Jam Kerja (Mulai)</th>
+                                <th>Jam Kerja (Selesai)</th>
+                                <th>Istirahat 1</th>
+                                <th>Istirahat 2</th>
+                                <th>Istirahat 3</th>
+                                <th>Istirahat 4</th>
+                            </tr>
+                        </thead>
+                        <tbody id="breakScheduleTbody">
+                            <!-- Diisi oleh JS -->
+                        </tbody>
+                    </table>
+                    <div class="break-schedule-actions">
+                        <button type="button" id="saveBreakSchedulesBtn" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Simpan Jadwal Istirahat
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <% } %>
         </div>
     </main>
 

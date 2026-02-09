@@ -19,6 +19,125 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = userData ? userData.dataset.role : null;
     const userDivision = userData ? userData.dataset.division : null;
 
+    // Break schedules (admin only)
+    const breakScheduleSection = document.getElementById('breakScheduleSection');
+    const breakScheduleTbody = document.getElementById('breakScheduleTbody');
+    const saveBreakSchedulesBtn = document.getElementById('saveBreakSchedulesBtn');
+
+    function getAuthHeaders() {
+        const value = `; ${document.cookie}`;
+        const parts = value.split('; auth_token=');
+        const token = parts.length === 2 ? parts.pop().split(';').shift() : null;
+        return {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+    }
+
+    const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    const BREAK_SLOTS_BY_DAY = { 1: 3, 2: 3, 3: 3, 4: 3, 5: 4, 6: 2, 7: 2 };
+
+    /** Normalize time to HH:MM so input type="time" shows jam dan menit */
+    function normalizeTimeStr(s) {
+        if (!s || typeof s !== 'string') return '';
+        s = s.trim();
+        const m = s.match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return s;
+        const h = String(parseInt(m[1], 10)).padStart(2, '0');
+        const min = String(parseInt(m[2], 10)).padStart(2, '0');
+        return h + ':' + min;
+    }
+
+    function renderBreakScheduleTable(data) {
+        if (!breakScheduleTbody) return;
+        const list = data || [];
+        const byKey = {};
+        list.forEach((row) => { byKey[`${row.day_of_week}_${row.shift}`] = row; });
+        let html = '';
+        for (let day = 1; day <= 7; day++) {
+            for (const shift of ['pagi', 'malam']) {
+                const key = `${day}_${shift}`;
+                const row = byKey[key] || { day_of_week: day, shift, work_start: '', work_end: '', break_1_start: '', break_1_end: '', break_2_start: '', break_2_end: '', break_3_start: '', break_3_end: '', break_4_start: '', break_4_end: '' };
+                const slots = BREAK_SLOTS_BY_DAY[day] || 3;
+                html += '<tr data-day="' + day + '" data-shift="' + shift + '">';
+                html += '<td>' + DAY_NAMES[day] + '</td>';
+                html += '<td>' + (shift === 'pagi' ? 'Pagi' : 'Malam') + '</td>';
+                html += '<td><input type="time" data-field="work_start" value="' + normalizeTimeStr(row.work_start) + '"></td>';
+                html += '<td><input type="time" data-field="work_end" value="' + normalizeTimeStr(row.work_end) + '"></td>';
+                for (let b = 1; b <= 4; b++) {
+                    const show = b <= slots;
+                    const startVal = normalizeTimeStr(row['break_' + b + '_start'] || '');
+                    const endVal = normalizeTimeStr(row['break_' + b + '_end'] || '');
+                    html += '<td class="break-cell-wrap' + (show ? '' : ' empty') + '">';
+                    if (show) {
+                        html += '<div class="break-pair">';
+                        html += '<input type="time" data-field="break_' + b + '_start" value="' + startVal + '">';
+                        html += '<span class="dash">–</span>';
+                        html += '<input type="time" data-field="break_' + b + '_end" value="' + endVal + '">';
+                        html += '</div>';
+                    } else {
+                        html += '–';
+                    }
+                    html += '</td>';
+                }
+                html += '</tr>';
+            }
+        }
+        breakScheduleTbody.innerHTML = html;
+    }
+
+    async function loadBreakSchedules() {
+        if (!breakScheduleSection) return;
+        try {
+            const res = await fetch('/api/break-schedules', { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) renderBreakScheduleTable(json.data);
+            else renderBreakScheduleTable([]);
+        } catch (e) {
+            console.error('Load break schedules:', e);
+            renderBreakScheduleTable([]);
+        }
+    }
+
+    if (saveBreakSchedulesBtn && breakScheduleTbody) {
+        saveBreakSchedulesBtn.addEventListener('click', async () => {
+            const rows = breakScheduleTbody.querySelectorAll('tr[data-day][data-shift]');
+            const schedules = [];
+            rows.forEach((tr) => {
+                const day = parseInt(tr.dataset.day, 10);
+                const shift = tr.dataset.shift;
+                const work_start = (tr.querySelector('input[data-field="work_start"]') || {}).value || null;
+                const work_end = (tr.querySelector('input[data-field="work_end"]') || {}).value || null;
+                const payload = { day_of_week: day, shift, work_start: work_start || null, work_end: work_end || null };
+                for (let b = 1; b <= 4; b++) {
+                    const s = (tr.querySelector('input[data-field="break_' + b + '_start"]') || {}).value || null;
+                    const e = (tr.querySelector('input[data-field="break_' + b + '_end"]') || {}).value || null;
+                    payload['break_' + b + '_start'] = s || null;
+                    payload['break_' + b + '_end'] = e || null;
+                }
+                schedules.push(payload);
+            });
+            try {
+                const res = await fetch('/api/break-schedules', {
+                    method: 'PUT',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ schedules })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.message || 'Gagal menyimpan.');
+                if (json.success) {
+                    alert('Jadwal istirahat berhasil disimpan.');
+                    if (json.data) renderBreakScheduleTable(json.data);
+                } else throw new Error(json.message || 'Gagal menyimpan.');
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        });
+    }
+
+    if (breakScheduleSection) loadBreakSchedules();
+
     // Disable write operations for management role
     if (userRole === 'management') {
         // Hide add form

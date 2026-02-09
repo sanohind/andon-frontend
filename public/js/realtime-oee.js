@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Maps
   const metricsByAddress = new Map(); // address -> { cycle_time, target_quantity, oee, name, line_name }
   const machineState = new Map(); // address -> runtimeSecondsAccumulated, downtimeStartIso, lastShiftKey
+  let breakSchedulesByKey = {}; // "${day_of_week}_${shift}" -> { work_start, work_end, breaks: [{ start, end }] }
 
   let lastStatusPayload = null;
   let machinesFlat = []; // [{ address, name, line_name }]
@@ -164,11 +165,77 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(oee) ? oee : null;
   }
 
-  /** Running Hour: waktu berjalan 07:00-16:00 (pagi) atau 20:00-05:00 (malam), tidak peduli Idle/Problem. */
-  function computeRunningHourSeconds(now, shiftStart) {
-    const maxSeconds = 9 * 3600; // 9 jam per shift (07-16 pagi, 20-05 malam)
+  /** Parse "HH:mm" to { h, m }. */
+  function parseTimeStr(s) {
+    if (!s || typeof s !== 'string') return null;
+    const parts = s.trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!parts) return null;
+    return { h: parseInt(parts[1], 10), m: parseInt(parts[2], 10) };
+  }
+
+  /** Running Hour: real time, berhenti selama jam istirahat. Menggunakan jam kerja & istirahat dari break schedule jika ada. */
+  function computeRunningHourSeconds(now, shiftStart, shift) {
     const elapsed = Math.max(0, now.diff(shiftStart, 'seconds'));
-    return Math.min(elapsed, maxSeconds);
+    const maxSeconds = 9 * 3600;
+    try {
+      const dayOfWeek = shiftStart.isoWeekday();
+      const key = `${dayOfWeek}_${shift}`;
+      const schedule = breakSchedulesByKey[key];
+      if (!schedule || !schedule.work_start || !schedule.work_end) {
+        return Math.min(elapsed, maxSeconds);
+      }
+      const base = shiftStart.clone().startOf('day');
+      const ws = parseTimeStr(schedule.work_start);
+      const we = parseTimeStr(schedule.work_end);
+      if (!ws || !we) return Math.min(elapsed, maxSeconds);
+      let workStartM = base.clone().hour(ws.h).minute(ws.m).second(0).millisecond(0);
+      let workEndM = base.clone().hour(we.h).minute(we.m).second(0).millisecond(0);
+      if (we.h < ws.h || (we.h === ws.h && we.m < ws.m)) workEndM = workEndM.add(1, 'day');
+      const maxFn = (typeof moment.max === 'function') ? moment.max : (a, b) => (a.isAfter(b) ? a : b);
+      const minFn = (typeof moment.min === 'function') ? moment.min : (a, b) => (a.isBefore(b) ? a : b);
+      const effectiveStart = maxFn(shiftStart, workStartM);
+      const effectiveEnd = minFn(now, workEndM);
+      let runningSec = Math.max(0, effectiveEnd.diff(effectiveStart, 'seconds'));
+      const breaks = schedule.breaks || [];
+      const isMalam = shift === 'malam';
+      for (let i = 0; i < breaks.length; i++) {
+        const b = breaks[i];
+        const bs = parseTimeStr(b.start);
+        const be = parseTimeStr(b.end);
+        if (!bs || !be) continue;
+        let breakStartM = base.clone().hour(bs.h).minute(bs.m).second(0).millisecond(0);
+        let breakEndM = base.clone().hour(be.h).minute(be.m).second(0).millisecond(0);
+        if (isMalam && bs.h < 12) { breakStartM = breakStartM.add(1, 'day'); breakEndM = breakEndM.add(1, 'day'); }
+        else if (be.h < bs.h || (be.h === bs.h && be.m < bs.m)) breakEndM = breakEndM.add(1, 'day');
+        const overStart = maxFn(effectiveStart, breakStartM);
+        const overEnd = minFn(effectiveEnd, breakEndM);
+        const overSec = Math.max(0, overEnd.diff(overStart, 'seconds'));
+        runningSec -= overSec;
+      }
+      return Math.max(0, runningSec);
+    } catch (e) {
+      return Math.min(elapsed, maxSeconds);
+    }
+  }
+
+  async function loadBreakSchedules() {
+    try {
+      const res = await fetch('/api/break-schedules', { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (!json.success || !Array.isArray(json.data)) return;
+      const byKey = {};
+      json.data.forEach((row) => {
+        const key = `${row.day_of_week}_${row.shift}`;
+        byKey[key] = {
+          work_start: row.work_start,
+          work_end: row.work_end,
+          breaks: row.breaks || []
+        };
+      });
+      breakSchedulesByKey = byKey;
+    } catch (e) {
+      // ignore
+    }
   }
 
   function normalizeProblemType(v) {
@@ -277,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateValues() {
     if (!lastStatusPayload) return;
     const now = nowTz();
-    const { shiftStart, shiftKey } = getShiftInfo(now);
+    const { shift, shiftStart, shiftKey } = getShiftInfo(now);
 
     // Build quick lookup by address from status payload
     const machineLookup = new Map(); // address -> status object
@@ -291,6 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     machinesFlat.forEach((m) => {
+      try {
       const addr = String(m.address).trim();
       const st = machineLookup.get(addr) || {};
       const metrics = metricsByAddress.get(addr) || {};
@@ -337,7 +405,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isDowntimeActive) {
         const tsRaw = st.timestamp || st.problem_timestamp || null;
         const ts = tsRaw ? moment.tz(tsRaw, ['YYYY-MM-DD HH:mm:ss', moment.ISO_8601], SHIFT_TZ) : null;
-        const start = ts && ts.isValid() ? moment.max(ts, shiftStart) : shiftStart;
+        const maxM = (typeof moment.max === 'function') ? moment.max : (a, b) => (a.isAfter(b) ? a : b);
+        const start = ts && ts.isValid() ? maxM(ts, shiftStart) : shiftStart;
         if (!state.downtimeStartIso) state.downtimeStartIso = start.toISOString();
         const ds = moment(state.downtimeStartIso);
         downtimeSec = Math.max(0, now.diff(ds, 'seconds'));
@@ -381,9 +450,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const cycle = safeNumber(metrics.cycle_time);
       const actualQty = safeNumber(st.quantity);
-      const idealQty = computeIdealQty(cycle, runtimeSeconds);
+      const runningHourSec = computeRunningHourSeconds(now, shiftStart, shift);
+      // Ideal Qty = Running Hour (real time, nanti dikurangi jam istirahat) / Cycle Time
+      const idealQty = computeIdealQty(cycle, runningHourSec);
       const oee = computeOee(actualQty, idealQty);
-      const runningHourSec = computeRunningHourSeconds(now, shiftStart);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
       const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
 
@@ -396,6 +466,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (el) el.textContent = text;
         };
         setText('ideal', String(idealQty));
+        const idealEl = document.getElementById(`b${blockIdx}_ideal_${keyAddr}`);
+        if (idealEl) {
+          idealEl.classList.remove('rt-ideal-warn', 'rt-ideal-bad');
+          if (isProblem) idealEl.classList.add('rt-ideal-bad');
+          else if (isIdle || isWarning) idealEl.classList.add('rt-ideal-warn');
+        }
         setText('total', String(actualQty));
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
@@ -424,6 +500,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isProblem) dot.classList.add('bad');
         else if (isIdle || isWarning) dot.classList.add('warn');
         else dot.classList.add('ok');
+      }
+      } catch (err) {
+        console.warn('realtime-oee updateValues error for machine:', m && m.address, err);
       }
     });
   }
@@ -510,11 +589,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   (async function init() {
     await loadMetrics();
+    loadBreakSchedules().catch(function() {});
     await loadInitialStatus();
     initSocket();
-    // Refresh metrics periodically
     setInterval(loadMetrics, 60000);
-    // Tick every second
+    setInterval(function() { loadBreakSchedules().catch(function() {}); }, 60000);
     setInterval(updateValues, 1000);
   })();
 });

@@ -124,6 +124,19 @@
 .rt-value.oee { color: var(--rt-yellow); font-size: 1.25rem; }
 .rt-value.target { color: var(--rt-green); font-size: 0.95rem; font-weight: 800; }
 .rt-value.ideal.rt-ideal-ot { color: #d4a017; }
+/* Ideal Qty berkedip mengikuti warna status saat idle atau problem */
+@keyframes rt-ideal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.rt-value.ideal.rt-ideal-warn {
+  color: var(--rt-yellow);
+  animation: rt-ideal-blink 1.2s ease-in-out infinite;
+}
+.rt-value.ideal.rt-ideal-bad {
+  color: #ff4d4f;
+  animation: rt-ideal-blink 1.2s ease-in-out infinite;
+}
 .rt-value.target .rt-target-ot { color: #d4a017; font-size: 0.85rem; font-weight: 700; display: block; margin-top: 2px; }
 .rt-value.target.rt-has-ot-target { line-height: 1.25; }
 
