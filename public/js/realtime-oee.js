@@ -424,6 +424,19 @@ document.addEventListener('DOMContentLoaded', () => {
         state.runtimePauseStartIso = null;
       }
 
+      // Hitung elapsed shift & runtime tanpa pause (hanya kurangi downtime)
+      const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
+      const runtimeWithoutPause = Math.max(0, elapsedSinceShiftStart - downtimeSec);
+
+      // BUGFIX: Jika kita sedang dalam keadaan paused dan pernah menyimpan pausedValue
+      // (misalnya setelah reload / login ulang), rekalkulasi total durasi pause
+      // agar runtimeRaw SELALU kembali ke pausedValue saat resume,
+      // tidak meloncat mengikuti lama istirahat.
+      if (state.pausedValue != null) {
+        const desiredPauseTotal = Math.max(0, runtimeWithoutPause - state.pausedValue);
+        state.runtimePauseAccumSeconds = desiredPauseTotal;
+      }
+
       const runtimePauseSecCurrent = state.runtimePauseStartIso
         ? Math.max(0, now.diff(moment(state.runtimePauseStartIso), 'seconds'))
         : 0;
@@ -431,9 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Run-time: hitung dari jam dinding (persist antar refresh)
       // elapsed sejak awal shift dikurangi downtime dan runtime-pause.
-      // Tidak lagi dikunci oleh Running Hour; berhenti murni saat idle/problem.
-      const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
-      const runtimeRaw = Math.max(0, elapsedSinceShiftStart - downtimeSec - runtimePauseTotalSec);
+      const runtimeRaw = Math.max(0, runtimeWithoutPause - runtimePauseTotalSec);
 
       // Freeze runtime when paused, restore across refresh
       if (isRuntimePaused) {
