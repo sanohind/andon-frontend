@@ -391,14 +391,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const isProblem = statusNorm === 'problem';
       const isWarning = statusNorm === 'warning';
       const isDowntimeActive = isProblem && isDowntimeProblemType(problemType);
+      // Backend mengirim status: 'normal' | 'warning' | 'problem'. Tidak mengirim 'idle'.
+      // Saat mesin idle (quantity tidak naik), backend mengirim 'warning'. Jadi kita anggap warning = idle untuk pause.
       const isIdle = statusNorm === 'idle' || st.is_idle === true || String(st.machine_state || '').toLowerCase() === 'idle';
+      const isIdleOrWarning = isIdle || isWarning;
 
-      // Runtime harus PAUSE hanya ketika:
-      // - idle
-      // - problem (termasuk yang bertipe downtime: machine/quality/engineering)
-      // Warning dibiarkan tetap menghitung runtime.
-      // Downtime timer tetap berjalan terpisah untuk problem downtime.
-      const isRuntimePaused = isIdle || isProblem;
+      // Runtime harus PAUSE ketika: idle ATAU problem (termasuk warning = idle dari backend).
+      const isRuntimePaused = isIdleOrWarning || isProblem;
 
       // Downtime start timestamp: use st.timestamp when available, clipped to shiftStart
       let downtimeSec = 0;
