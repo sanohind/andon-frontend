@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let machinesFlat = []; // [{ address, name, line_name }]
   let blocks = []; // chunked
 
+  // Server time sync: offset (ms) = server time - device time, agar semua device menampilkan waktu sama
+  let lastServerTimeOffsetMs = 0;
+  let lastPayloadServerTimeIso = null;
+
   function getCookieValue(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
@@ -50,6 +54,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function nowTz() {
     return window.moment && moment.tz ? moment.tz(SHIFT_TZ) : moment();
+  }
+
+  /** Waktu "sekarang" menurut server (untuk Run Time / Running Hour yang konsisten di semua device). */
+  function serverNow() {
+    const deviceMs = Date.now();
+    const serverMs = deviceMs + lastServerTimeOffsetMs;
+    return window.moment && moment.tz ? moment(serverMs).tz(SHIFT_TZ) : moment(serverMs);
+  }
+
+  async function fetchServerTime() {
+    try {
+      const res = await fetch('/api/server-time', { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (!res.ok || !json.success || !json.server_time) return;
+      const serverMs = moment(json.server_time).valueOf();
+      const deviceMs = Date.now();
+      lastServerTimeOffsetMs = serverMs - deviceMs;
+    } catch (e) {
+      // ignore; tetap pakai device time
+    }
   }
 
   function getShiftInfo(now) {
@@ -343,11 +367,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateValues() {
     if (!lastStatusPayload) return;
-    const now = nowTz();
+    const now = serverNow();
     const { shift, shiftStart, shiftKey } = getShiftInfo(now);
 
-    // Build quick lookup by address from status payload
-    const machineLookup = new Map(); // address -> status object
+    const machineLookup = new Map();
     Object.keys(lastStatusPayload.machine_statuses_by_line || {}).forEach((ln) => {
       const arr = lastStatusPayload.machine_statuses_by_line[ln] || [];
       arr.forEach((m) => {
@@ -363,106 +386,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const st = machineLookup.get(addr) || {};
       const metrics = metricsByAddress.get(addr) || {};
 
-      // Track downtime + runtime-pause state (per machine)
-      if (!machineState.has(addr)) {
-        machineState.set(addr, {
-          lastShiftKey: shiftKey,
-          downtimeStartIso: null,
-          runtimePauseStartIso: null,
-          runtimePauseAccumSeconds: 0,
-          pausedValue: runtimePauseStorage.load(addr, shiftKey)
-        });
-      }
-      const state = machineState.get(addr);
-
-      // shift change -> reset tracking
-      if (state.lastShiftKey !== shiftKey) {
-        state.downtimeStartIso = null;
-        state.runtimePauseStartIso = null;
-        state.runtimePauseAccumSeconds = 0;
-        state.pausedValue = null;
-        runtimePauseStorage.clear(addr, state.lastShiftKey);
-        state.lastShiftKey = shiftKey;
-      }
-
-      // Determine downtime active (only for machine/quality/engineering)
-      const problemType = st.problem_type || st.tipe_problem || '';
-      const statusNorm = String(st.status || '').toLowerCase(); // normal|warning|problem|idle (varies)
+      const statusNorm = String(st.status || '').toLowerCase();
       const isProblem = statusNorm === 'problem';
       const isWarning = statusNorm === 'warning';
-      const isDowntimeActive = isProblem && isDowntimeProblemType(problemType);
-      // Backend mengirim status: 'normal' | 'warning' | 'problem'. Tidak mengirim 'idle'.
-      // Saat mesin idle (quantity tidak naik), backend mengirim 'warning'. Jadi kita anggap warning = idle untuk pause.
       const isIdle = statusNorm === 'idle' || st.is_idle === true || String(st.machine_state || '').toLowerCase() === 'idle';
       const isIdleOrWarning = isIdle || isWarning;
 
-      // Runtime harus PAUSE ketika: idle ATAU problem (termasuk warning = idle dari backend).
-      const isRuntimePaused = isIdleOrWarning || isProblem;
-
-      // Downtime start timestamp: use st.timestamp when available, clipped to shiftStart
-      let downtimeSec = 0;
-      if (isDowntimeActive) {
-        const tsRaw = st.timestamp || st.problem_timestamp || null;
-        const ts = tsRaw ? moment.tz(tsRaw, ['YYYY-MM-DD HH:mm:ss', moment.ISO_8601], SHIFT_TZ) : null;
-        const maxM = (typeof moment.max === 'function') ? moment.max : (a, b) => (a.isAfter(b) ? a : b);
-        const start = ts && ts.isValid() ? maxM(ts, shiftStart) : shiftStart;
-        if (!state.downtimeStartIso) state.downtimeStartIso = start.toISOString();
-        const ds = moment(state.downtimeStartIso);
-        downtimeSec = Math.max(0, now.diff(ds, 'seconds'));
+      let runtimeSeconds;
+      if (typeof st.runtime_seconds === 'number') {
+        runtimeSeconds = st.runtime_seconds;
+        if (statusNorm === 'normal' && lastPayloadServerTimeIso) {
+          const elapsed = Math.max(0, now.diff(moment(lastPayloadServerTimeIso), 'seconds'));
+          runtimeSeconds += elapsed;
+        }
       } else {
-        state.downtimeStartIso = null;
+        runtimeSeconds = 0;
       }
 
-      // Track runtime pause start/accum (does NOT affect downtime display)
-      if (isRuntimePaused) {
-        if (!state.runtimePauseStartIso) {
-          state.runtimePauseStartIso = now.toISOString();
-        }
-      } else if (state.runtimePauseStartIso) {
-        const ps = moment(state.runtimePauseStartIso);
-        state.runtimePauseAccumSeconds += Math.max(0, now.diff(ps, 'seconds'));
-        state.runtimePauseStartIso = null;
-      }
-
-      // Hitung elapsed shift & runtime tanpa pause (hanya kurangi downtime)
-      const elapsedSinceShiftStart = Math.max(0, now.diff(shiftStart, 'seconds'));
-      const runtimeWithoutPause = Math.max(0, elapsedSinceShiftStart - downtimeSec);
-
-      // BUGFIX: Jika kita sedang dalam keadaan paused dan pernah menyimpan pausedValue
-      // (misalnya setelah reload / login ulang), rekalkulasi total durasi pause
-      // agar runtimeRaw SELALU kembali ke pausedValue saat resume,
-      // tidak meloncat mengikuti lama istirahat.
-      if (state.pausedValue != null) {
-        const desiredPauseTotal = Math.max(0, runtimeWithoutPause - state.pausedValue);
-        state.runtimePauseAccumSeconds = desiredPauseTotal;
-      }
-
-      const runtimePauseSecCurrent = state.runtimePauseStartIso
-        ? Math.max(0, now.diff(moment(state.runtimePauseStartIso), 'seconds'))
-        : 0;
-      const runtimePauseTotalSec = Math.max(0, (state.runtimePauseAccumSeconds || 0) + runtimePauseSecCurrent);
-
-      // Run-time: hitung dari jam dinding (persist antar refresh)
-      // elapsed sejak awal shift dikurangi downtime dan runtime-pause.
-      const runtimeRaw = Math.max(0, runtimeWithoutPause - runtimePauseTotalSec);
-
-      // Freeze runtime when paused, restore across refresh
-      if (isRuntimePaused) {
-        if (state.pausedValue == null) {
-          state.pausedValue = runtimeRaw;
-          runtimePauseStorage.save(addr, shiftKey, state.pausedValue);
-        }
-      } else if (state.pausedValue != null) {
-        state.pausedValue = null;
-        runtimePauseStorage.clear(addr, shiftKey);
-      }
-
-      const runtimeSeconds = (state.pausedValue != null) ? state.pausedValue : runtimeRaw;
+      const runningHourSec = computeRunningHourSeconds(now, shiftStart, shift);
 
       const cycle = safeNumber(metrics.cycle_time);
       const actualQty = safeNumber(st.quantity);
-      // Ideal Qty = Running Hour (real time, nanti dikurangi jam istirahat) / Cycle Time
-      const runningHourSec = computeRunningHourSeconds(now, shiftStart, shift);
       const idealQty = computeIdealQty(cycle, runningHourSec);
       const oee = computeOee(actualQty, idealQty);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
@@ -488,10 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));
         setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
-        const targetHtml = (target == null ? '-' : String(target)) +
-          (targetOt != null && metrics.ot_enabled
-            ? `<br><span class="rt-target-ot">${targetOt}</span>`
-            : '');
         const targetEl = document.getElementById(`b${blockIdx}_target_${keyAddr}`);
         if (targetEl) {
           if (targetOt != null && metrics.ot_enabled) {
@@ -551,6 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const json = await res.json();
       if (!res.ok || !json.success || !json.data) return;
       lastStatusPayload = json.data;
+      if (json.data.server_time) lastPayloadServerTimeIso = json.data.server_time;
       machinesFlat = flattenMachines(json.data.machine_statuses_by_line);
       blocks = chunkMachines(machinesFlat, 8);
       renderBoard();
@@ -570,7 +511,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('dashboardUpdate', (payload) => {
       if (!payload || !payload.success || !payload.data) return;
-      // Filter payload by selected line (client-side) so board stays per-line
       if (lineFilter && payload.data.machine_statuses_by_line) {
         lastStatusPayload = {
           ...payload.data,
@@ -581,6 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         lastStatusPayload = payload.data;
       }
+      if (lastStatusPayload.server_time) lastPayloadServerTimeIso = lastStatusPayload.server_time;
       // If machine list changed (rare), rebuild
       const flat = flattenMachines(payload.data.machine_statuses_by_line);
       if (flat.length && (flat.length !== machinesFlat.length)) {
@@ -591,18 +532,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Update current time display (header-common also does this, but keep safe)
   setInterval(() => {
     const el = document.getElementById('currentTime');
-    if (el) el.textContent = nowTz().format('HH:mm:ss');
+    if (el) el.textContent = serverNow().format('HH:mm:ss');
   }, 1000);
 
-
   (async function init() {
+    await fetchServerTime();
     await loadMetrics();
     loadBreakSchedules().catch(function() {});
     await loadInitialStatus();
     initSocket();
+    setInterval(fetchServerTime, 60000);
     setInterval(loadMetrics, 60000);
     setInterval(function() { loadBreakSchedules().catch(function() {}); }, 60000);
     setInterval(updateValues, 1000);

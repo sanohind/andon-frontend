@@ -578,6 +578,17 @@ app.get('/health-check', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Server time (untuk sinkronisasi Run Time / Running Hour di semua device) - proxy ke Laravel
+app.get('/api/server-time', async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/server-time`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Server time proxy error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch server time' });
+  }
+});
+
 // API Routes - Proxy to Laravel backend dengan Authorization header
 app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {
