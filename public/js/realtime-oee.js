@@ -10,8 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Maps
   const metricsByAddress = new Map(); // address -> { cycle_time, target_quantity, oee, name, line_name }
-  const machineState = new Map(); // address -> runtimeSecondsAccumulated, downtimeStartIso, lastShiftKey
-  let breakSchedulesByKey = {}; // "${day_of_week}_${shift}" -> { work_start, work_end, breaks: [{ start, end }] }
 
   let lastStatusPayload = null;
   let machinesFlat = []; // [{ address, name, line_name }]
@@ -114,29 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${hh}:${mm}:${ss}`;
   }
 
-  const runtimePauseStorage = {
-    key(addr, shiftKey) {
-      return `rt_runtime_pause_${addr}_${shiftKey}`;
-    },
-    load(addr, shiftKey) {
-      try {
-        const raw = localStorage.getItem(this.key(addr, shiftKey));
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.shiftKey === shiftKey && typeof parsed.value === 'number') return parsed.value;
-      } catch (_) { /* ignore */ }
-      return null;
-    },
-    save(addr, shiftKey, value) {
-      try {
-        localStorage.setItem(this.key(addr, shiftKey), JSON.stringify({ shiftKey, value }));
-      } catch (_) { /* ignore */ }
-    },
-    clear(addr, shiftKey) {
-      try { localStorage.removeItem(this.key(addr, shiftKey)); } catch (_) { /* ignore */ }
-    }
-  };
-
   function safeNumber(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -172,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  /** Ideal Qty = Run Time (detik) / Cycle Time. Berubah seiring bertambahnya Run Time. */
+  /** Ideal Qty = Running Hour (detik) / Cycle Time. Menggunakan running_hour_seconds dari backend. */
   function computeIdealQty(cycleSeconds, runtimeSeconds) {
     const c = safeNumber(cycleSeconds);
     const r = Math.max(0, safeNumber(runtimeSeconds));
@@ -197,51 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return { h: parseInt(parts[1], 10), m: parseInt(parts[2], 10) };
   }
 
-  /** Running Hour: real time, berhenti selama jam istirahat. Menggunakan jam kerja & istirahat dari break schedule jika ada. */
-  function computeRunningHourSeconds(now, shiftStart, shift) {
-    const elapsed = Math.max(0, now.diff(shiftStart, 'seconds'));
-    const maxSeconds = 9 * 3600;
-    try {
-      const dayOfWeek = shiftStart.isoWeekday();
-      const key = `${dayOfWeek}_${shift}`;
-      const schedule = breakSchedulesByKey[key];
-      if (!schedule || !schedule.work_start || !schedule.work_end) {
-        return Math.min(elapsed, maxSeconds);
-      }
-      const base = shiftStart.clone().startOf('day');
-      const ws = parseTimeStr(schedule.work_start);
-      const we = parseTimeStr(schedule.work_end);
-      if (!ws || !we) return Math.min(elapsed, maxSeconds);
-      let workStartM = base.clone().hour(ws.h).minute(ws.m).second(0).millisecond(0);
-      let workEndM = base.clone().hour(we.h).minute(we.m).second(0).millisecond(0);
-      if (we.h < ws.h || (we.h === ws.h && we.m < ws.m)) workEndM = workEndM.add(1, 'day');
-      const maxFn = (typeof moment.max === 'function') ? moment.max : (a, b) => (a.isAfter(b) ? a : b);
-      const minFn = (typeof moment.min === 'function') ? moment.min : (a, b) => (a.isBefore(b) ? a : b);
-      const effectiveStart = maxFn(shiftStart, workStartM);
-      const effectiveEnd = minFn(now, workEndM);
-      let runningSec = Math.max(0, effectiveEnd.diff(effectiveStart, 'seconds'));
-      const breaks = schedule.breaks || [];
-      const isMalam = shift === 'malam';
-      for (let i = 0; i < breaks.length; i++) {
-        const b = breaks[i];
-        const bs = parseTimeStr(b.start);
-        const be = parseTimeStr(b.end);
-        if (!bs || !be) continue;
-        let breakStartM = base.clone().hour(bs.h).minute(bs.m).second(0).millisecond(0);
-        let breakEndM = base.clone().hour(be.h).minute(be.m).second(0).millisecond(0);
-        if (isMalam && bs.h < 12) { breakStartM = breakStartM.add(1, 'day'); breakEndM = breakEndM.add(1, 'day'); }
-        else if (be.h < bs.h || (be.h === bs.h && be.m < bs.m)) breakEndM = breakEndM.add(1, 'day');
-        const overStart = maxFn(effectiveStart, breakStartM);
-        const overEnd = minFn(effectiveEnd, breakEndM);
-        const overSec = Math.max(0, overEnd.diff(overStart, 'seconds'));
-        runningSec -= overSec;
-      }
-      return Math.max(0, runningSec);
-    } catch (e) {
-      return Math.min(elapsed, maxSeconds);
-    }
-  }
-
   async function loadBreakSchedules() {
     try {
       const res = await fetch('/api/break-schedules', { headers: getAuthHeaders() });
@@ -260,18 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       // ignore
     }
-  }
-
-  function normalizeProblemType(v) {
-    return String(v || '').trim().toLowerCase();
-  }
-
-  function isDowntimeProblemType(problemType) {
-    const t = normalizeProblemType(problemType);
-    // match common variants
-    return t === 'machine' || t === 'quality' || t === 'engineering' ||
-      t === 'tipe machine' || t === 'tipe mesin' ||
-      t.includes('machine') || t.includes('quality') || t.includes('engineering');
   }
 
   function flattenMachines(machineStatusesByLine) {
@@ -367,8 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateValues() {
     if (!lastStatusPayload) return;
-    const now = serverNow();
-    const { shift, shiftStart, shiftKey } = getShiftInfo(now);
 
     const machineLookup = new Map();
     Object.keys(lastStatusPayload.machine_statuses_by_line || {}).forEach((ln) => {
@@ -534,12 +450,10 @@ document.addEventListener('DOMContentLoaded', () => {
   (async function init() {
     await fetchServerTime();
     await loadMetrics();
-    loadBreakSchedules().catch(function() {});
     await loadInitialStatus();
     initSocket();
     setInterval(fetchServerTime, 60000);
     setInterval(loadMetrics, 60000);
-    setInterval(function() { loadBreakSchedules().catch(function() {}); }, 60000);
     setInterval(updateValues, 1000);
   })();
 });
