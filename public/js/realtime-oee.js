@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let machinesFlat = []; // [{ address, name, line_name }]
   let blocks = []; // chunked
 
+  // Server time sync: offset (ms) = server time - device time, agar semua device menampilkan waktu sama
+  let lastServerTimeOffsetMs = 0;
+  let lastPayloadServerTimeIso = null;
+
   function getCookieValue(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
@@ -50,6 +54,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function nowTz() {
     return window.moment && moment.tz ? moment.tz(SHIFT_TZ) : moment();
+  }
+
+  /** Waktu "sekarang" menurut server (untuk Run Time / Running Hour yang konsisten di semua device). */
+  function serverNow() {
+    const deviceMs = Date.now();
+    const serverMs = deviceMs + lastServerTimeOffsetMs;
+    return window.moment && moment.tz ? moment(serverMs).tz(SHIFT_TZ) : moment(serverMs);
+  }
+
+  async function fetchServerTime() {
+    try {
+      const res = await fetch('/api/server-time', { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (!res.ok || !json.success || !json.server_time) return;
+      const serverMs = moment(json.server_time).valueOf();
+      const deviceMs = Date.now();
+      lastServerTimeOffsetMs = serverMs - deviceMs;
+    } catch (e) {
+      // ignore; tetap pakai device time
+    }
   }
 
   function getShiftInfo(now) {
@@ -343,11 +367,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateValues() {
     if (!lastStatusPayload) return;
-    const now = nowTz();
+    const now = serverNow();
     const { shift, shiftStart, shiftKey } = getShiftInfo(now);
 
-    // Build quick lookup by address from status payload
-    const machineLookup = new Map(); // address -> status object
+    const machineLookup = new Map();
     Object.keys(lastStatusPayload.machine_statuses_by_line || {}).forEach((ln) => {
       const arr = lastStatusPayload.machine_statuses_by_line[ln] || [];
       arr.forEach((m) => {
@@ -403,10 +426,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));
         setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
-        const targetHtml = (target == null ? '-' : String(target)) +
-          (targetOt != null && metrics.ot_enabled
-            ? `<br><span class="rt-target-ot">${targetOt}</span>`
-            : '');
         const targetEl = document.getElementById(`b${blockIdx}_target_${keyAddr}`);
         if (targetEl) {
           if (targetOt != null && metrics.ot_enabled) {
@@ -466,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const json = await res.json();
       if (!res.ok || !json.success || !json.data) return;
       lastStatusPayload = json.data;
+      if (json.data.server_time) lastPayloadServerTimeIso = json.data.server_time;
       machinesFlat = flattenMachines(json.data.machine_statuses_by_line);
       blocks = chunkMachines(machinesFlat, 8);
       renderBoard();
@@ -485,7 +505,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('dashboardUpdate', (payload) => {
       if (!payload || !payload.success || !payload.data) return;
-      // Filter payload by selected line (client-side) so board stays per-line
       if (lineFilter && payload.data.machine_statuses_by_line) {
         lastStatusPayload = {
           ...payload.data,
@@ -496,6 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         lastStatusPayload = payload.data;
       }
+      if (lastStatusPayload.server_time) lastPayloadServerTimeIso = lastStatusPayload.server_time;
       // If machine list changed (rare), rebuild
       const flat = flattenMachines(payload.data.machine_statuses_by_line);
       if (flat.length && (flat.length !== machinesFlat.length)) {
@@ -506,18 +526,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Update current time display (header-common also does this, but keep safe)
   setInterval(() => {
     const el = document.getElementById('currentTime');
-    if (el) el.textContent = nowTz().format('HH:mm:ss');
+    if (el) el.textContent = serverNow().format('HH:mm:ss');
   }, 1000);
 
-
   (async function init() {
+    await fetchServerTime();
     await loadMetrics();
     loadBreakSchedules().catch(function() {});
     await loadInitialStatus();
     initSocket();
+    setInterval(fetchServerTime, 60000);
     setInterval(loadMetrics, 60000);
     setInterval(function() { loadBreakSchedules().catch(function() {}); }, 60000);
     setInterval(updateValues, 1000);
