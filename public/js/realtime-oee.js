@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cavity = safeNumber(st.cavity ?? metrics.cavity ?? 1);
       const totalProduct = actualQty * cavity;
       const idealQty = computeIdealQty(cycle, runningHourSec);
-      const oee = computeOee(actualQty, idealQty);
+      const oee = computeOee(totalProduct, idealQty);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
       const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
 
