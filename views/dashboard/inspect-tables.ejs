@@ -592,7 +592,7 @@
                     <tbody>
                         <% if (tableList && tableList.length > 0) { %>
                             <% tableList.forEach(table => { %>
-                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>" data-target-quantity="<%= table.target_quantity || '' %>" data-cycle-time="<%= table.cycle_time || '' %>" data-warning-cycle="<%= table.warning_cycle_count || '' %>" data-problem-cycle="<%= table.problem_cycle_count || '' %>" data-ot-enabled="<%= table.ot_enabled ? '1' : '0' %>" data-ot-duration-type="<%= table.ot_duration_type || '' %>" data-target-ot="<%= table.target_ot != null ? table.target_ot : '' %>">
+                                <tr data-id="<%= table.id %>" data-address="<%= table.address %>" data-division="<%= table.division || '' %>" data-line="<%= table.line_name %>" data-name="<%= (table.name || '').trim() %>" data-target-quantity="<%= table.target_quantity || '' %>" data-cycle-time="<%= table.cycle_time || '' %>" data-warning-cycle="<%= table.warning_cycle_count || '' %>" data-problem-cycle="<%= table.problem_cycle_count || '' %>" data-cavity="<%= table.cavity != null ? table.cavity : '1' %>" data-ot-enabled="<%= table.ot_enabled ? '1' : '0' %>" data-ot-duration-type="<%= table.ot_duration_type || '' %>" data-target-ot="<%= table.target_ot != null ? table.target_ot : '' %>">
                                     <td>
                                         <span class="table-name-clickable" data-address="<%= table.address %>">
                                             <%= table.name %>
@@ -827,6 +827,21 @@
                         </div>
                         <div class="config-actions">
                             <button type="submit" class="btn btn-primary">Simpan Threshold</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="config-section">
+                    <h4><i class="fas fa-cubes"></i> Set Cavity</h4>
+                    <form id="configCavityForm">
+                        <input type="hidden" id="configCavityAddress">
+                        <div class="form-group">
+                            <label for="configCavityInput">Cavity (jumlah cavity per mesin)</label>
+                            <input type="number" id="configCavityInput" min="1" value="1" required>
+                            <small style="color: #666; display: block; margin-top: 5px;">Total Product di dashboard = quantity × cavity. Default: 1.</small>
+                        </div>
+                        <div class="config-actions">
+                            <button type="submit" class="btn btn-primary">Simpan Cavity</button>
                         </div>
                     </form>
                 </div>

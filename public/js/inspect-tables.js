@@ -214,6 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const configOtDurationTypeInput = document.getElementById('configOtDurationTypeInput');
     const configTargetOtInput = document.getElementById('configTargetOtInput');
 
+    const configCavityForm = document.getElementById('configCavityForm');
+    const configCavityAddress = document.getElementById('configCavityAddress');
+    const configCavityInput = document.getElementById('configCavityInput');
+
     // Elements for Part Configuration Modal
     const partConfigModal = document.getElementById('partConfigModal');
     const partConfigForm = document.getElementById('partConfigForm');
@@ -771,6 +775,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (configOtDurationTypeInput) configOtDurationTypeInput.value = row.dataset.otDurationType || '';
             if (configTargetOtInput) configTargetOtInput.value = row.dataset.targetOt != null && row.dataset.targetOt !== '' ? row.dataset.targetOt : '';
 
+            if (configCavityAddress) configCavityAddress.value = address;
+            if (configCavityInput) configCavityInput.value = row.dataset.cavity !== undefined && row.dataset.cavity !== '' ? row.dataset.cavity : '1';
+
             if (configModal) configModal.classList.add('show');
         }
     });
@@ -926,6 +933,27 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Pengaturan OT tersimpan.');
         } catch (err) {
             console.error('Error saving OT settings:', err);
+            alert(`Error: ${err.message}`);
+        }
+    });
+
+    if (configCavityForm) configCavityForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const address = configCavityAddress.value;
+        const val = parseInt(configCavityInput.value, 10);
+        if (Number.isNaN(val) || val < 1) return alert('Cavity harus >= 1.');
+        try {
+            const res = await fetch(`/api/inspection-tables/address/${encodeURIComponent(address)}/cavity`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ cavity: val })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || 'Gagal menyimpan cavity.');
+            const row = document.querySelector(`tr[data-address="${address}"]`);
+            if (row) row.dataset.cavity = val;
+            alert('Cavity tersimpan.');
+        } catch (err) {
             alert(`Error: ${err.message}`);
         }
     });

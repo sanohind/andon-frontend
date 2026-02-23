@@ -317,6 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const cycle = safeNumber(metrics.cycle_time);
       const actualQty = safeNumber(st.quantity);
+      const cavity = safeNumber(st.cavity ?? metrics.cavity ?? 1);
+      const totalProduct = actualQty * cavity;
       const idealQty = computeIdealQty(cycle, runningHourSec);
       const oee = computeOee(actualQty, idealQty);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
@@ -337,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isProblem) idealEl.classList.add('rt-ideal-bad');
           else if (isIdle || isWarning) idealEl.classList.add('rt-ideal-warn');
         }
-        setText('total', String(actualQty));
+        setText('total', String(totalProduct));
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));
