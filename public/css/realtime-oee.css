@@ -65,7 +65,7 @@
     color: #e5e7eb;
     font-size: 1rem;
     font-weight: 500;
-    margin: 0;
+    margin: 0 0 0 10px; /* sejajarkan kiri dengan Andon Dashboard (yang punya margin-left 10px) */
     font-family: inherit;
 }
 
@@ -231,8 +231,13 @@
   color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
-.rt-value.target .rt-target-ot { color: #ffff00; font-size: 1.2rem; font-weight: 900; display: block; margin-top: 2px; }
+.rt-value.target .rt-target-ot { color: #d4a017; font-size: 1.2rem; font-weight: 900; display: block; margin-top: 2px; }
 .rt-value.target.rt-has-ot-target { line-height: 1.25; }
+
+/* Override warna target OT khusus single page tema gelap: gunakan kuning basic */
+.rt-oee-public-body .rt-value.target .rt-target-ot {
+    color: var(--rt-yellow);
+}
 
 /* Make it compact but readable */
 @media (max-width: 1366px) {
