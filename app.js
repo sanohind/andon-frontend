@@ -104,12 +104,17 @@ setInterval(() => getDivisionLineMapping().catch(() => {}), MAPPING_CACHE_TTL_MS
 getDivisionLineMapping().catch(() => {});
 
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
-  
+  const token = socket.handshake.auth && socket.handshake.auth.token
+    ? socket.handshake.auth.token
+    : socket.handshake.headers.authorization;
+
+  // Izinkan koneksi publik tanpa token (untuk single page monitoring)
   if (!token) {
-    return next(new Error('Authentication error'));
+    socket.user = null;
+    socket.isPublic = true;
+    return next();
   }
-  
+
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/validate-token`, {
       token: token
@@ -120,6 +125,7 @@ io.use(async (socket, next) => {
         ...response.data.user,
         line_name: response.data.user.line_name // PASTIKAN INI ADA
       };
+      socket.isPublic = false;
       
       console.log('🔐 Socket user authenticated:', {
         id: socket.user.id,
@@ -1886,20 +1892,27 @@ async function fetchAndEmitDashboardData(socket = null) {
             // Mapping divisi->line dari database (untuk filter manager, termasuk divisi/line baru)
             const divisionLineMapping = await getDivisionLineMapping();
 
-            // Emit dashboardUpdate dengan filtering berdasarkan user role
-            if (socket && socket.user) {
-                // Untuk single socket dengan user info, kirim data yang sudah difilter
-                const filteredData = filterDataForUser(socket.user, dataToEmit, divisionLineMapping);
-                socket.emit('dashboardUpdate', { success: true, data: filteredData });
-            } else {
-                // Untuk broadcast ke semua client, filter untuk setiap user
-                io.sockets.sockets.forEach((clientSocket) => {
-                    if (clientSocket.user) {
-                        const filteredData = filterDataForUser(clientSocket.user, dataToEmit, divisionLineMapping);
-                        clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
-                    }
-                });
-            }
+      // Emit dashboardUpdate dengan filtering berdasarkan user role
+      if (socket) {
+          if (socket.user) {
+              // Socket dengan user terautentikasi -> kirim data yang sudah difilter
+              const filteredData = filterDataForUser(socket.user, dataToEmit, divisionLineMapping);
+              socket.emit('dashboardUpdate', { success: true, data: filteredData });
+          } else {
+              // Socket publik (tanpa user) -> kirim data mentah (semua line)
+              socket.emit('dashboardUpdate', { success: true, data: dataToEmit });
+          }
+      } else {
+          // Broadcast ke semua client: filter jika ada user, kirim mentah untuk socket publik
+          io.sockets.sockets.forEach((clientSocket) => {
+              if (clientSocket.user) {
+                  const filteredData = filterDataForUser(clientSocket.user, dataToEmit, divisionLineMapping);
+                  clientSocket.emit('dashboardUpdate', { success: true, data: filteredData });
+              } else {
+                  clientSocket.emit('dashboardUpdate', { success: true, data: dataToEmit });
+              }
+          });
+      }
 
             // PERBAIKAN: Filter dan kirim notifikasi berdasarkan user line
             newProblems.forEach(problem => {

@@ -434,13 +434,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initSocket() {
     const token = getCookieValue('auth_token');
-    if (!token) {
-      // Halaman publik tanpa login: tidak inisialisasi socket, hanya pakai polling API
-      return;
-    }
-    const socket = io({
-      auth: { token }
-    });
+    const options = token ? { auth: { token } } : {};
+    const socket = io(options);
 
     socket.on('connect', () => setConnection(true));
     socket.on('disconnect', () => setConnection(false));
@@ -477,7 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
     await fetchServerTime();
     await loadMetrics();
     await loadInitialStatus();
+    // Selalu gunakan socket: untuk user login memakai token, untuk single page publik tanpa token (public socket)
     initSocket();
+
     setInterval(fetchServerTime, 60000);
     setInterval(loadMetrics, 60000);
     setInterval(updateValues, 1000);
