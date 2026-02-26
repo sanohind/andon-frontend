@@ -634,6 +634,39 @@ app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Public dashboard status (tanpa auth, gunakan token aplikasi Laravel)
+app.get('/api/public/dashboard/status', async (req, res) => {
+  try {
+    const lineName = req.query.line_name || req.query.line || '';
+
+    const queryParams = {};
+    if (lineName) {
+      queryParams.line_name = lineName;
+    }
+    const queryString = Object.keys(queryParams).length > 0
+      ? '?' + new URLSearchParams(queryParams).toString()
+      : '';
+
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/status${queryString}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'X-User-Role': '',
+        'X-User-Division': '',
+        'X-Line-Name': lineName
+      }
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching public dashboard status:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch public dashboard status',
+      error: error.message
+    });
+  }
+});
+
 // New endpoint for active problems with JOIN logic
 app.get('/api/problems/active', requireAuthAPI, async (req, res) => {
   try {
@@ -1598,6 +1631,18 @@ app.get('/api/inspection-tables/metrics', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Public inspection tables metrics (read-only, tanpa auth user)
+app.get('/api/public/inspection-tables/metrics', async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables/metrics`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
 // Tambahkan proxy konsisten untuk POST inspection-tables
 app.post('/api/inspection-tables', requireAuthAPI, async (req, res) => {
   // Block write operations for management role
@@ -1620,6 +1665,21 @@ app.get('/api/break-schedules', requireAuthAPI, async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/break-schedules`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || req.user?.token || ''}`, 'Accept': 'application/json' }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+// Public break schedules (hanya GET, tanpa auth)
+app.get('/api/public/break-schedules', async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/break-schedules`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json'
+      }
     });
     res.json(response.data);
   } catch (error) {

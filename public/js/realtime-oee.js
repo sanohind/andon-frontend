@@ -174,7 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadBreakSchedules() {
     try {
-      const res = await fetch('/api/break-schedules', { headers: getAuthHeaders() });
+      const token = getCookieValue('auth_token');
+      const url = token ? '/api/break-schedules' : '/api/public/break-schedules';
+      const options = token ? { headers: getAuthHeaders() } : {};
+      const res = await fetch(url, options);
       const json = await res.json();
       if (!json.success || !Array.isArray(json.data)) return;
       const byKey = {};
@@ -386,7 +389,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function loadMetrics() {
     try {
-      const res = await fetch('/api/inspection-tables/metrics', { headers: getAuthHeaders() });
+      const token = getCookieValue('auth_token');
+      const url = token ? '/api/inspection-tables/metrics' : '/api/public/inspection-tables/metrics';
+      const options = token ? { headers: getAuthHeaders() } : {};
+      const res = await fetch(url, options);
       const json = await res.json();
       if (!res.ok || !json.success || !Array.isArray(json.data)) return;
       metricsByAddress.clear();
@@ -405,15 +411,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const userRole = userDataEl ? userDataEl.dataset.role : null;
       const userDivision = userDataEl ? userDataEl.dataset.division : null;
       const qs = lineFilter ? `?${new URLSearchParams({ line_name: lineFilter }).toString()}` : '';
-      const res = await fetch(`/api/dashboard/status${qs}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole || '',
-          'X-User-Division': userDivision || '',
-          'X-Line-Name': lineFilter || ''
-        }
-      });
+      const url = token ? `/api/dashboard/status${qs}` : `/api/public/dashboard/status${qs}`;
+      const headers = token ? {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-User-Role': userRole || '',
+        'X-User-Division': userDivision || '',
+        'X-Line-Name': lineFilter || ''
+      } : {};
+      const res = await fetch(url, { headers });
       const json = await res.json();
       if (!res.ok || !json.success || !json.data) return;
       lastStatusPayload = json.data;
