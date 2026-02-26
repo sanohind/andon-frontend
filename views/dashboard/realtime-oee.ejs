@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="/css/realtime-oee.css">
 </head>
-<body class="rt-oee-body" data-line-filter="<%= lineFilter ? lineFilter : '' %>">
+<body class="rt-oee-body rt-oee-embedded-body" data-line-filter="<%= lineFilter ? lineFilter : '' %>">
     <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display:none;"></div>
 
     <header class="dashboard-header rt-oee-header">

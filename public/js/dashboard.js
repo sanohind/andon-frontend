@@ -299,7 +299,7 @@ class DashboardManager {
         }
     }
 
-    openLeaderSetOtForMachine(address, machineName) {
+    openLeaderSetOtForMachine(address, machineName, machineStatus = null) {
         const modal = document.getElementById('leaderSetOtModal');
         const addressEl = document.getElementById('leaderSetOtAddress');
         const labelWrap = document.getElementById('leaderSetOtMachineLabelWrap');
@@ -311,9 +311,24 @@ class DashboardManager {
         const enabledInput = document.getElementById('leaderSetOtEnabledInput');
         const durationInput = document.getElementById('leaderSetOtDurationTypeInput');
         const targetInput = document.getElementById('leaderSetOtTargetInput');
-        if (enabledInput) enabledInput.checked = false;
-        if (durationInput) durationInput.value = '';
-        if (targetInput) targetInput.value = '';
+        let currentOtEnabled = false;
+        let currentOtDurationType = '';
+        let currentTargetOt = '';
+
+        // Prefill from machineStatus if available (sama seperti admin view)
+        if (machineStatus) {
+            currentOtEnabled = !!(machineStatus.ot_enabled || machineStatus.otEnabled);
+            currentOtDurationType = machineStatus.ot_duration_type || machineStatus.otDurationType || '';
+            if (machineStatus.target_ot != null) {
+                currentTargetOt = String(machineStatus.target_ot);
+            } else if (machineStatus.targetOt != null) {
+                currentTargetOt = String(machineStatus.targetOt);
+            }
+        }
+
+        if (enabledInput) enabledInput.checked = currentOtEnabled;
+        if (durationInput) durationInput.value = currentOtDurationType || '';
+        if (targetInput) targetInput.value = currentTargetOt || '';
         modal.classList.add('show');
     }
 
@@ -1240,7 +1255,7 @@ class DashboardManager {
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
                 const setOtBtn = modalBody.querySelector('.btn-leader-set-ot-detail');
                 if (setOtBtn && machineStatus && machineStatus.address) {
-                    setOtBtn.addEventListener('click', () => this.openLeaderSetOtForMachine(machineStatus.address, machine));
+                    setOtBtn.addEventListener('click', () => this.openLeaderSetOtForMachine(machineStatus.address, machine, machineStatus));
                 }
             }
         } catch (error) {
@@ -3830,9 +3845,9 @@ function closeModal() {
     dashboardManager.closeModal();
 }
 
-function openLeaderSetOtForMachine(machineAddress, machineName) {
+function openLeaderSetOtForMachine(machineAddress, machineName, machineStatus) {
     if (dashboardManager) {
-        dashboardManager.openLeaderSetOtForMachine(machineAddress, machineName);
+        dashboardManager.openLeaderSetOtForMachine(machineAddress, machineName, machineStatus || null);
     }
 }
 

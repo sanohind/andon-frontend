@@ -1,20 +1,86 @@
+/* Default (embedded) palette - light theme integrated with dashboard */
 :root {
-    /* Light theme (match other pages) */
     --rt-cell-bg: #ffffff;
     --rt-header-bg: #f8fafc;
     --rt-label-bg: #f1f5f9;
     --rt-border: rgba(0, 0, 0, 0.12);
 
-    /* Value colors (keep strong contrast on white) */
     --rt-green: #16a34a;
     --rt-cyan: #0284c7;
     --rt-yellow: #ca8a04;
+    --rt-red: #e11d48;
+}
+
+/* Dark palette hanya untuk single page public monitoring */
+.rt-oee-public-body {
+    --onyx: #0a0a0aff;
+    --onyx-2: #0e0e0eff;
+    --onyx-3: #131313ff;
+    --carbon-black: #171717ff;
+    --carbon-black-2: #1b1b1bff;
+    --carbon-black-3: #1f1f1fff;
+    --carbon-black-4: #232323ff;
+    --carbon-black-5: #262626ff;
+    --graphite: #292929ff;
+    --graphite-2: #2c2c2cff;
+
+    /* Map palette ke variabel yang dipakai komponen */
+    --rt-cell-bg: var(--carbon-black-3);
+    --rt-header-bg: var(--carbon-black-2);
+    --rt-label-bg: var(--carbon-black-4);
+    --rt-border: rgba(148, 163, 184, 0.45);
+
+    /* Value colors (basic dan kontras di tema gelap) */
+    --rt-green: #00ff00;
+    --rt-cyan: #00bcd4;
+    --rt-yellow: #ffff00;
+    --rt-red: #ff0000;
 }
 
 .rt-oee-body {
     min-height: 100vh;
     overflow: auto;
-    background: #ffffff; /* match other pages */
+}
+
+/* Tema gelap hanya untuk single page public */
+.rt-oee-public-body {
+    background: var(--carbon-black);
+    color: #f9fafb;
+}
+
+.rt-oee-public-body .dashboard-header {
+    background: var(--carbon-black-3);
+    backdrop-filter: none;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.75);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.rt-oee-public-body .dashboard-title {
+    color: #f9fafb;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.rt-oee-public-body .dashboard-subtitle {
+    color: #e5e7eb;
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0;
+    font-family: inherit;
+}
+
+.rt-oee-public-body .connection-status {
+    color: var(--rt-green);
+}
+
+.rt-oee-public-body .connection-status.disconnected {
+    color: var(--rt-red);
+}
+
+.rt-oee-public-body .current-time {
+    color: #e5e7eb;
+    font-size: 1.35rem;
+    font-weight: 700;
 }
 
 .rt-oee-header {
@@ -32,7 +98,10 @@
     min-height: 200px;
     padding: 0.75rem 1rem;
     overflow: auto;
-    background: #ffffff;
+}
+
+.rt-oee-public-body .rt-oee-viewport {
+    background: var(--carbon-black);
 }
 
 .rt-oee-board {
@@ -54,6 +123,11 @@
     box-shadow: var(--box-shadow);
 }
 
+.rt-oee-public-body .rt-oee-block {
+    background: var(--carbon-black-3);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.85);
+}
+
 .rt-matrix {
     display: grid;
     width: 100%;
@@ -71,7 +145,10 @@
     justify-content: center;
     min-height: 40px;
     text-align: center;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: "Monda", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 900;
+    font-style: normal;
     color: #0f172a;
 }
 
@@ -103,26 +180,43 @@
 }
 
 .rt-dot {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 999px;
     border: 2px solid rgba(15, 23, 42, 0.25);
     flex: 0 0 auto;
 }
 .rt-dot.ok { background: var(--rt-green); }
 .rt-dot.warn { background: var(--rt-yellow); }
-.rt-dot.bad { background: #ff4d4f; }
+.rt-dot.bad { background: var(--rt-red); }
 
 .rt-value {
     font-weight: 900;
     letter-spacing: 0.5px;
+    font-size: 2.2rem;
+    line-height: 1.05;
 }
-.rt-value.ideal { color: var(--rt-green); font-size: 1.6rem; }
-.rt-value.total { color: #0f172a; font-size: 1.35rem; }
-.rt-value.ng { color: var(--rt-cyan); font-size: 1.25rem; }
-.rt-value.time { color: #0f172a; font-size: 1.25rem; }
-.rt-value.oee { color: var(--rt-yellow); font-size: 1.25rem; }
-.rt-value.target { color: var(--rt-green); font-size: 0.95rem; font-weight: 800; }
+.rt-value.ideal { color: var(--rt-green); }
+.rt-value.total { color: #0f172a; }
+.rt-value.ng { color: var(--rt-cyan); }
+.rt-value.time { color: #0f172a; font-size: 1.5rem; }
+.rt-value.oee { color: var(--rt-yellow); }
+.rt-value.target { color: var(--rt-green); font-size: 1.3rem; font-weight: 800; }
+
+/* Penyesuaian warna teks untuk tema gelap single page */
+.rt-oee-public-body .rt-cell {
+    color: #f9fafb;
+}
+.rt-oee-public-body .rt-cell.rt-label {
+    color: #e5e7eb;
+}
+.rt-oee-public-body .rt-cell.rt-header {
+    color: #f9fafb;
+}
+.rt-oee-public-body .rt-value.total,
+.rt-oee-public-body .rt-value.time {
+    color: #f9fafb;
+}
 .rt-value.ideal.rt-ideal-ot { color: #d4a017; }
 /* Ideal Qty berkedip mengikuti warna status saat idle atau problem */
 @keyframes rt-ideal-blink {
@@ -134,17 +228,23 @@
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
 .rt-value.ideal.rt-ideal-bad {
-  color: #ff4d4f;
+  color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
-.rt-value.target .rt-target-ot { color: #d4a017; font-size: 0.85rem; font-weight: 700; display: block; margin-top: 2px; }
+.rt-value.target .rt-target-ot { color: #ffff00; font-size: 1.2rem; font-weight: 900; display: block; margin-top: 2px; }
 .rt-value.target.rt-has-ot-target { line-height: 1.25; }
 
 /* Make it compact but readable */
 @media (max-width: 1366px) {
     .rt-cell { min-height: 34px; padding: 5px 7px; }
-    .rt-value.ideal { font-size: 1.35rem; }
-    .rt-value.total { font-size: 1.15rem; }
-    .rt-value.time, .rt-value.oee { font-size: 1.05rem; }
+    .rt-value { font-size: 1.8rem; }
+    .rt-value.time { font-size: 1.2rem; }
+    .rt-value.target { font-size: 1.1rem; }
+}
+
+/* OEE blinking sama seperti Ideal-Qty ketika idle/problem */
+.rt-value.oee.rt-oee-low {
+  color: var(--rt-red);
+  animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
 

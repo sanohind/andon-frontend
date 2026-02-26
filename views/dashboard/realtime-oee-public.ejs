@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/realtime-oee.css">
+</head>
+<body class="rt-oee-body rt-oee-public-body" data-line-filter="<%= lineFilter ? lineFilter : '' %>">
+    <header class="dashboard-header rt-oee-header">
+        <div class="container rt-oee-header-container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/image/Logo sanoh 2 2.png" alt="Sanoh Logo" class="logo-img rt-logo-white">
+                    <div>
+                        <h1 class="dashboard-title">Andon Dashboard</h1>
+                        <p class="dashboard-subtitle">
+                            Production Monitoring
+                            <% if (lineFilter) { %>
+                                - <span><%= lineFilter %></span>
+                            <% } else { %>
+                                - All Lines
+                            <% } %>
+                        </p>
+                    </div>
+                </div>
+                <div class="status-info">
+                    <div class="bottom-row-status">
+                        <div class="connection-status" id="connectionStatus">
+                            <i class="fas fa-wifi"></i>
+                            <span>Connected</span>
+                        </div>
+                        <div class="current-time">
+                            <span id="currentTime">--:--:--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="rt-oee-main">
+        <div class="rt-oee-viewport">
+            <div class="rt-oee-board" id="rtOeeBoard">
+                <!-- blocks inserted by JS -->
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment-timezone/builds/moment-timezone-with-data.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/realtime-oee.js"></script>
+</body>
+</html>
+

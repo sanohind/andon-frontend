@@ -364,6 +364,14 @@ app.get('/realtime-oee', requireAuth, (req, res) => {
   });
 });
 
+// Public production monitoring page (no login required, dark theme)
+app.get('/monitoring/production', (req, res) => {
+  res.render('dashboard/realtime-oee-public', {
+    title: 'Production Monitoring',
+    lineFilter: (req.query && (req.query.line_name || req.query.line)) ? String(req.query.line_name || req.query.line) : null
+  });
+});
+
 
 // Auth Routes - Login Page
 app.get('/login', (req, res) => {

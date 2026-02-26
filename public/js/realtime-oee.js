@@ -344,7 +344,20 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));
-        setText('oee', (oee == null) ? '-' : oee.toFixed(2) + '%');
+        const oeeEl = document.getElementById(`b${blockIdx}_oee_${keyAddr}`);
+        if (oeeEl) {
+          if (oee == null) {
+            oeeEl.textContent = '-';
+            oeeEl.classList.remove('rt-oee-low');
+          } else {
+            oeeEl.textContent = oee.toFixed(2) + '%';
+            if (oee < 85) {
+              oeeEl.classList.add('rt-oee-low');
+            } else {
+              oeeEl.classList.remove('rt-oee-low');
+            }
+          }
+        }
         const targetEl = document.getElementById(`b${blockIdx}_target_${keyAddr}`);
         if (targetEl) {
           if (targetOt != null && metrics.ot_enabled) {
@@ -415,6 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initSocket() {
     const token = getCookieValue('auth_token');
+    if (!token) {
+      // Halaman publik tanpa login: tidak inisialisasi socket, hanya pakai polling API
+      return;
+    }
     const socket = io({
       auth: { token }
     });
