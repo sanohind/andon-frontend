@@ -1692,6 +1692,56 @@ app.get('/api/public/break-schedules', async (req, res) => {
     res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
   }
 });
+
+// OEE settings - GET/PUT via Laravel API (only admin for PUT)
+app.get('/api/oee-settings', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/oee-settings`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json',
+        'X-User-Role': req.user?.role || ''
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+app.put('/api/oee-settings', requireAuthAPI, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Hanya admin yang dapat mengatur threshold OEE.' });
+    }
+    const response = await axios.put(`${LARAVEL_API_BASE}/oee-settings`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-User-Role': req.user.role
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+// Public OEE settings (read-only, tanpa auth)
+app.get('/api/public/oee-settings', async (req, res) => {
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/oee-settings`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
 app.put('/api/break-schedules', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Hanya admin yang dapat mengatur jam istirahat.' });

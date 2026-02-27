@@ -701,6 +701,22 @@
                     </div>
                 </div>
             </div>
+
+            <div class="form-container" id="oeeThresholdSection" style="margin-top: 1.5rem;">
+                <h3><i class="fas fa-exclamation-triangle"></i> Set Threshold Warning OEE</h3>
+                <div class="oee-threshold-row">
+                    <label for="oeeWarningThresholdInput">
+                        Nilai Threshold OEE (%)<br>
+                        <small>OEE di bawah nilai ini akan tampil sebagai warning (merah berkedip) di semua mesin.</small>
+                    </label>
+                    <div class="oee-threshold-input-wrap">
+                        <input type="number" id="oeeWarningThresholdInput" min="0" max="100" step="0.01" value="85">
+                        <button type="button" id="saveOeeThresholdBtn" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Simpan Threshold OEE
+                        </button>
+                    </div>
+                </div>
+            </div>
             <% } %>
         </div>
     </main>

@@ -24,6 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const breakScheduleTbody = document.getElementById('breakScheduleTbody');
     const saveBreakSchedulesBtn = document.getElementById('saveBreakSchedulesBtn');
 
+    // OEE warning threshold (admin only)
+    const oeeThresholdSection = document.getElementById('oeeThresholdSection');
+    const oeeWarningThresholdInput = document.getElementById('oeeWarningThresholdInput');
+    const saveOeeThresholdBtn = document.getElementById('saveOeeThresholdBtn');
+
     function getAuthHeaders() {
         const value = `; ${document.cookie}`;
         const parts = value.split('; auth_token=');
@@ -137,6 +142,58 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (breakScheduleSection) loadBreakSchedules();
+
+    async function loadOeeSettings() {
+        if (!oeeThresholdSection || !oeeWarningThresholdInput) return;
+        try {
+            const res = await fetch('/api/oee-settings', { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (json.success && json.data && typeof json.data.warning_threshold_percent !== 'undefined') {
+                const val = Number(json.data.warning_threshold_percent);
+                if (!Number.isNaN(val)) {
+                    oeeWarningThresholdInput.value = val;
+                }
+            } else if (!oeeWarningThresholdInput.value) {
+                oeeWarningThresholdInput.value = 85;
+            }
+        } catch (e) {
+            console.error('Load OEE settings:', e);
+            if (!oeeWarningThresholdInput.value) {
+                oeeWarningThresholdInput.value = 85;
+            }
+        }
+    }
+
+    if (oeeThresholdSection) {
+        loadOeeSettings();
+        if (saveOeeThresholdBtn && oeeWarningThresholdInput) {
+            saveOeeThresholdBtn.addEventListener('click', async () => {
+                const raw = (oeeWarningThresholdInput.value || '').trim();
+                const val = Number(raw);
+                if (Number.isNaN(val)) {
+                    return alert('Nilai threshold OEE harus berupa angka.');
+                }
+                if (val < 0 || val > 100) {
+                    return alert('Nilai threshold OEE harus antara 0 dan 100.');
+                }
+                try {
+                    const res = await fetch('/api/oee-settings', {
+                        method: 'PUT',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ warning_threshold_percent: val })
+                    });
+                    const json = await res.json();
+                    if (!res.ok || !json.success) {
+                        throw new Error(json.message || 'Gagal menyimpan threshold OEE.');
+                    }
+                    alert('Threshold OEE berhasil disimpan.');
+                } catch (err) {
+                    console.error('Save OEE settings:', err);
+                    alert('Error: ' + err.message);
+                }
+            });
+        }
+    }
 
     // Disable write operations for management role
     if (userRole === 'management') {

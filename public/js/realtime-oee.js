@@ -164,6 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
     return Number.isFinite(oee) ? oee : null;
   }
 
+  // Global OEE warning threshold (percent). Default 85, bisa di-set lewat API.
+  let oeeWarningThreshold = 85;
+
   /** Parse "HH:mm" to { h, m }. */
   function parseTimeStr(s) {
     if (!s || typeof s !== 'string') return null;
@@ -354,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
             oeeEl.classList.remove('rt-oee-low');
           } else {
             oeeEl.textContent = oee.toFixed(2) + '%';
-            if (oee < 85) {
+            if (oee < oeeWarningThreshold) {
               oeeEl.classList.add('rt-oee-low');
             } else {
               oeeEl.classList.remove('rt-oee-low');
@@ -401,6 +404,24 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     } catch (e) {
       // ignore
+    }
+  }
+
+  async function loadOeeSettingsForBoard() {
+    try {
+      const token = getCookieValue('auth_token');
+      const url = token ? '/api/oee-settings' : '/api/public/oee-settings';
+      const options = token ? { headers: getAuthHeaders() } : {};
+      const res = await fetch(url, options);
+      const json = await res.json();
+      if (json && json.success && json.data && typeof json.data.warning_threshold_percent !== 'undefined') {
+        const val = Number(json.data.warning_threshold_percent);
+        if (!Number.isNaN(val) && val >= 0 && val <= 100) {
+          oeeWarningThreshold = val;
+        }
+      }
+    } catch (e) {
+      // ignore, gunakan default
     }
   }
 
@@ -470,6 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   (async function init() {
     await fetchServerTime();
+    await loadOeeSettingsForBoard();
     await loadMetrics();
     await loadInitialStatus();
     // Selalu gunakan socket: untuk user login memakai token, untuk single page publik tanpa token (public socket)
