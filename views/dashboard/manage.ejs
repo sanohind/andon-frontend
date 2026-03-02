@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/manage.css">
+    <link rel="stylesheet" href="/css/manage-lines.css">
+</head>
+<body class="has-fixed-header">
+    <div id="userData" data-role="<%= user.role %>" data-division="<%= user.division || '' %>" style="display:none;"></div>
+    <%- include('../partials/header') %>
+
+    <main class="dashboard-main">
+        <div class="container">
+            <nav class="manage-sub-nav">
+                <a href="/manage/machine" class="manage-sub-link <%= section === 'machine' ? 'active' : '' %>"><i class="fas fa-industry"></i> Machine</a>
+                <a href="/manage/shift" class="manage-sub-link <%= section === 'shift' ? 'active' : '' %>"><i class="fas fa-clock"></i> Shift</a>
+                <a href="/manage/oee" class="manage-sub-link <%= section === 'oee' ? 'active' : '' %>"><i class="fas fa-percentage"></i> OEE</a>
+                <a href="/manage/schedule" class="manage-sub-link <%= section === 'schedule' ? 'active' : '' %>"><i class="fas fa-calendar-alt"></i> Schedule</a>
+                <a href="/manage/lines" class="manage-sub-link <%= section === 'lines' ? 'active' : '' %>"><i class="fas fa-sitemap"></i> Lines</a>
+            </nav>
+
+            <!-- SECTION: Machine -->
+            <div id="section-machine" class="manage-section" data-section="machine" style="display:<%= section === 'machine' ? 'block' : 'none' %>">
+                <div class="form-container">
+                    <h3>Tambah Mesin</h3>
+                    <form id="addMachineForm">
+                        <input type="text" name="name" placeholder="Nama Mesin (e.g., Mesin 1)" required>
+                        <select name="division" id="machineDivisionSelect" required>
+                            <option value="">Pilih Divisi</option>
+                        </select>
+                        <select name="line_name" id="machineLineSelect" required>
+                            <option value="">Pilih Line</option>
+                        </select>
+                        <button type="submit">Tambah Mesin</button>
+                    </form>
+                </div>
+                <div class="table-container">
+                    <h3>Daftar Mesin</h3>
+                    <div class="filter-container">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label><i class="fas fa-search"></i> Nama</label>
+                                <input type="text" id="filterMachineName" placeholder="Cari nama mesin..." class="filter-input">
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-building"></i> Divisi</label>
+                                <select id="filterMachineDivision" class="filter-select"><option value="">Semua Divisi</option></select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-sitemap"></i> Line</label>
+                                <select id="filterMachineLine" class="filter-select"><option value="">Semua Line</option></select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Tampilkan</label>
+                                <select id="machinePageSize" class="filter-select">
+                                    <option value="10" selected>10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <button type="button" id="clearMachineFilters" class="btn-clear-filters"><i class="fas fa-times"></i> Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                    <table id="machinesTable" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nama</th>
+                                <th>Divisi</th>
+                                <th>Line</th>
+                                <th>Address</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="pagination-wrap">
+                        <div class="pagination-info" id="machinePaginationInfo"></div>
+                        <div class="pagination-controls" id="machinePaginationControls"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: Shift -->
+            <div id="section-shift" class="manage-section" data-section="shift" style="display:<%= section === 'shift' ? 'block' : 'none' %>">
+                <% if (user.role === 'admin') { %>
+                <div class="shift-tables-wrap">
+                    <div class="form-container shift-table-card">
+                        <h3><i class="fas fa-coffee"></i> Set Jam Istirahat</h3>
+                        <p class="section-desc">Atur jam mulai dan selesai istirahat per hari dan shift.</p>
+                        <div class="break-schedule-scroll">
+                            <table class="break-schedule-table" id="breakScheduleTable">
+                                <thead>
+                                    <tr><th>Hari</th><th>Shift</th><th>Istirahat 1</th><th>Istirahat 2</th><th>Istirahat 3</th><th>Istirahat 4</th></tr>
+                                </thead>
+                                <tbody id="breakScheduleTbody"></tbody>
+                            </table>
+                        </div>
+                        <div class="break-schedule-actions">
+                            <button type="button" id="saveBreakSchedulesBtn" class="btn btn-primary"><i class="fas fa-save"></i> Simpan Jam Istirahat</button>
+                        </div>
+                    </div>
+                    <div class="form-container shift-table-card">
+                        <h3><i class="fas fa-business-time"></i> Set Jam Mulai & Selesai Shift Kerja</h3>
+                        <p class="section-desc">Atur jam mulai dan selesai kerja per hari dan shift.</p>
+                        <div class="break-schedule-scroll">
+                            <table class="break-schedule-table" id="shiftWorkTable">
+                                <thead>
+                                    <tr><th>Hari</th><th>Shift</th><th>Jam Mulai</th><th>Jam Selesai</th></tr>
+                                </thead>
+                                <tbody id="shiftWorkTbody"></tbody>
+                            </table>
+                        </div>
+                        <div class="break-schedule-actions">
+                            <button type="button" id="saveShiftWorkBtn" class="btn btn-primary"><i class="fas fa-save"></i> Simpan Jam Shift</button>
+                        </div>
+                    </div>
+                </div>
+                <% } else { %>
+                <p class="text-muted">Hanya admin yang dapat mengatur shift.</p>
+                <% } %>
+            </div>
+
+            <!-- SECTION: OEE -->
+            <div id="section-oee" class="manage-section" data-section="oee" style="display:<%= section === 'oee' ? 'block' : 'none' %>">
+                <% if (user.role === 'admin') { %>
+                <div class="form-container oee-threshold-card">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Set Threshold Warning OEE</h3>
+                    <div class="oee-threshold-row">
+                        <label for="oeeWarningThresholdInput">
+                            Nilai Threshold OEE (%)<br>
+                            <small>OEE di bawah nilai ini akan tampil sebagai warning (merah berkedip) di semua mesin.</small>
+                        </label>
+                        <div class="oee-threshold-input-wrap">
+                            <input type="number" id="oeeWarningThresholdInput" min="0" max="100" step="0.01" value="85">
+                            <button type="button" id="saveOeeThresholdBtn" class="btn btn-primary"><i class="fas fa-save"></i> Simpan</button>
+                        </div>
+                    </div>
+                </div>
+                <% } else { %>
+                <p class="text-muted">Hanya admin yang dapat mengatur threshold OEE.</p>
+                <% } %>
+            </div>
+
+            <!-- SECTION: Schedule -->
+            <div id="section-schedule" class="manage-section" data-section="schedule" style="display:<%= section === 'schedule' ? 'block' : 'none' %>">
+                <div class="form-container">
+                    <h3>Tambah Schedule</h3>
+                    <form id="addScheduleForm" class="schedule-form">
+                        <div class="schedule-form-grid">
+                            <div class="form-group">
+                                <label>Tanggal</label>
+                                <input type="date" id="scheduleDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Mesin</label>
+                                <select id="scheduleMachine" required><option value="">Pilih Mesin</option></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Shift</label>
+                                <select id="scheduleShift">
+                                    <option value="pagi">Pagi</option>
+                                    <option value="malam">Malam</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Target</label>
+                                <input type="number" id="scheduleTarget" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Cavity</label>
+                                <input type="number" id="scheduleCavity" min="1" value="1">
+                            </div>
+                            <div class="form-group form-group-toggle">
+                                <label>OT (Lembur)</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="scheduleOtEnabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group ot-fields" id="scheduleOtFields" style="display:none;">
+                                <label>Durasi OT</label>
+                                <select id="scheduleOtDuration">
+                                    <option value="">-- Pilih --</option>
+                                    <option value="2h_pagi">2 jam shift pagi</option>
+                                    <option value="2h_malam">2 jam shift malam</option>
+                                    <option value="3.5h_pagi">3,5 jam shift pagi</option>
+                                </select>
+                            </div>
+                            <div class="form-group ot-fields" id="scheduleOtTargetWrap" style="display:none;">
+                                <label>Target OT</label>
+                                <input type="number" id="scheduleTargetOt" min="0" placeholder="Target OT">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Simpan Schedule</button>
+                    </form>
+                </div>
+                <div class="table-container">
+                    <h3>Daftar Schedule</h3>
+                    <div class="filter-container">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label><i class="fas fa-search"></i> Cari</label>
+                                <input type="text" id="filterScheduleSearch" placeholder="Tanggal, mesin..." class="filter-input">
+                            </div>
+                            <div class="filter-group">
+                                <label>Tampilkan</label>
+                                <select id="schedulePageSize" class="filter-select">
+                                    <option value="10" selected>10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <button type="button" id="clearScheduleFilters" class="btn-clear-filters"><i class="fas fa-times"></i> Reset</button>
+                        </div>
+                    </div>
+                    <table id="scheduleTable" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Mesin</th>
+                                <th>Shift</th>
+                                <th>Target</th>
+                                <th>Cavity</th>
+                                <th>OT</th>
+                                <th>Durasi OT</th>
+                                <th>Target OT</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="pagination-wrap">
+                        <div class="pagination-info" id="schedulePaginationInfo"></div>
+                        <div class="pagination-controls" id="schedulePaginationControls"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: Lines -->
+            <div id="section-lines" class="manage-section" data-section="lines" style="display:<%= section === 'lines' ? 'block' : 'none' %>">
+                <% if (user.role === 'admin') { %>
+                <div class="form-container">
+                    <h3>Tambah Divisi Baru</h3>
+                    <form id="addDivisionForm">
+                        <input type="text" name="name" placeholder="Nama Divisi" required>
+                        <button type="submit" title="Tambah Divisi"><i class="fas fa-plus"></i></button>
+                    </form>
+                </div>
+                <div class="divisions-list" id="divisionsList">
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><p>Memuat data divisi dan line...</p></div>
+                </div>
+                <% } else { %>
+                <p class="text-muted">Hanya admin yang dapat mengelola Lines dan Divisi.</p>
+                <% } %>
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit Machine Modal -->
+    <div class="modal" id="editMachineModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Mesin</h3>
+                <button type="button" class="modal-close" id="closeEditMachine">×</button>
+            </div>
+            <form id="editMachineForm">
+                <input type="hidden" id="editMachineId">
+                <div class="form-group">
+                    <label>Nama Mesin</label>
+                    <input type="text" id="editMachineName" required>
+                </div>
+                <div class="form-group">
+                    <label>Divisi</label>
+                    <select id="editMachineDivision" required><option value="">Pilih Divisi</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Line</label>
+                    <select id="editMachineLine" required><option value="">Pilih Line</option></select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelEditMachine">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Config Modal (Cycle Time + Cycle Threshold only) -->
+    <div class="modal" id="configMachineModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-gear"></i> Konfigurasi Mesin</h3>
+                <button type="button" class="modal-close" id="closeConfigMachine">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="configMachineAddress">
+                <div class="config-section">
+                    <h4><i class="fas fa-clock"></i> Set Cycle Time</h4>
+                    <form id="configCycleForm">
+                        <input type="hidden" id="configCycleAddress">
+                        <div class="form-group">
+                            <label>Cycle Time (detik)</label>
+                            <input type="number" id="configCycleTimeInput" min="0" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Simpan Cycle</button>
+                    </form>
+                </div>
+                <div class="config-section">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Set Cycle Threshold</h4>
+                    <form id="configCycleThresholdForm">
+                        <input type="hidden" id="configCycleThresholdAddress">
+                        <div class="form-group">
+                            <label>Warning Cycle Count</label>
+                            <input type="number" id="configWarningCycleCountInput" min="1" required>
+                            <small>Jumlah cycle sebelum status warning (kuning)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Problem Cycle Count</label>
+                            <input type="number" id="configProblemCycleCountInput" min="1" required>
+                            <small>Jumlah cycle sebelum status problem (merah)</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Simpan Threshold</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Schedule Modal -->
+    <div class="modal" id="editScheduleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Schedule</h3>
+                <button type="button" class="modal-close" id="closeEditSchedule">×</button>
+            </div>
+            <form id="editScheduleForm">
+                <input type="hidden" id="editScheduleId">
+                <div class="form-group">
+                    <label>Tanggal</label>
+                    <input type="date" id="editScheduleDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Mesin</label>
+                    <select id="editScheduleMachine"><option value="">Pilih Mesin</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Shift</label>
+                    <select id="editScheduleShift">
+                        <option value="pagi">Pagi</option>
+                        <option value="malam">Malam</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target</label>
+                    <input type="number" id="editScheduleTarget" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Cavity</label>
+                    <input type="number" id="editScheduleCavity" min="1" value="1">
+                </div>
+                <div class="form-group form-group-toggle">
+                    <label>OT (Lembur)</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="editScheduleOtEnabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="form-group" id="editScheduleOtFields" style="display:none;">
+                    <label>Durasi OT</label>
+                    <select id="editScheduleOtDuration">
+                        <option value="">-- Pilih --</option>
+                        <option value="2h_pagi">2 jam shift pagi</option>
+                        <option value="2h_malam">2 jam shift malam</option>
+                        <option value="3.5h_pagi">3,5 jam shift pagi</option>
+                    </select>
+                </div>
+                <div class="form-group" id="editScheduleTargetOtWrap" style="display:none;">
+                    <label>Target OT</label>
+                    <input type="number" id="editScheduleTargetOt" min="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelEditSchedule">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lines modals (same as manage-lines) -->
+    <div id="editDivisionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Divisi</h3>
+                <span class="close" id="closeEditDivision">&times;</span>
+            </div>
+            <form id="editDivisionForm">
+                <input type="hidden" id="editDivisionId">
+                <div class="form-group">
+                    <label>Nama Divisi</label>
+                    <input type="text" id="editDivisionName" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelEditDivision"><i class="fas fa-times"></i></button>
+                    <button type="submit" class="btn-submit"><i class="fas fa-check"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="addLineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Tambah Line Baru</h3>
+                <span class="close" id="closeAddLine">&times;</span>
+            </div>
+            <form id="addLineForm">
+                <input type="hidden" id="addLineDivisionId">
+                <div class="form-group">
+                    <label>Nama Line</label>
+                    <input type="text" id="addLineName" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelAddLine"><i class="fas fa-times"></i></button>
+                    <button type="submit" class="btn-submit"><i class="fas fa-check"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="editLineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Line</h3>
+                <span class="close" id="closeEditLine">&times;</span>
+            </div>
+            <form id="editLineForm">
+                <input type="hidden" id="editLineId">
+                <div class="form-group">
+                    <label>Divisi</label>
+                    <select id="editLineDivisionId" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Nama Line</label>
+                    <input type="text" id="editLineName" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelEditLine"><i class="fas fa-times"></i></button>
+                    <button type="submit" class="btn-submit"><i class="fas fa-check"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/header-common.js"></script>
+    <script src="/js/manage.js"></script>
+</body>
+</html>

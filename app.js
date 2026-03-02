@@ -331,22 +331,37 @@ app.get('/divisions', requireAuth, async (req, res) => {
 });
 
 app.get('/manage-lines', requireAuth, async (req, res) => {
-  console.log('✅ Manage lines route hit - User:', req.user?.name, 'Role:', req.user?.role);
-  if (!req.user || req.user.role !== 'admin') {
-    console.log('❌ Access denied - User role:', req.user?.role);
-    return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'management'].includes(req.user?.role)) return res.status(403).send('Akses Ditolak');
+  return res.redirect('/manage/lines');
+});
+
+app.get('/manage', requireAuth, (req, res) => {
+  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  return res.redirect('/manage/machine');
+});
+
+app.get('/manage/:section', requireAuth, async (req, res) => {
+  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  const section = (req.params.section || 'machine').toLowerCase();
+  const allowed = ['machine', 'shift', 'oee', 'schedule', 'lines'];
+  if (!allowed.includes(section)) return res.redirect('/manage/machine');
+  let tableList = [];
+  if (section === 'machine') {
+    try {
+      const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://localhost:8000/api';
+      const headers = process.env.LARAVEL_API_TOKEN ? { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN}` } : {};
+      const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, { headers });
+      tableList = (response.data && response.data.data) ? response.data.data : (response.data || []);
+    } catch (e) {
+      tableList = [];
+    }
   }
-  try {
-    console.log('✅ Rendering manage-lines page');
-    res.render('dashboard/manage-lines', {
-      title: 'Manage Lines - Andon Dashboard',
-      user: req.user
-    });
-  } catch (error) {
-    console.error('❌ Error rendering manage-lines page:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).send('Error loading page: ' + error.message);
-  }
+  res.render('dashboard/manage', {
+    title: 'Manage - Andon Dashboard',
+    user: req.user,
+    section,
+    tableList
+  });
 });
 
 app.get('/analytics', requireAuth, (req, res) => {
@@ -1380,47 +1395,10 @@ app.delete('/api/teknisi-pic/:id', requireAuth, async (req, res) => {
   }
 });
 
-// RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN & MANAGEMENT)
-app.get('/inspect-tables', requireAuth, async (req, res) => {
+// RUTE UNTUK MENYAJIKAN HALAMAN MANAJEMEN MEJA (HANYA ADMIN & MANAGEMENT) -> redirect ke Manage
+app.get('/inspect-tables', requireAuth, (req, res) => {
   if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
-  try {
-    console.log('Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
-    
-    // Prepare headers
-    const headers = {};
-    if (process.env.LARAVEL_API_TOKEN) {
-      headers['Authorization'] = `Bearer ${process.env.LARAVEL_API_TOKEN}`;
-    }
-    
-    const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables`, { headers });
-    
-    console.log('Response status:', response.status);
-    console.log('Response data:', response.data);
-    
-    // Handle the response format: {"success":true,"data":[...]}
-    let tableList = [];
-    if (response.data && response.data.success && response.data.data) {
-      tableList = response.data.data;
-    } else if (Array.isArray(response.data)) {
-      tableList = response.data;
-    } else {
-      tableList = [];
-    }
-
-    
-    res.render('dashboard/inspect-tables', {
-      title: 'Manage Inspect Tables',
-      user: req.user,
-      tableList: tableList
-    });
-  } catch (error) {
-    console.error('Error fetching inspection tables:', error.message);
-    res.render('dashboard/inspect-tables', {
-      title: 'Manage Inspect Tables',
-      user: req.user,
-      tableList: []
-    });
-  }
+  return res.redirect('/manage/machine');
 });
 
 // RUTE PROXY API UNTUK MENGAMBIL DAFTAR MEJA INSPECT
@@ -1757,6 +1735,53 @@ app.put('/api/break-schedules', requireAuth, async (req, res) => {
     res.json(response.data);
   } catch (error) {
     res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+// Machine schedules (Manage > Schedule)
+app.get('/api/machine-schedules', requireAuthAPI, async (req, res) => {
+  if (!['admin', 'management'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.get(`${LARAVEL_API_BASE}/machine-schedules`, {
+      params: req.query,
+      headers: { 'Authorization': `Bearer ${req.user?.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json' }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+app.post('/api/machine-schedules', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/machine-schedules`, req.body, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json', 'Content-Type': 'application/json' }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+app.put('/api/machine-schedules/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/machine-schedules/${req.params.id}`, req.body, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json', 'Content-Type': 'application/json' }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
+app.delete('/api/machine-schedules/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.delete(`${LARAVEL_API_BASE}/machine-schedules/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json' }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
 

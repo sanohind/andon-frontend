@@ -1,0 +1,330 @@
+/* Manage page */
+.manage-sub-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eef2f7;
+}
+.manage-sub-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+.manage-sub-link:hover { background: rgba(10, 40, 86, 0.08); }
+.manage-sub-link.active { background: var(--primary-color); color: #fff; }
+
+.manage-section { margin-bottom: 2rem; }
+.manage-section .form-container,
+.manage-section .table-container {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+}
+.manage-section .form-container h3,
+.manage-section .table-container h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+/* Machine: form row */
+#addMachineForm {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+#addMachineForm input[type="text"],
+#addMachineForm select {
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1em;
+}
+#addMachineForm input[type="text"] { min-width: 200px; flex: 1; }
+#addMachineForm select { min-width: 140px; }
+#addMachineForm button {
+    background: var(--primary-color);
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+/* Data table common */
+.data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.data-table th {
+    background: #f8f9fc;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--primary-color);
+    border-bottom: 2px solid #eef2f7;
+}
+.data-table td { padding: 12px 14px; border-bottom: 1px solid #eef2f7; }
+.data-table tr:hover td { background: #f8f9fa; }
+
+.action-buttons-container { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-edit, .btn-delete, .btn-config-gear {
+    padding: 8px 10px;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+}
+.btn-edit { background: #17a2b8; }
+.btn-delete { background: var(--danger-color); }
+.btn-config-gear { background: #6c757d; }
+.btn-edit:hover, .btn-delete:hover, .btn-config-gear:hover { opacity: 0.9; }
+
+/* Pagination */
+.pagination-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 1rem;
+    padding-top: 12px;
+}
+.pagination-info { font-size: 0.9rem; color: #666; }
+.pagination-controls { display: flex; gap: 6px; }
+.pagination-controls button {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.pagination-controls button:hover:not(:disabled) { background: #f0f0f0; }
+.pagination-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Shift: two cards */
+.shift-tables-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 900px) { .shift-tables-wrap { grid-template-columns: 1fr; } }
+.shift-table-card { margin-bottom: 0; }
+.section-desc { font-size: 0.9rem; color: #666; margin-bottom: 1rem; }
+.break-schedule-scroll { overflow-x: auto; margin-bottom: 12px; }
+.break-schedule-table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 0.9em; }
+.break-schedule-table th, .break-schedule-table td { border: 1px solid #eef2f7; padding: 8px 10px; text-align: left; }
+.break-schedule-table th { background: #f8f9fc; font-weight: 600; color: var(--primary-color); }
+.break-schedule-table input[type="time"] { width: 90px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; }
+.break-schedule-actions { margin-top: 12px; }
+
+/* OEE */
+.oee-threshold-card .oee-threshold-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; }
+.oee-threshold-row label { flex: 1; min-width: 200px; }
+.oee-threshold-input-wrap { display: flex; align-items: center; gap: 10px; }
+.oee-threshold-input-wrap input[type="number"] { width: 100px; padding: 10px; border: 1px solid #ddd; border-radius: var(--border-radius); }
+
+/* Config section in modal */
+.config-section { border: 1px solid #eef2f7; border-radius: 8px; padding: 14px; margin-bottom: 14px; background: #fafbfc; }
+.config-section h4 { margin: 0 0 10px 0; font-size: 1rem; color: var(--primary-color); }
+.config-section .form-group { margin-bottom: 10px; }
+.config-section .form-group:last-child { margin-bottom: 0; }
+.config-section small { display: block; margin-top: 4px; color: #666; }
+
+/* Status badges */
+.status-open { background: #d4edda; color: #155724; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+.status-closed { background: #e2e3e5; color: #383d41; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+
+/* Lines */
+.divisions-list .loading-spinner { text-align: center; padding: 2rem; color: #666; }
+.text-muted { color: #666; }
+
+/* Filter container */
+.filter-container { margin-bottom: 1rem; padding: 1rem; background: #f8f9fc; border-radius: var(--border-radius); border: 1px solid #eef2f7; }
+.filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.filter-group { display: flex; flex-direction: column; gap: 6px; min-width: 140px; }
+.filter-group label { font-size: 0.85em; font-weight: 600; color: var(--primary-color); display: flex; align-items: center; gap: 6px; }
+.filter-input, .filter-select { padding: 10px 12px; border: 1px solid #ddd; border-radius: var(--border-radius); font-size: 0.95em; background: #fff; min-height: 40px; transition: var(--transition); }
+.filter-input:focus, .filter-select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(10, 40, 86, 0.1); }
+.btn-clear-filters { padding: 10px 16px; background: #6c757d; color: #fff; border: none; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: 6px; height: 40px; align-self: flex-end; }
+.btn-clear-filters:hover { opacity: 0.9; }
+
+/* ===================================================
+   SCHEDULE FORM - FIX KOLOM BERTUMPUK
+   =================================================== */
+
+/* Form: paksa block agar tombol tidak ikut dalam baris */
+#addScheduleForm.schedule-form {
+    display: block !important;
+}
+
+/* Grid: flex row, TIDAK wrap, gap kecil */
+#addScheduleForm .schedule-form-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
+/* Tiap kolom: PAKSA tidak grow/shrink, ukuran max-width ketat */
+#addScheduleForm .schedule-form-grid > .form-group,
+#addScheduleForm .schedule-form-grid > .form-group-toggle,
+#addScheduleForm .schedule-form-grid > .ot-fields {
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    margin-bottom: 0 !important;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Lebar tiap kolom — paksa dengan width + max-width */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(1) { width: 140px !important; max-width: 140px !important; } /* Tanggal */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 155px !important; max-width: 155px !important; } /* Mesin */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 105px !important; max-width: 105px !important; } /* Shift */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 95px  !important; max-width: 95px  !important; } /* Target */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 85px  !important; max-width: 85px  !important; } /* Cavity */
+#addScheduleForm .schedule-form-grid > .form-group-toggle        { width: 80px  !important; max-width: 80px  !important; } /* OT toggle */
+#addScheduleForm .schedule-form-grid > #scheduleOtFields         { width: 155px !important; max-width: 155px !important; } /* OT Duration */
+#addScheduleForm .schedule-form-grid > #scheduleOtTargetWrap     { width: 110px !important; max-width: 110px !important; } /* OT Target */
+
+/* Label */
+#addScheduleForm .schedule-form-grid label {
+    display: block !important;
+    margin-bottom: 5px !important;
+    font-weight: 600;
+    color: var(--primary-color);
+    font-size: 0.88em;
+    white-space: nowrap;
+}
+
+/* Input & Select: pas dengan lebar kolom */
+#addScheduleForm .schedule-form-grid input,
+#addScheduleForm .schedule-form-grid select {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 7px 8px !important;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    box-sizing: border-box !important;
+    height: 38px;
+}
+
+/* OT Toggle: label atas, toggle bawah */
+#addScheduleForm .schedule-form-grid > .form-group-toggle {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+}
+
+/* Tombol Simpan di baris sendiri */
+#addScheduleForm > .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Responsive */
+@media (max-width: 1050px) {
+    #addScheduleForm .schedule-form-grid {
+        flex-wrap: wrap !important;
+    }
+    #addScheduleForm .schedule-form-grid > .form-group,
+    #addScheduleForm .schedule-form-grid > .form-group-toggle,
+    #addScheduleForm .schedule-form-grid > .ot-fields {
+        flex: 1 1 120px !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+}
+
+/* ===================================================
+   OT TOGGLE SWITCH (global)
+   =================================================== */
+.form-group-toggle { display: flex; align-items: center; gap: 12px; }
+.form-group-toggle label:first-of-type { margin-bottom: 0; }
+.toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; cursor: pointer; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 28px; transition: 0.3s; }
+.toggle-slider:before { content: ""; position: absolute; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.toggle-switch input:checked + .toggle-slider { background-color: var(--primary-color); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
+.toggle-switch input:focus + .toggle-slider { box-shadow: 0 0 0 3px rgba(10, 40, 86, 0.2); }
+
+/* ===================================================
+   OVERRIDE dashboard.css - fix kolom schedule bertumpuk
+   Letakkan di PALING BAWAH manage.css
+   =================================================== */
+
+/* Reset flex dari .form-container form di dashboard.css */
+#addScheduleForm.schedule-form {
+    display: block !important;
+    gap: unset !important;
+    align-items: unset !important;
+    flex-wrap: unset !important;
+}
+
+/* Reset flex:1 dan min-width dari dashboard.css pada input/select */
+#addScheduleForm .schedule-form-grid input,
+#addScheduleForm .schedule-form-grid select {
+    flex: none !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 7px 8px !important;
+    box-sizing: border-box !important;
+    height: 38px !important;
+}
+
+/* Grid baris */
+#addScheduleForm .schedule-form-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Tiap kolom: paksa tidak grow */
+#addScheduleForm .schedule-form-grid > * {
+    flex: none !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    min-width: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Lebar tiap kolom */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(1) { width: 140px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 155px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 105px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 95px  !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 85px  !important; }
+#addScheduleForm .schedule-form-grid > .form-group-toggle        { width: 80px  !important; }
+#addScheduleForm .schedule-form-grid > #scheduleOtFields         { width: 155px !important; }
+#addScheduleForm .schedule-form-grid > #scheduleOtTargetWrap     { width: 110px !important; }
+
+/* Responsive */
+@media (max-width: 1050px) {
+    #addScheduleForm .schedule-form-grid {
+        flex-wrap: wrap !important;
+    }
+    #addScheduleForm .schedule-form-grid > * {
+        flex: 1 1 120px !important;
+        width: auto !important;
+    }
+}

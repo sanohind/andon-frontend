@@ -42,6 +42,81 @@ body {
     z-index: 100;
 }
 
+.dashboard-header-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+body.has-fixed-header .dashboard-main {
+    padding-top: 70px;
+}
+
+/* Manage dropdown in nav */
+.nav-manage-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-manage-trigger {
+    display: inline-flex;
+    align-items: center;
+}
+
+.nav-manage-chevron {
+    margin-left: 4px;
+    margin-right: 0;
+    font-size: 0.65rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-manage-wrapper:hover .nav-manage-chevron {
+    transform: rotate(180deg);
+}
+
+.nav-manage-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    min-width: 180px;
+    background: #fff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 6px 0;
+    z-index: 1001;
+    border: 1px solid #eef2f7;
+}
+
+.nav-manage-wrapper:hover .nav-manage-dropdown {
+    display: block;
+}
+
+.nav-manage-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.nav-manage-item:hover {
+    background: rgba(10, 40, 86, 0.08);
+}
+
+.nav-manage-item i {
+    width: 18px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
 .header-content {
     display: flex;
     justify-content: space-between;
