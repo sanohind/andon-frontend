@@ -23,6 +23,15 @@
         return String(parseInt(m[1], 10)).padStart(2, '0') + ':' + String(parseInt(m[2], 10)).padStart(2, '0');
     }
 
+    function showScheduleSuccess(message) {
+        const msg = message || 'Data Schedule berhasil disimpan.';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Berhasil', msg, 'success');
+        } else {
+            alert(msg);
+        }
+    }
+
     // --- Section detection
     const sectionEl = document.querySelector('.manage-section[style*="block"]') || document.querySelector('[data-section]');
     const currentSection = sectionEl ? sectionEl.getAttribute('data-section') : 'machine';
@@ -718,6 +727,7 @@
                     document.getElementById('scheduleOtFields').style.display = 'none';
                     document.getElementById('scheduleOtTargetWrap').style.display = 'none';
                     loadSchedules();
+                    showScheduleSuccess('Data Schedule berhasil disimpan.');
                 } catch (err) { alert(err.message); }
             });
         }
@@ -745,6 +755,7 @@
                 if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
                 closeModal('editScheduleModal');
                 loadSchedules();
+                showScheduleSuccess('Data Schedule berhasil diperbarui.');
             } catch (err) { alert(err.message); }
         });
         document.getElementById('closeEditSchedule')?.addEventListener('click', () => closeModal('editScheduleModal'));
