@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     label: 'Aktual Reguler',
                     data: actualsRegular,
                     backgroundColor: '#4c6ef5',
-                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
                     maxBarThickness: 36,
                     stack: 'actual',
                     yAxisID: 'y'
@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     label: 'Aktual OT',
                     data: actualsOt,
                     backgroundColor: '#d4a017',
-                    borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
                     maxBarThickness: 36,
                     stack: 'actual',
                     yAxisID: 'y'
