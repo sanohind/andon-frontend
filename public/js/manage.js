@@ -36,6 +36,13 @@
     const sectionEl = document.querySelector('.manage-section[style*="block"]') || document.querySelector('[data-section]');
     const currentSection = sectionEl ? sectionEl.getAttribute('data-section') : 'machine';
 
+    // User role (management = view only, no add/edit/delete/config)
+    const userRole = (() => {
+        const el = document.getElementById('userData');
+        return el ? (el.getAttribute('data-role') || '') : '';
+    })();
+    const isManagementViewOnly = userRole === 'management';
+
     // ========== MACHINE ==========
     let allMachines = [];
     let machinePage = 1;
@@ -112,19 +119,22 @@
         const start = (machinePage - 1) * machinePageSize;
         const pageData = filtered.slice(start, start + machinePageSize);
 
+        const actionCellHtml = isManagementViewOnly
+            ? '<td class="text-muted">—</td>'
+            : `<td>
+                    <div class="action-buttons-container">
+                        <button class="btn-edit" type="button" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="btn-delete" type="button" title="Hapus"><i class="fas fa-trash"></i></button>
+                        <button class="btn-config-gear" type="button" title="Konfigurasi"><i class="fas fa-gear"></i></button>
+                    </div>
+                </td>`;
         tbody.innerHTML = pageData.map(m => `
             <tr data-id="${m.id}" data-address="${m.address || ''}" data-name="${escapeHtml(m.name || '')}" data-division="${m.division || ''}" data-line="${m.line_name || m.line || ''}" data-cycle="${m.cycle_time || ''}" data-warning="${m.warning_cycle_count || ''}" data-problem="${m.problem_cycle_count || ''}">
                 <td>${escapeHtml(m.name || '')}</td>
                 <td>${escapeHtml(m.division || '')}</td>
                 <td>${escapeHtml(m.line_name || m.line || '')}</td>
                 <td>${m.address || ''}</td>
-                <td>
-                    <div class="action-buttons-container">
-                        <button class="btn-edit" type="button" title="Edit"><i class="fas fa-edit"></i></button>
-                        <button class="btn-delete" type="button" title="Hapus"><i class="fas fa-trash"></i></button>
-                        <button class="btn-config-gear" type="button" title="Konfigurasi"><i class="fas fa-gear"></i></button>
-                    </div>
-                </td>
+                ${actionCellHtml}
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Tidak ada data</td></tr>';
 
@@ -140,15 +150,17 @@
             ctrlEl.querySelector('[data-page="next"]').addEventListener('click', () => { machinePage = Math.min(lastPage, machinePage + 1); renderMachinesTable(); });
         }
 
-        tbody.querySelectorAll('.btn-edit').forEach(btn => {
-            btn.addEventListener('click', () => openEditMachine(btn.closest('tr')));
-        });
-        tbody.querySelectorAll('.btn-delete').forEach(btn => {
-            btn.addEventListener('click', () => deleteMachine(btn.closest('tr')));
-        });
-        tbody.querySelectorAll('.btn-config-gear').forEach(btn => {
-            btn.addEventListener('click', () => openConfigMachine(btn.closest('tr')));
-        });
+        if (!isManagementViewOnly) {
+            tbody.querySelectorAll('.btn-edit').forEach(btn => {
+                btn.addEventListener('click', () => openEditMachine(btn.closest('tr')));
+            });
+            tbody.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.addEventListener('click', () => deleteMachine(btn.closest('tr')));
+            });
+            tbody.querySelectorAll('.btn-config-gear').forEach(btn => {
+                btn.addEventListener('click', () => openConfigMachine(btn.closest('tr')));
+            });
+        }
     }
 
     function escapeHtml(s) {
@@ -388,6 +400,14 @@
             const list = json.data || [];
             const total = json.total || 0;
             const lastPage = json.last_page || 1;
+            const scheduleActionCell = isManagementViewOnly
+                ? '<td class="text-muted">—</td>'
+                : `<td>
+                        <div class="action-buttons-container">
+                            <button class="btn-edit btn-schedule-edit" type="button" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn-delete btn-schedule-delete" type="button" title="Hapus"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>`;
             tbody.innerHTML = list.map(s => {
                 const shiftLabel = (s.shift || 'pagi') === 'malam' ? 'Malam' : 'Pagi';
                 const otLabel = s.ot_enabled ? 'Aktif' : 'Nonaktif';
@@ -407,12 +427,7 @@
                     <td>${durasiLabel || '-'}</td>
                     <td>${targetOtLabel}</td>
                     <td><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
-                    <td>
-                        <div class="action-buttons-container">
-                            <button class="btn-edit btn-schedule-edit" type="button" title="Edit"><i class="fas fa-edit"></i></button>
-                            <button class="btn-delete btn-schedule-delete" type="button" title="Hapus"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </td>
+                    ${scheduleActionCell}
                 </tr>
                 `;
             }).join('') || '<tr><td colspan="10">Tidak ada data</td></tr>';
@@ -428,12 +443,14 @@
                 ctrlEl.querySelector('[data-page="next"]').addEventListener('click', () => { schedulePage++; loadSchedules(); });
             }
 
-            tbody.querySelectorAll('.btn-schedule-edit').forEach(btn => {
-                btn.addEventListener('click', () => openEditSchedule(btn.closest('tr'), list));
-            });
-            tbody.querySelectorAll('.btn-schedule-delete').forEach(btn => {
-                btn.addEventListener('click', () => deleteSchedule(btn.closest('tr')));
-            });
+            if (!isManagementViewOnly) {
+                tbody.querySelectorAll('.btn-schedule-edit').forEach(btn => {
+                    btn.addEventListener('click', () => openEditSchedule(btn.closest('tr'), list));
+                });
+                tbody.querySelectorAll('.btn-schedule-delete').forEach(btn => {
+                    btn.addEventListener('click', () => deleteSchedule(btn.closest('tr')));
+                });
+            }
         } catch (e) {
             tbody.innerHTML = '<tr><td colspan="10">Error: ' + escapeHtml(e.message) + '</td></tr>';
         }

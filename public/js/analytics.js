@@ -506,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const labels = json.data.map(d => d.snapshot_at);
             const quantities = json.data.map(d => d.quantity);
+            const idealQuantities = json.data.map(d => Number(d.ideal_quantity ?? 0));
             const otEnabled = !!json.ot_enabled;
 
             const parseHourFromLabel = (label) => {
@@ -551,6 +552,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const ctx = canvas.getContext('2d');
             const hourlyDatasets = [
                 {
+                    label: 'Ideal Qty',
+                    data: idealQuantities,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#22c55e',
+                    segment: { borderColor: '#22c55e' }
+                },
+                {
                     label: otEnabled ? 'Aktual Reguler' : 'Quantity',
                     data: dataReguler,
                     borderColor: '#4c6ef5',
@@ -591,7 +605,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         legend: { display: true, position: 'top' },
                         tooltip: {
                             callbacks: {
-                                label(c) { return `Quantity: ${formatQuantityValue(c.parsed.y)}`; }
+                                label(c) {
+                                    const label = c.dataset.label || '';
+                                    const value = formatQuantityValue(c.parsed.y);
+                                    return `${label}: ${value}`;
+                                }
                             }
                         }
                     },

@@ -26,6 +26,7 @@
 
             <!-- SECTION: Machine -->
             <div id="section-machine" class="manage-section" data-section="machine" style="display:<%= section === 'machine' ? 'block' : 'none' %>">
+                <% if (user.role !== 'management') { %>
                 <div class="form-container">
                     <h3>Tambah Mesin</h3>
                     <form id="addMachineForm">
@@ -39,6 +40,7 @@
                         <button type="submit">Tambah Mesin</button>
                     </form>
                 </div>
+                <% } %>
                 <div class="table-container">
                     <h3>Daftar Mesin</h3>
                     <div class="filter-container">
@@ -151,6 +153,7 @@
 
             <!-- SECTION: Schedule -->
             <div id="section-schedule" class="manage-section" data-section="schedule" style="display:<%= section === 'schedule' ? 'block' : 'none' %>">
+                <% if (user.role !== 'management') { %>
                 <div class="form-container">
                     <h3>Tambah Schedule</h3>
                     <form id="addScheduleForm" class="schedule-form">
@@ -202,6 +205,7 @@
                         <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Simpan Schedule</button>
                     </form>
                 </div>
+                <% } %>
                 <div class="table-container">
                     <h3>Daftar Schedule</h3>
                     <div class="filter-container">

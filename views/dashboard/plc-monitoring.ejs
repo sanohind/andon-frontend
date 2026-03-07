@@ -303,6 +303,7 @@
     </style>
 </head>
 <body class="has-fixed-header">
+    <div id="userData" data-role="<%= user.role %>" style="display:none;"></div>
      <%- include('../partials/header') %>
     <main class="dashboard-main">
         <div class="container">
@@ -316,9 +317,11 @@
                     <i class="fas fa-sync-alt"></i> Auto-refresh every 5 seconds
                 </div>
                     <div class="plc-actions">
+                        <% if (user.role !== 'management') { %>
                         <button class="btn btn-primary" onclick="openAddDeviceModal()">
                             <i class="fas fa-plus"></i> Add Device
                         </button>
+                        <% } %>
                     </div>
                 </div>
                 <div class="plc-controls">
