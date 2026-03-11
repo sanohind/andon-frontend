@@ -286,17 +286,7 @@ class DashboardManager {
             }
         });
 
-        // Leader: Set OT modal
-        const leaderSetOtModal = document.getElementById('leaderSetOtModal');
-        const leaderSetOtModalClose = document.getElementById('leaderSetOtModalClose');
-        const leaderSetOtModalCancel = document.getElementById('leaderSetOtModalCancel');
-        const leaderSetOtForm = document.getElementById('leaderSetOtForm');
-        if (leaderSetOtModal) {
-            if (leaderSetOtModalClose) leaderSetOtModalClose.addEventListener('click', () => this.closeLeaderSetOtModal());
-            if (leaderSetOtModalCancel) leaderSetOtModalCancel.addEventListener('click', () => this.closeLeaderSetOtModal());
-            leaderSetOtModal.addEventListener('click', (e) => { if (e.target === leaderSetOtModal) this.closeLeaderSetOtModal(); });
-            if (leaderSetOtForm) leaderSetOtForm.addEventListener('submit', (e) => this.submitLeaderSetOt(e));
-        }
+        // Leader: Set OT modal removed (UI no longer present)
     }
 
     openLeaderSetOtForMachine(address, machineName, machineStatus = null) {
@@ -1253,10 +1243,7 @@ class DashboardManager {
                 const machineStatus = await this.getCurrentMachineStatus(machine, machineLine);
                 console.log('Machine status received:', machineStatus);
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
-                const setOtBtn = modalBody.querySelector('.btn-leader-set-ot-detail');
-                if (setOtBtn && machineStatus && machineStatus.address) {
-                    setOtBtn.addEventListener('click', () => this.openLeaderSetOtForMachine(machineStatus.address, machine, machineStatus));
-                }
+                // Leader Set OT feature removed
             }
         } catch (error) {
             console.error('Error loading problem detail:', error);
@@ -1442,13 +1429,7 @@ class DashboardManager {
 
                 ${messageBoxHTML}
 
-                ${this.userRole === 'leader' && (machineStatus.address || '') ? `
-                <div class="modal-detail-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
-                    <button type="button" class="btn btn-leader-set-ot-detail">
-                        <i class="fas fa-moon"></i> Set OT (Lembur)
-                    </button>
-                </div>
-                ` : ''}
+                <!-- Leader Set OT feature removed -->
             </div>
         `;
     }
@@ -3846,9 +3827,7 @@ function closeModal() {
 }
 
 function openLeaderSetOtForMachine(machineAddress, machineName, machineStatus) {
-    if (dashboardManager) {
-        dashboardManager.openLeaderSetOtForMachine(machineAddress, machineName, machineStatus || null);
-    }
+    // Leader Set OT feature removed
 }
 
 function resolveProblem() {

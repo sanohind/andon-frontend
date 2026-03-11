@@ -68,6 +68,11 @@
 
     <main class="dashboard-main">
         <div class="container">
+            <%
+                // Dashboard Line: halaman dashboard yang difilter per line (atau leader yang hanya melihat line-nya).
+                // OEE harus disembunyikan DI SINI (bukan di Production Monitoring /realtime-oee).
+                const isLineDashboardView = !!lineFilter || user.role === 'leader';
+            %>
             <% if (typeof lineFilter !== 'undefined' && lineFilter && user.role !== 'leader') { %>
                 <div style="margin-bottom: 1rem; display:flex; align-items:center; justify-content: space-between; gap: 0.75rem;">
                     <div style="display:flex; align-items:center; gap:0.75rem;">
@@ -163,7 +168,7 @@
                                         </div>
                                         <div class="detail-item oee-info">
                                             <span class="label"><i class="fas fa-percentage"></i> OEE:</span>
-                                            <span class="value" id="oee-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>">-</span>
+                                            <span class="value" id="oee-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>" style="<%= isLineDashboardView ? 'display:none;' : '' %>">-</span>
                                         </div>
                                     </div>
                                 </div>
@@ -249,48 +254,7 @@
         </div>
     </div>
 
-    <!-- Set OT Modal (hanya untuk leader di dashboard line) -->
-    <div class="modal" id="leaderSetOtModal">
-        <div class="modal-content" style="max-width: 480px;">
-            <div class="modal-header">
-                <h3><i class="fas fa-moon"></i> Set OT (Lembur)</h3>
-                <button type="button" class="modal-close" id="leaderSetOtModalClose">×</button>
-            </div>
-            <div class="modal-body">
-                <form id="leaderSetOtForm">
-                    <div class="form-group" id="leaderSetOtMachineLabelWrap" style="display: none;">
-                        <label>Mesin</label>
-                        <p id="leaderSetOtMachineLabel" class="leader-set-ot-machine-name"></p>
-                    </div>
-                    <input type="hidden" id="leaderSetOtAddress">
-                    <div class="form-group form-group-ot-checkbox">
-                        <label class="label-ot-checkbox" for="leaderSetOtEnabledInput">
-                            <input type="checkbox" id="leaderSetOtEnabledInput" name="ot_enabled" class="ot-checkbox-input">
-                            <span class="ot-checkbox-text">Aktifkan OT (Over Time / Lembur)</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label for="leaderSetOtDurationTypeInput">Durasi OT</label>
-                        <select id="leaderSetOtDurationTypeInput" name="ot_duration_type">
-                            <option value="">-- Pilih durasi --</option>
-                            <option value="2h_pagi">2 jam shift pagi</option>
-                            <option value="2h_malam">2 jam shift malam</option>
-                            <option value="3.5h_pagi">3,5 jam shift pagi</option>
-                        </select>
-                        <small style="color: #666;">OT aktif setelah jam shift reguler (pagi selesai 16:00, malam 05:00).</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="leaderSetOtTargetInput">Target OT (quantity)</label>
-                        <input type="number" id="leaderSetOtTargetInput" name="target_ot" min="0" placeholder="Target khusus untuk periode OT">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" id="leaderSetOtModalCancel" class="btn btn-secondary">Batal</button>
-                <button type="submit" form="leaderSetOtForm" class="btn btn-primary">Simpan</button>
-            </div>
-        </div>
-    </div>
+    <!-- Set OT Modal (leader) dihapus sesuai permintaan -->
 
     <audio id="alertSound" preload="auto">
         <source src="/audio/alert.mp3" type="audio/mpeg">

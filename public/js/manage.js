@@ -42,6 +42,10 @@
         return el ? (el.getAttribute('data-role') || '') : '';
     })();
     const isManagementViewOnly = userRole === 'management';
+    const leaderLineName = (() => {
+        const el = document.getElementById('userData');
+        return el ? (el.getAttribute('data-line') || '') : '';
+    })();
 
     // ========== MACHINE ==========
     let allMachines = [];
@@ -372,7 +376,10 @@
         try {
             const res = await fetch(`${API}/inspect-tables`, { credentials: 'include', headers: getAuthHeaders() });
             const data = await res.json();
-            const list = Array.isArray(data) ? data : (data.data || data) || [];
+            let list = Array.isArray(data) ? data : (data.data || data) || [];
+            if (userRole === 'leader' && leaderLineName) {
+                list = list.filter(m => String(m.line_name || m.line || '') === String(leaderLineName));
+            }
             const sel = document.getElementById('scheduleMachine');
             const editSel = document.getElementById('editScheduleMachine');
             [sel, editSel].forEach(select => {

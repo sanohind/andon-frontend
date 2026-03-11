@@ -336,14 +336,17 @@ app.get('/manage-lines', requireAuth, async (req, res) => {
 });
 
 app.get('/manage', requireAuth, (req, res) => {
-  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'management', 'leader'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  if (req.user.role === 'leader') return res.redirect('/manage/schedule');
   return res.redirect('/manage/machine');
 });
 
 app.get('/manage/:section', requireAuth, async (req, res) => {
-  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
+  if (!['admin', 'management', 'leader'].includes(req.user.role)) return res.status(403).send('Akses Ditolak');
   const section = (req.params.section || 'machine').toLowerCase();
-  const allowed = ['machine', 'shift', 'oee', 'schedule', 'lines'];
+  const allowed = req.user.role === 'leader'
+    ? ['schedule']
+    : ['machine', 'shift', 'oee', 'schedule', 'lines'];
   if (!allowed.includes(section)) return res.redirect('/manage/machine');
   let tableList = [];
   if (section === 'machine') {
@@ -1403,7 +1406,7 @@ app.get('/inspect-tables', requireAuth, (req, res) => {
 
 // RUTE PROXY API UNTUK MENGAMBIL DAFTAR MEJA INSPECT
 app.get('/api/inspect-tables', requireAuth, async (req, res) => {
-  if (!['admin', 'management'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'manager', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     console.log('API: Fetching inspection tables from:', `${LARAVEL_API_BASE}/inspection-tables`);
     
@@ -1418,8 +1421,16 @@ app.get('/api/inspect-tables', requireAuth, async (req, res) => {
     // Handle the response format: { success:true, data:[...] } or array
     let tableList = response.data && response.data.data ? response.data.data : (response.data || []);
 
+    // Filter for leader - hanya mesin di line leader tersebut
+    if (req.user.role === 'leader' && req.user.line_name) {
+      const leaderLine = String(req.user.line_name || '').trim();
+      tableList = tableList.filter((t) => {
+        const line = String(t.line_name || t.lineName || t.line || '').trim();
+        return line === leaderLine;
+      });
+    }
     // Filter for manager - mapping dinamis dari database (divisi/line baru ikut terbaca)
-    if (req.user.role === 'manager') {
+    else if (req.user.role === 'manager') {
       const normalizeKey = (v) => String(v || '').trim().toLowerCase();
       const divisionToLines = await getDivisionLineMapping();
       const allowedLineKeys = new Set((divisionToLines[normalizeKey(req.user.division)] || []).map(normalizeKey));
@@ -1740,7 +1751,7 @@ app.put('/api/break-schedules', requireAuth, async (req, res) => {
 
 // Machine schedules (Manage > Schedule)
 app.get('/api/machine-schedules', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'management'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'leader'].includes(req.user?.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/machine-schedules`, {
       params: req.query,
@@ -1752,7 +1763,7 @@ app.get('/api/machine-schedules', requireAuthAPI, async (req, res) => {
   }
 });
 app.post('/api/machine-schedules', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.post(`${LARAVEL_API_BASE}/machine-schedules`, req.body, {
       headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json', 'Content-Type': 'application/json' }
@@ -1763,7 +1774,7 @@ app.post('/api/machine-schedules', requireAuth, async (req, res) => {
   }
 });
 app.put('/api/machine-schedules/:id', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.put(`${LARAVEL_API_BASE}/machine-schedules/${req.params.id}`, req.body, {
       headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json', 'Content-Type': 'application/json' }
@@ -1774,7 +1785,7 @@ app.put('/api/machine-schedules/:id', requireAuth, async (req, res) => {
   }
 });
 app.delete('/api/machine-schedules/:id', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const response = await axios.delete(`${LARAVEL_API_BASE}/machine-schedules/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json' }

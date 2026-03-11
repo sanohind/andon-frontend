@@ -11,11 +11,12 @@
     <link rel="stylesheet" href="/css/manage-lines.css">
 </head>
 <body class="has-fixed-header">
-    <div id="userData" data-role="<%= user.role %>" data-division="<%= user.division || '' %>" style="display:none;"></div>
+    <div id="userData" data-role="<%= user.role %>" data-line="<%= user.line_name || '' %>" data-division="<%= user.division || '' %>" style="display:none;"></div>
     <%- include('../partials/header') %>
 
     <main class="dashboard-main">
         <div class="container">
+            <% if (user.role === 'admin' || user.role === 'management') { %>
             <nav class="manage-sub-nav">
                 <a href="/manage/machine" class="manage-sub-link <%= section === 'machine' ? 'active' : '' %>"><i class="fas fa-industry"></i> Machine</a>
                 <a href="/manage/shift" class="manage-sub-link <%= section === 'shift' ? 'active' : '' %>"><i class="fas fa-clock"></i> Shift</a>
@@ -23,6 +24,7 @@
                 <a href="/manage/schedule" class="manage-sub-link <%= section === 'schedule' ? 'active' : '' %>"><i class="fas fa-calendar-alt"></i> Schedule</a>
                 <a href="/manage/lines" class="manage-sub-link <%= section === 'lines' ? 'active' : '' %>"><i class="fas fa-sitemap"></i> Lines</a>
             </nav>
+            <% } %>
 
             <!-- SECTION: Machine -->
             <div id="section-machine" class="manage-section" data-section="machine" style="display:<%= section === 'machine' ? 'block' : 'none' %>">
@@ -155,6 +157,14 @@
 
             <!-- SECTION: Schedule -->
             <div id="section-schedule" class="manage-section" data-section="schedule" style="display:<%= section === 'schedule' ? 'block' : 'none' %>">
+                <% if (user.role === 'leader') { %>
+                <div style="margin-bottom: 1rem;">
+                    <a href="/" class="back-button" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--primary-color, #0A2856); color: white; text-decoration: none; border-radius: 4px; font-weight: 600;">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Kembali ke Dashboard</span>
+                    </a>
+                </div>
+                <% } %>
                 <% if (user.role !== 'management') { %>
                 <div class="form-container">
                     <h3>Tambah Schedule</h3>
