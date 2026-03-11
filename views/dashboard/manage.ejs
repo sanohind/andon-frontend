@@ -77,6 +77,8 @@
                                 <th>Nama</th>
                                 <th>Divisi</th>
                                 <th>Line</th>
+                                <th>Cycle Time</th>
+                                <th>Cavity</th>
                                 <th>Address</th>
                                 <th>Aksi</th>
                             </tr>
@@ -177,10 +179,6 @@
                                 <label>Target</label>
                                 <input type="number" id="scheduleTarget" min="0" required>
                             </div>
-                            <div class="form-group">
-                                <label>Cavity</label>
-                                <input type="number" id="scheduleCavity" min="1" value="1">
-                            </div>
                             <div class="form-group form-group-toggle">
                                 <label>OT (Lembur)</label>
                                 <label class="toggle-switch">
@@ -232,7 +230,6 @@
                                 <th>Mesin</th>
                                 <th>Shift</th>
                                 <th>Target</th>
-                                <th>Cavity</th>
                                 <th>OT</th>
                                 <th>Durasi OT</th>
                                 <th>Target OT</th>
@@ -319,6 +316,17 @@
                     </form>
                 </div>
                 <div class="config-section">
+                    <h4><i class="fas fa-layer-group"></i> Set Cavity</h4>
+                    <form id="configCavityForm">
+                        <input type="hidden" id="configCavityAddress">
+                        <div class="form-group">
+                            <label>Cavity</label>
+                            <input type="number" id="configCavityInput" min="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Simpan Cavity</button>
+                    </form>
+                </div>
+                <div class="config-section">
                     <h4><i class="fas fa-exclamation-triangle"></i> Set Cycle Threshold</h4>
                     <form id="configCycleThresholdForm">
                         <input type="hidden" id="configCycleThresholdAddress">
@@ -366,10 +374,6 @@
                 <div class="form-group">
                     <label>Target</label>
                     <input type="number" id="editScheduleTarget" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Cavity</label>
-                    <input type="number" id="editScheduleCavity" min="1" value="1">
                 </div>
                 <div class="form-group form-group-toggle">
                     <label>OT (Lembur)</label>

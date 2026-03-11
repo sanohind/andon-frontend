@@ -129,14 +129,16 @@
                     </div>
                 </td>`;
         tbody.innerHTML = pageData.map(m => `
-            <tr data-id="${m.id}" data-address="${m.address || ''}" data-name="${escapeHtml(m.name || '')}" data-division="${m.division || ''}" data-line="${m.line_name || m.line || ''}" data-cycle="${m.cycle_time || ''}" data-warning="${m.warning_cycle_count || ''}" data-problem="${m.problem_cycle_count || ''}">
+            <tr data-id="${m.id}" data-address="${m.address || ''}" data-name="${escapeHtml(m.name || '')}" data-division="${m.division || ''}" data-line="${m.line_name || m.line || ''}" data-cycle="${m.cycle_time || ''}" data-cavity="${m.cavity || ''}" data-warning="${m.warning_cycle_count || ''}" data-problem="${m.problem_cycle_count || ''}">
                 <td>${escapeHtml(m.name || '')}</td>
                 <td>${escapeHtml(m.division || '')}</td>
                 <td>${escapeHtml(m.line_name || m.line || '')}</td>
+                <td>${(m.cycle_time ?? '') === '' ? '-' : m.cycle_time}</td>
+                <td>${(m.cavity ?? '') === '' ? '-' : m.cavity}</td>
                 <td>${m.address || ''}</td>
                 ${actionCellHtml}
             </tr>
-        `).join('') || '<tr><td colspan="5" style="text-align:center;">Tidak ada data</td></tr>';
+        `).join('') || '<tr><td colspan="7" style="text-align:center;">Tidak ada data</td></tr>';
 
         if (infoEl) infoEl.textContent = `Menampilkan ${start + 1}-${Math.min(start + machinePageSize, total)} dari ${total} mesin`;
         if (ctrlEl) {
@@ -188,8 +190,10 @@
         const address = tr.dataset.address;
         document.getElementById('configMachineAddress').value = address;
         document.getElementById('configCycleAddress').value = address;
+        document.getElementById('configCavityAddress').value = address;
         document.getElementById('configCycleThresholdAddress').value = address;
         document.getElementById('configCycleTimeInput').value = tr.dataset.cycle || '';
+        document.getElementById('configCavityInput').value = tr.dataset.cavity || '1';
         document.getElementById('configWarningCycleCountInput').value = tr.dataset.warning || '';
         document.getElementById('configProblemCycleCountInput').value = tr.dataset.problem || '';
         document.getElementById('configMachineModal').classList.add('show');
@@ -422,7 +426,6 @@
                     <td>${escapeHtml(s.machine_name || s.machine_address)}</td>
                     <td>${shiftLabel}</td>
                     <td>${s.target_quantity}</td>
-                    <td>${s.cavity}</td>
                     <td>${otLabel}</td>
                     <td>${durasiLabel || '-'}</td>
                     <td>${targetOtLabel}</td>
@@ -430,7 +433,7 @@
                     ${scheduleActionCell}
                 </tr>
                 `;
-            }).join('') || '<tr><td colspan="10">Tidak ada data</td></tr>';
+            }).join('') || '<tr><td colspan="9">Tidak ada data</td></tr>';
 
             if (infoEl) infoEl.textContent = `Menampilkan ${list.length} dari ${total} schedule`;
             if (ctrlEl) {
@@ -452,7 +455,7 @@
                 });
             }
         } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="10">Error: ' + escapeHtml(e.message) + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9">Error: ' + escapeHtml(e.message) + '</td></tr>';
         }
     }
 
@@ -465,7 +468,6 @@
         document.getElementById('editScheduleDate').value = row.schedule_date;
         document.getElementById('editScheduleShift').value = row.shift || 'pagi';
         document.getElementById('editScheduleTarget').value = row.target_quantity;
-        document.getElementById('editScheduleCavity').value = row.cavity || 1;
         document.getElementById('editScheduleOtEnabled').checked = row.ot_enabled || false;
         document.getElementById('editScheduleOtDuration').value = row.ot_duration_type || '';
         document.getElementById('editScheduleTargetOt').value = row.target_ot || '';
@@ -695,6 +697,17 @@
                 loadMachines();
             } catch (err) { alert(err.message); }
         });
+        document.getElementById('configCavityForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const address = document.getElementById('configCavityAddress').value;
+            const cavity = parseInt(document.getElementById('configCavityInput').value, 10);
+            try {
+                const res = await fetch(`${API}/inspection-tables/address/${address}/cavity`, { method: 'PUT', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify({ cavity }) });
+                if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
+                alert('Cavity disimpan.');
+                loadMachines();
+            } catch (err) { alert(err.message); }
+        });
         document.getElementById('configCycleThresholdForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const address = document.getElementById('configCycleThresholdAddress').value;
@@ -731,7 +744,6 @@
                     machine_address: document.getElementById('scheduleMachine').value,
                     shift: document.getElementById('scheduleShift').value || 'pagi',
                     target_quantity: parseInt(document.getElementById('scheduleTarget').value, 10),
-                    cavity: parseInt(document.getElementById('scheduleCavity').value, 10) || 1,
                     ot_enabled: otEl ? otEl.checked : false,
                     ot_duration_type: otEl && otEl.checked ? (document.getElementById('scheduleOtDuration').value || null) : null,
                     target_ot: otEl && otEl.checked && document.getElementById('scheduleTargetOt').value ? parseInt(document.getElementById('scheduleTargetOt').value, 10) : null
@@ -762,7 +774,6 @@
                 machine_address: document.getElementById('editScheduleMachine').value,
                 shift: document.getElementById('editScheduleShift').value || 'pagi',
                 target_quantity: parseInt(document.getElementById('editScheduleTarget').value, 10),
-                cavity: parseInt(document.getElementById('editScheduleCavity').value, 10) || 1,
                 ot_enabled: otEl ? otEl.checked : false,
                 ot_duration_type: otEl && otEl.checked ? (document.getElementById('editScheduleOtDuration').value || null) : null,
                 target_ot: otEl && otEl.checked && document.getElementById('editScheduleTargetOt').value ? parseInt(document.getElementById('editScheduleTargetOt').value, 10) : null
