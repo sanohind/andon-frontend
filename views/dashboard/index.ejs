@@ -166,10 +166,12 @@
                                             <span class="label"><i class="fas fa-box"></i> Aktual:</span>
                                             <span class="value" id="quantity-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>"><%= machine.quantity !== undefined ? machine.quantity : '0' %></span>
                                         </div>
+                                        <% if (!isLineDashboardView) { %>
                                         <div class="detail-item oee-info">
                                             <span class="label"><i class="fas fa-percentage"></i> OEE:</span>
-                                            <span class="value" id="oee-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>" style="<%= isLineDashboardView ? 'display:none;' : '' %>">-</span>
+                                            <span class="value" id="oee-<%= machine.name.replace(/ /g, '') %>-line-<%= machine.line_name %>">-</span>
                                         </div>
+                                        <% } %>
                                     </div>
                                 </div>
                             <% }) %>
