@@ -147,21 +147,135 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  /** Ideal Qty = Running Hour (detik) / Cycle Time. Menggunakan running_hour_seconds dari backend. */
-  function computeIdealQty(cycleSeconds, runtimeSeconds) {
+  /** Ideal Qty baris dashboard = Running Hour (detik) / Cycle Time. Parameter waktu = running_hour_seconds dari backend. */
+  function computeIdealQty(cycleSeconds, timeSecondsForIdeal) {
     const c = safeNumber(cycleSeconds);
-    const r = Math.max(0, safeNumber(runtimeSeconds));
+    const r = Math.max(0, safeNumber(timeSecondsForIdeal));
     if (c <= 0) return 0;
     return Math.floor(r / c);
   }
 
-  /** OEE = (Actual Qty / Ideal Qty) * 100, dengan Ideal Qty = Run Time / Cycle Time. */
+  /** Ideal Qty hanya untuk tooltip Performance = Run Time (detik) / Cycle Time. Tidak mengganti nilai Ideal-Qty di board. */
+  function computeIdealQtyForPerformance(cycleSeconds, runTimeSeconds) {
+    return computeIdealQty(cycleSeconds, runTimeSeconds);
+  }
+
+  /** OEE = (Total Product / Ideal Qty) × 100; Ideal Qty sama dengan baris dashboard (Running Hour / Cycle Time × cavity). */
   function computeOee(actualQty, idealQty) {
     const actual = safeNumber(actualQty);
     const ideal = Math.max(0, safeNumber(idealQty));
     if (ideal <= 0) return null;
     const oee = (actual / ideal) * 100;
     return Number.isFinite(oee) ? oee : null;
+  }
+
+  /** Availability (%) = Run Time / Running Hour × 100 */
+  function computeAvailabilityPct(runtimeSeconds, runningHourSeconds) {
+    const rh = Math.max(0, safeNumber(runningHourSeconds));
+    if (rh <= 0) return null;
+    const rt = Math.max(0, safeNumber(runtimeSeconds));
+    const p = (rt / rh) * 100;
+    return Number.isFinite(p) ? p : null;
+  }
+
+  /** Performance (%) = Total Product / Ideal-Qty(performance) × 100; Ideal-Qty(performance) = Run Time / Cycle Time (× cavity di pemanggil). */
+  function computePerformancePct(totalProduct, idealQty) {
+    const ideal = Math.max(0, safeNumber(idealQty));
+    if (ideal <= 0) return null;
+    const total = safeNumber(totalProduct);
+    const p = (total / ideal) * 100;
+    return Number.isFinite(p) ? p : null;
+  }
+
+  function formatOeeTooltipLines(availabilityPct, performancePct, oeePct) {
+    const a = availabilityPct != null ? `${availabilityPct.toFixed(2)}%` : '-';
+    const p = performancePct != null ? `${performancePct.toFixed(2)}%` : '-';
+    const o = oeePct != null ? `${oeePct.toFixed(2)}%` : '-';
+    return [
+      `Availability: ${a}`,
+      `Performance: ${p}`,
+      'Quality: 100.00%',
+      `OEE: ${o}`
+    ].join('\n');
+  }
+
+  let oeeTooltipSession = null;
+
+  function closeOeeFloatingTip() {
+    if (!oeeTooltipSession) return;
+    const { tip, onScroll, onResize } = oeeTooltipSession;
+    tip.classList.remove('rt-oee-tooltip--open');
+    tip.style.display = 'none';
+    tip.style.position = '';
+    tip.style.top = '';
+    tip.style.left = '';
+    tip.style.visibility = '';
+    tip.style.zIndex = '';
+    tip.style.maxWidth = '';
+    tip.style.whiteSpace = '';
+    window.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', onResize);
+    oeeTooltipSession = null;
+  }
+
+  function positionOeeFloatingTip(anchorEl, tip) {
+    const r = anchorEl.getBoundingClientRect();
+    tip.style.display = 'block';
+    tip.style.position = 'fixed';
+    tip.style.left = '-10000px';
+    tip.style.top = '0';
+    tip.style.maxWidth = '';
+    tip.style.whiteSpace = 'pre-line';
+    tip.style.visibility = 'hidden';
+    const pad = 12;
+    const maxBoxW = window.innerWidth - 2 * pad;
+    let tr = tip.getBoundingClientRect();
+    if (tr.width > maxBoxW) {
+      tip.style.maxWidth = `${maxBoxW}px`;
+      tip.style.whiteSpace = 'pre-wrap';
+      tr = tip.getBoundingClientRect();
+    }
+    let left = r.left + r.width / 2 - tr.width / 2;
+    let top = r.bottom + 8;
+    left = Math.max(pad, Math.min(left, window.innerWidth - tr.width - pad));
+    if (top + tr.height > window.innerHeight - pad) {
+      top = r.top - tr.height - 8;
+    }
+    top = Math.max(pad, Math.min(top, window.innerHeight - tr.height - pad));
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.visibility = '';
+    tip.style.zIndex = '10001';
+    tip.classList.add('rt-oee-tooltip--open');
+  }
+
+  function openOeeFloatingTip(anchorEl, tip) {
+    closeOeeFloatingTip();
+    const onReposition = () => {
+      if (oeeTooltipSession && oeeTooltipSession.tip === tip) {
+        positionOeeFloatingTip(anchorEl, tip);
+      }
+    };
+    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', onReposition);
+    oeeTooltipSession = { tip, onScroll: onReposition, onResize: onReposition };
+    positionOeeFloatingTip(anchorEl, tip);
+  }
+
+  function bindOeeTooltipHooks() {
+    if (!boardEl) return;
+    boardEl.querySelectorAll('.rt-oee-cell').forEach((cell) => {
+      const tip = cell.querySelector('.rt-oee-tooltip');
+      if (!tip) return;
+      cell.addEventListener('mouseenter', () => openOeeFloatingTip(cell, tip));
+      cell.addEventListener('mouseleave', (e) => {
+        if (!cell.contains(e.relatedTarget)) closeOeeFloatingTip();
+      });
+      cell.addEventListener('focusin', () => openOeeFloatingTip(cell, tip));
+      cell.addEventListener('focusout', (e) => {
+        if (!cell.contains(e.relatedTarget)) closeOeeFloatingTip();
+      });
+    });
   }
 
   // Global OEE warning threshold (percent). Default 85, bisa di-set lewat API.
@@ -273,7 +387,12 @@ document.addEventListener('DOMContentLoaded', () => {
         block.forEach((m) => {
           const id = `b${blockIdx}_${r.key}_${encodeURIComponent(m.address)}`;
           const cls = `rt-value ${r.key === 'ideal' ? 'ideal' : r.key === 'total' ? 'total' : r.key === 'ng' ? 'ng' : r.key === 'oee' ? 'oee' : r.key === 'target' ? 'target' : 'time'}`;
-          cells.push(`<div class="rt-cell"><span class="${cls}" id="${id}">-</span></div>`);
+          if (r.key === 'oee') {
+            const tipId = `${id}_tip`;
+            cells.push(`<div class="rt-cell rt-oee-cell" tabindex="0"><span class="${cls}" id="${id}">-</span><div class="rt-oee-tooltip" id="${tipId}" role="tooltip"></div></div>`);
+          } else {
+            cells.push(`<div class="rt-cell"><span class="${cls}" id="${id}">-</span></div>`);
+          }
         });
       });
 
@@ -287,6 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
 
     boardEl.innerHTML = `<div class="rt-oee-blocks">${blocksHtml}</div>`;
+    bindOeeTooltipHooks();
   }
 
   function updateValues() {
@@ -327,7 +447,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const totalProduct = actualQty * cavity;
       const idealQtyBase = computeIdealQty(cycle, runningHourSec);
       const idealQty = idealQtyBase * cavity;
+      const idealQtyForPerformance = computeIdealQtyForPerformance(cycle, runtimeSeconds) * cavity;
       const oee = computeOee(totalProduct, idealQty);
+      const availabilityPct = computeAvailabilityPct(runtimeSeconds, runningHourSec);
+      const performancePct = computePerformancePct(totalProduct, idealQtyForPerformance);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
       const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
 
@@ -351,6 +474,14 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));
         const oeeEl = document.getElementById(`b${blockIdx}_oee_${keyAddr}`);
+        const oeeTipEl = document.getElementById(`b${blockIdx}_oee_${keyAddr}_tip`);
+        const oeeCellEl = oeeEl ? oeeEl.closest('.rt-oee-cell') : null;
+        const tipText = formatOeeTooltipLines(availabilityPct, performancePct, oee);
+        if (oeeTipEl) oeeTipEl.textContent = tipText;
+        if (oeeCellEl) oeeCellEl.setAttribute('aria-label', tipText.replace(/\n/g, '. '));
+        if (oeeTipEl && oeeCellEl && oeeTipEl.classList.contains('rt-oee-tooltip--open')) {
+          positionOeeFloatingTip(oeeCellEl, oeeTipEl);
+        }
         if (oeeEl) {
           if (oee == null) {
             oeeEl.textContent = '-';

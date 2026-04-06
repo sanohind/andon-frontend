@@ -118,7 +118,7 @@
 .rt-oee-block {
     border: 1px solid var(--rt-border);
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
     background: #ffffff;
     box-shadow: var(--box-shadow);
 }
@@ -251,5 +251,47 @@
 .rt-value.oee.rt-oee-low {
   color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
+}
+
+/* Tooltip breakdown OEE — posisi diatur JS (fixed) supaya tidak terpotong overflow */
+.rt-oee-cell {
+    position: relative;
+    z-index: 0;
+    overflow: visible;
+    cursor: help;
+    outline: none;
+    flex-direction: column;
+    gap: 2px;
+}
+.rt-oee-cell:hover,
+.rt-oee-cell:focus-within {
+    z-index: 50;
+}
+.rt-oee-tooltip {
+    display: none;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: none;
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.98);
+    color: #f1f5f9;
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+    white-space: pre-line;
+    text-align: left;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+.rt-oee-tooltip.rt-oee-tooltip--open {
+    display: block;
+}
+.rt-oee-public-body .rt-oee-tooltip {
+    background: rgba(3, 7, 18, 0.98);
+    color: #f9fafb;
+    border-color: rgba(250, 204, 21, 0.5);
 }
 
