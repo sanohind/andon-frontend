@@ -1269,6 +1269,46 @@ body.has-fixed-header .dashboard-main {
     grid-column: span 2;
 }
 
+.oee-analytics-card {
+    grid-column: span 2;
+    margin-top: 1rem;
+}
+
+.oee-analytics-card-header {
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 0;
+    justify-content: center;
+}
+
+.oee-analytics-card-header h3 {
+    margin: 0;
+    text-align: center;
+    width: 100%;
+}
+
+.oee-analytics-card-body {
+    position: relative;
+    min-height: 200px;
+    margin-top: 1rem;
+}
+
+.oee-analytics-card-body .chart-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px dashed #d1d5db;
+    border-radius: var(--border-radius);
+    color: #6b7280;
+    text-align: center;
+    padding: 1rem;
+}
+
 .quantity-chart-body {
     position: relative;
     min-height: 200px;
@@ -1336,7 +1376,8 @@ body.has-fixed-header .dashboard-main {
     .charts-section {
         grid-template-columns: 1fr;
     }
-    .quantity-chart-card {
+    .quantity-chart-card,
+    .oee-analytics-card {
         grid-column: 1;
     }
 }

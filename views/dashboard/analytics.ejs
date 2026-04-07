@@ -102,6 +102,18 @@
                         </div>
                     </div>
                 </div>
+                <div class="chart-card oee-analytics-card">
+                    <div class="chart-card-header oee-analytics-card-header">
+                        <h3>OEE</h3>
+                    </div>
+                    <div class="quantity-chart-body oee-analytics-card-body">
+                        <div id="oeeChartsContainer" class="oee-charts-by-line" style="display: none;"></div>
+                        <div class="chart-empty-state" id="lineOeeEmptyState" style="display: none;">
+                            <i class="fas fa-chart-bar"></i>
+                            <p>Belum ada data OEE untuk opsi yang dipilih.</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="chart-card">
                     <h3>Frekuensi Masalah per Mesin</h3>
                     <div class="chart-wrapper">
@@ -341,6 +353,34 @@
             <% } %>
         </div>
     </main>
+
+    <!-- Modal: OEE per Jam (line + stacked A/P/Q) -->
+    <div class="modal" id="oeeHourlyModal" style="display: none;">
+        <div class="modal-content quantity-hourly-modal-content" style="max-width: 820px;">
+            <div class="modal-header">
+                <h3 id="oeeHourlyModalTitle">OEE per Jam</h3>
+                <button type="button" class="modal-close" id="oeeHourlyModalClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="oeeHourlyChartEmpty" class="chart-empty-state" style="display: none;">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Belum ada data OEE per jam untuk mesin ini (jalankan scheduler <code>oee:hourly-snapshot</code> atau gunakan fallback harian pada chart utama).</p>
+                </div>
+                <div id="oeeHourlyChartLoading" style="display: none; text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p>Memuat data...</p>
+                </div>
+                <div class="chart-wrapper" id="oeeHourlyChartWrapper" style="height: 400px; display: none;">
+                    <canvas id="oeeHourlyChartCanvas"></canvas>
+                </div>
+                <div class="quantity-hourly-footer" style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" id="oeeHourlyExportBtn" type="button" style="display: none;">
+                        <i class="fas fa-file-excel"></i> Download Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Quantity per Jam (Line Chart per Mesin) -->
     <div class="modal" id="quantityHourlyModal" style="display: none;">

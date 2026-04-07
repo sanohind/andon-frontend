@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const quantityShiftSelect = document.getElementById('quantityShiftSelect');
     const quantityChartsContainer = document.getElementById('quantityChartsContainer');
     const lineQuantityEmptyState = document.getElementById('lineQuantityEmptyState');
+    const oeeChartsContainer = document.getElementById('oeeChartsContainer');
+    const lineOeeEmptyState = document.getElementById('lineOeeEmptyState');
 
     // Determine what to show based on role
     const showCharts = ['admin', 'management', 'manager'].includes(userRole);
@@ -62,8 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (downtimeEl) chartConfigs.downtime = { ctx: downtimeEl.getContext('2d'), type: 'bar', chart: null };
         if (problemTypeEl) chartConfigs.problemType = { ctx: problemTypeEl.getContext('2d'), type: 'doughnut', chart: null };
         if (mttrEl) chartConfigs.mttr = { ctx: mttrEl.getContext('2d'), type: 'bar', chart: null };
-        // Chart configs untuk quantity akan dibuat secara dinamis per line
+        // Chart configs untuk quantity / OEE akan dibuat secara dinamis per line
         chartConfigs.lineQuantity = { charts: {} };
+        chartConfigs.lineOee = { charts: {} };
     }
 
     let lastSelectedRange = null;
@@ -199,17 +202,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const response = await fetch(`/api/dashboard/analytics/line-quantity?${params.toString()}`, {
-                headers: getAuthHeaders()
-            });
+            const [qtyResponse, oeeResponse] = await Promise.all([
+                fetch(`/api/dashboard/analytics/line-quantity?${params.toString()}`, { headers: getAuthHeaders() }),
+                fetch(`/api/dashboard/analytics/line-oee?${params.toString()}`, { headers: getAuthHeaders() })
+            ]);
 
-            if (!response.ok) {
+            if (!qtyResponse.ok) {
                 throw new Error('Failed to fetch line quantity analytics');
             }
 
-            const result = await response.json();
+            const result = await qtyResponse.json();
             if (!result.success || !result.data) {
                 throw new Error(result.message || 'Invalid line quantity response');
+            }
+
+            let oeeByLine = {};
+            if (oeeResponse.ok) {
+                const oeeJson = await oeeResponse.json();
+                if (oeeJson.success && oeeJson.data && Array.isArray(oeeJson.data.lines)) {
+                    oeeJson.data.lines.forEach((l) => {
+                        oeeByLine[l.line_name || ''] = l;
+                    });
+                }
             }
 
             const { lines = [] } = result.data;
@@ -221,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleLineQuantityEmptyState(!hasLines);
 
             if (hasLines) {
-                updateLineQuantityCharts(lines, result.data.filter || {});
+                updateLineQuantityCharts(lines, result.data.filter || {}, oeeByLine);
             } else {
                 clearLineQuantityCharts();
             }
@@ -241,6 +255,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             chartConfigs.lineQuantity.charts = {};
         }
+        if (chartConfigs.lineOee && chartConfigs.lineOee.charts) {
+            Object.values(chartConfigs.lineOee.charts).forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                }
+            });
+            chartConfigs.lineOee.charts = {};
+        }
+        if (quantityChartsContainer) quantityChartsContainer.innerHTML = '';
+        if (oeeChartsContainer) oeeChartsContainer.innerHTML = '';
     }
 
     function toggleLineQuantityEmptyState(showEmpty) {
@@ -250,10 +274,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (quantityChartsContainer) {
             quantityChartsContainer.style.display = showEmpty ? 'none' : 'block';
         }
+        if (lineOeeEmptyState) {
+            lineOeeEmptyState.style.display = showEmpty ? 'flex' : 'none';
+        }
+        if (oeeChartsContainer) {
+            oeeChartsContainer.style.display = showEmpty ? 'none' : 'block';
+        }
     }
 
-    function updateLineQuantityCharts(linesData, filterInfo) {
-        if (!chartConfigs.lineQuantity || !quantityChartsContainer) return;
+    function updateLineQuantityCharts(linesData, filterInfo, oeeByLine = {}) {
+        if (!chartConfigs.lineQuantity || !chartConfigs.lineOee || !quantityChartsContainer || !oeeChartsContainer) return;
 
         if (!Array.isArray(linesData) || linesData.length === 0) {
             toggleLineQuantityEmptyState(true);
@@ -261,14 +291,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const filterLabel = filterInfo.filter_label || '';
-        const shiftLabel = filterInfo.shift_label || '';
-
         toggleLineQuantityEmptyState(false);
         clearLineQuantityCharts();
         quantityChartsContainer.innerHTML = '';
         quantityChartsContainer.className = 'quantity-charts-by-line';
         quantityChartsContainer.style.display = 'grid';
+        oeeChartsContainer.innerHTML = '';
+        oeeChartsContainer.className = 'oee-charts-by-line';
+        oeeChartsContainer.style.display = 'grid';
 
         linesData.forEach((lineData) => {
             const lineName = lineData.line_name || 'Unknown';
@@ -283,13 +313,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetsOt = machines.map(m => (m.ot_enabled && m.target_ot != null) ? Number(m.target_ot) : null);
             const hasOt = targetsOt.some(t => t != null && t > 0);
 
+            const oeeLine = oeeByLine[lineName] || { machines: [] };
+            const oeeMap = {};
+            (oeeLine.machines || []).forEach((om) => {
+                if (om && om.address) oeeMap[om.address] = om;
+            });
+            const oeeRaw = machines.map((m) => {
+                const om = oeeMap[m.address];
+                if (om && om.oee_percent != null && !Number.isNaN(Number(om.oee_percent))) {
+                    return Number(om.oee_percent);
+                }
+                return null;
+            });
+            const oeeDisplay = oeeRaw.map((v) => (v == null ? 0 : v));
+
             const chartId = `lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const chartOeeId = `lineOeeChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
             const card = document.createElement('div');
             card.className = 'line-quantity-chart-item';
             card.innerHTML = `
                 <div class="line-chart-header">
-                    <h4>Line: ${lineName}</h4>
-                    <div class="line-chart-summary">${filterLabel} ${shiftLabel}</div>
+                    <h4>Production Quantity — Line: ${lineName}</h4>
                     <button class="btn btn-secondary btn-sm" data-line-export="${chartId}" type="button" title="Download Excel">
                         <i class="fas fa-file-excel"></i>
                     </button>
@@ -298,7 +343,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     <canvas id="${chartId}"></canvas>
                 </div>
             `;
+
+            const oeeCard = document.createElement('div');
+            oeeCard.className = 'line-oee-chart-item';
+            oeeCard.innerHTML = `
+                <div class="line-chart-header">
+                    <h4>OEE — Line: ${lineName}</h4>
+                    <button class="btn btn-secondary btn-sm" data-oee-export="${chartOeeId}" type="button" title="Download Excel OEE">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
+                </div>
+                <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
+                    <canvas id="${chartOeeId}"></canvas>
+                </div>
+            `;
+
             quantityChartsContainer.appendChild(card);
+            oeeChartsContainer.appendChild(oeeCard);
 
             const canvas = document.getElementById(chartId);
             if (!canvas) return;
@@ -441,6 +502,77 @@ document.addEventListener('DOMContentLoaded', () => {
             const exportBtn = card.querySelector(`[data-line-export="${chartId}"]`);
             if (exportBtn) {
                 exportBtn.addEventListener('click', () => exportLineQuantityExcel(lineData, lastLineQuantityParams, lastLineQuantityFilter));
+            }
+
+            const oeeCanvas = document.getElementById(chartOeeId);
+            if (oeeCanvas) {
+                const oeeChart = new Chart(oeeCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'OEE (%)',
+                            data: oeeDisplay,
+                            backgroundColor: '#ca8a04',
+                            borderRadius: 6,
+                            maxBarThickness: 36
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: (evt, activeEls) => {
+                            if (!activeEls.length) return;
+                            const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+                            if (period !== 'daily') {
+                                alert('Pilih periode Harian untuk melihat grafik OEE per jam.');
+                                return;
+                            }
+                            const dataIndex = activeEls[0].index;
+                            if (!machines || !machines[dataIndex]) return;
+                            const machine = machines[dataIndex];
+                            const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                            const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                            openOeeHourlyModal(machine.name, machine.address, date, shift);
+                        },
+                        plugins: {
+                            legend: { display: true, position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    label(context) {
+                                        const i = context.dataIndex;
+                                        const r = oeeRaw[i];
+                                        if (r == null) return 'OEE: (tidak ada data)';
+                                        return `OEE: ${Number(r).toFixed(2)}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: { display: false },
+                                ticks: { maxRotation: 45, minRotation: 0 }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                suggestedMax: 100,
+                                title: { display: false },
+                                ticks: { callback: (v) => `${v}%` }
+                            }
+                        }
+                    }
+                });
+                oeeChart.oeeRawValues = oeeRaw;
+                oeeChart.oeeMachines = machines;
+                oeeChart.oeeLineName = lineName;
+                if (!chartConfigs.lineOee.charts) chartConfigs.lineOee.charts = {};
+                chartConfigs.lineOee.charts[chartOeeId] = oeeChart;
+
+                const oeeExportBtn = oeeCard.querySelector(`[data-oee-export="${chartOeeId}"]`);
+                if (oeeExportBtn) {
+                    oeeExportBtn.addEventListener('click', () => exportLineOeeExcel(lineName, machines, oeeMap, lastLineQuantityParams, lastLineQuantityFilter));
+                }
             }
         });
     }
@@ -695,6 +827,260 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityHourly');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
         const fileName = `quantity_hourly_${safeName}_${ts}_${shiftLabel}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    let oeeHourlyChartInstance = null;
+    let lastOeeHourlyData = null;
+    let lastOeeHourlyMeta = null;
+
+    function exportLineOeeExcel(lineName, machines, oeeMap, params, filterInfo) {
+        if (!machines || !Array.isArray(machines) || machines.length === 0) {
+            alert('Tidak ada data OEE untuk line ini.');
+            return;
+        }
+        const period = params?.period || 'daily';
+        const ts = (period === 'daily')
+            ? (params?.date || '-')
+            : (filterInfo?.filter_label || '-');
+        const shiftRaw = params?.shift || 'pagi';
+        const shiftLabel = shiftRaw === 'malam' ? 'Malam' : 'Pagi';
+
+        const rows = [];
+        let id = 1;
+        machines.forEach((m) => {
+            const om = oeeMap[m.address] || {};
+            rows.push([
+                id++,
+                m.name || '-',
+                shiftLabel,
+                ts,
+                om.oee_percent != null ? Number(om.oee_percent).toFixed(2) : '-',
+                om.availability_percent != null ? Number(om.availability_percent).toFixed(2) : '-',
+                om.performance_percent != null ? Number(om.performance_percent).toFixed(2) : '-',
+                om.quality_percent != null ? Number(om.quality_percent).toFixed(2) : '100.00'
+            ]);
+        });
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'OEE');
+        const fileName = `oee_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    async function openOeeHourlyModal(machineName, machineAddress, date, shift) {
+        const modal = document.getElementById('oeeHourlyModal');
+        const titleEl = document.getElementById('oeeHourlyModalTitle');
+        const emptyEl = document.getElementById('oeeHourlyChartEmpty');
+        const loadingEl = document.getElementById('oeeHourlyChartLoading');
+        const wrapperEl = document.getElementById('oeeHourlyChartWrapper');
+        const canvas = document.getElementById('oeeHourlyChartCanvas');
+        const exportBtn = document.getElementById('oeeHourlyExportBtn');
+        if (!modal || !titleEl || !canvas) return;
+
+        if (oeeHourlyChartInstance) {
+            oeeHourlyChartInstance.destroy();
+            oeeHourlyChartInstance = null;
+        }
+
+        titleEl.textContent = `OEE per Jam — ${machineName}`;
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrapperEl) wrapperEl.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'block';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.classList.add('show');
+
+        lastOeeHourlyData = null;
+        lastOeeHourlyMeta = null;
+        if (exportBtn) {
+            exportBtn.style.display = 'none';
+            exportBtn.onclick = null;
+        }
+
+        try {
+            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+            const res = await fetch(`/api/dashboard/analytics/oee-hourly?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                if (emptyEl) emptyEl.style.display = 'flex';
+                if (wrapperEl) wrapperEl.style.display = 'none';
+                return;
+            }
+
+            lastOeeHourlyData = json.data;
+            lastOeeHourlyMeta = { machineName, machineAddress, date, shift };
+
+            const labels = json.data.map((d) => d.snapshot_at);
+            const oeeVals = json.data.map((d) => (d.oee_percent != null ? Number(d.oee_percent) : null));
+            const aVals = json.data.map((d) => (d.availability_percent != null ? Number(d.availability_percent) : 0));
+            const pVals = json.data.map((d) => (d.performance_percent != null ? Number(d.performance_percent) : 0));
+            const qVals = json.data.map((d) => (d.quality_percent != null ? Number(d.quality_percent) : 100));
+
+            if (wrapperEl) wrapperEl.style.display = 'block';
+            const ctx = canvas.getContext('2d');
+            oeeHourlyChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'OEE (%)',
+                            data: oeeVals,
+                            borderColor: '#ca8a04',
+                            backgroundColor: 'rgba(202, 138, 4, 0.12)',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            spanGaps: true,
+                            yAxisID: 'y',
+                            pointRadius: 3,
+                            pointBackgroundColor: '#ca8a04'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Availability (%)',
+                            data: aVals,
+                            backgroundColor: 'rgba(34, 197, 94, 0.75)',
+                            stack: 'apq',
+                            yAxisID: 'y1',
+                            maxBarThickness: 28
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Performance (%)',
+                            data: pVals,
+                            backgroundColor: 'rgba(76, 110, 245, 0.75)',
+                            stack: 'apq',
+                            yAxisID: 'y1',
+                            maxBarThickness: 28
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Quality (%)',
+                            data: qVals,
+                            backgroundColor: 'rgba(148, 163, 184, 0.85)',
+                            stack: 'apq',
+                            yAxisID: 'y1',
+                            maxBarThickness: 28
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(c) {
+                                    const v = c.parsed.y;
+                                    if (c.dataset.label === 'OEE (%)' && (v == null || Number.isNaN(v))) {
+                                        return `${c.dataset.label}: —`;
+                                    }
+                                    if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
+                                    return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Waktu' },
+                            ticks: { maxRotation: 45, minRotation: 0 }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: 'OEE (%)' },
+                            beginAtZero: true,
+                            suggestedMax: 110,
+                            ticks: { callback: (v) => `${v}%` },
+                            grid: { drawOnChartArea: true }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            stacked: true,
+                            title: { display: true, text: 'Availability / Performance / Quality (%)' },
+                            beginAtZero: true,
+                            suggestedMax: 300,
+                            grid: { drawOnChartArea: false },
+                            ticks: { callback: (v) => `${v}%` }
+                        }
+                    }
+                }
+            });
+
+            if (exportBtn) {
+                exportBtn.style.display = 'inline-flex';
+                exportBtn.onclick = () => exportOeeHourlyExcel();
+            }
+        } catch (err) {
+            console.error('Fetch OEE hourly:', err);
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (emptyEl) {
+                emptyEl.style.display = 'flex';
+                const p = emptyEl.querySelector('p');
+                if (p) p.textContent = 'Gagal memuat data OEE per jam.';
+            }
+        }
+    }
+
+    function closeOeeHourlyModal() {
+        const modal = document.getElementById('oeeHourlyModal');
+        if (oeeHourlyChartInstance) {
+            oeeHourlyChartInstance.destroy();
+            oeeHourlyChartInstance = null;
+        }
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    }
+
+    (function initOeeHourlyModal() {
+        const closeBtn = document.getElementById('oeeHourlyModalClose');
+        const modal = document.getElementById('oeeHourlyModal');
+        if (closeBtn) closeBtn.addEventListener('click', closeOeeHourlyModal);
+        if (modal) {
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeOeeHourlyModal(); });
+        }
+    })();
+
+    function exportOeeHourlyExcel() {
+        if (!lastOeeHourlyData || !Array.isArray(lastOeeHourlyData) || !lastOeeHourlyData.length) {
+            alert('Tidak ada data OEE per jam untuk diunduh.');
+            return;
+        }
+        const meta = lastOeeHourlyMeta || {};
+        const shiftLabel = meta.shift === 'malam' ? 'Malam' : 'Pagi';
+        const rows = [];
+        let id = 1;
+        lastOeeHourlyData.forEach((d) => {
+            rows.push([
+                id++,
+                meta.machineName || '-',
+                shiftLabel,
+                d.snapshot_at || '-',
+                d.oee_percent != null ? Number(d.oee_percent).toFixed(2) : '-',
+                d.availability_percent != null ? Number(d.availability_percent).toFixed(2) : '-',
+                d.performance_percent != null ? Number(d.performance_percent).toFixed(2) : '-',
+                d.quality_percent != null ? Number(d.quality_percent).toFixed(2) : '100.00'
+            ]);
+        });
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Waktu', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'OEEHourly');
+        const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
+        const fileName = `oee_hourly_${safeName}_${meta.date || ''}_${shiftLabel}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 

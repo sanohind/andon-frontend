@@ -958,6 +958,52 @@ app.get('/api/dashboard/analytics/quantity-hourly', requireAuthAPI, async (req, 
   }
 });
 
+app.get('/api/dashboard/analytics/line-oee', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, date, month, year, shift } = req.query;
+    let { division } = req.query;
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-oee`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, date, month, year, shift, division }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching line OEE analytics:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch line OEE analytics',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/oee-hourly', requireAuthAPI, async (req, res) => {
+  try {
+    const { date, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/oee-hourly`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { date, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching OEE hourly:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch OEE hourly',
+      error: error.message
+    });
+  }
+});
+
 // Endpoint untuk analytics umum (harus didefinisikan setelah route yang lebih spesifik)
 app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {

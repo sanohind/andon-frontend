@@ -697,12 +697,20 @@
     }
 }
 
-/* Line Quantity Charts Styles */
-.quantity-charts-by-line {
+/* Line Quantity / OEE Charts (card terpisah, grid serupa) */
+.quantity-charts-by-line,
+.oee-charts-by-line {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
     margin-top: 1rem;
+}
+
+.line-oee-chart-item {
+    background: #f8f9fa;
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    border: 1px solid #e9ecef;
 }
 
 .quantity-charts-by-line .line-quantity-chart-item {
@@ -756,7 +764,8 @@
 }
 
 @media (max-width: 768px) {
-    #quantityChartsContainer {
+    #quantityChartsContainer,
+    #oeeChartsContainer {
         grid-template-columns: 1fr;
     }
     
