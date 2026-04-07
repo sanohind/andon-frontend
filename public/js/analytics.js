@@ -830,9 +830,21 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.writeFile(wb, fileName);
     }
 
-    let oeeHourlyChartInstance = null;
+    let oeeHourlyLineChartInstance = null;
+    let oeeHourlyStackChartInstance = null;
     let lastOeeHourlyData = null;
     let lastOeeHourlyMeta = null;
+
+    function destroyOeeHourlyCharts() {
+        if (oeeHourlyLineChartInstance) {
+            oeeHourlyLineChartInstance.destroy();
+            oeeHourlyLineChartInstance = null;
+        }
+        if (oeeHourlyStackChartInstance) {
+            oeeHourlyStackChartInstance.destroy();
+            oeeHourlyStackChartInstance = null;
+        }
+    }
 
     function exportLineOeeExcel(lineName, machines, oeeMap, params, filterInfo) {
         if (!machines || !Array.isArray(machines) || machines.length === 0) {
@@ -874,19 +886,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const titleEl = document.getElementById('oeeHourlyModalTitle');
         const emptyEl = document.getElementById('oeeHourlyChartEmpty');
         const loadingEl = document.getElementById('oeeHourlyChartLoading');
-        const wrapperEl = document.getElementById('oeeHourlyChartWrapper');
-        const canvas = document.getElementById('oeeHourlyChartCanvas');
+        const chartsWrap = document.getElementById('oeeHourlyChartsWrap');
+        const lineCanvas = document.getElementById('oeeHourlyLineCanvas');
+        const stackCanvas = document.getElementById('oeeHourlyStackCanvas');
         const exportBtn = document.getElementById('oeeHourlyExportBtn');
-        if (!modal || !titleEl || !canvas) return;
+        if (!modal || !titleEl || !lineCanvas || !stackCanvas) return;
 
-        if (oeeHourlyChartInstance) {
-            oeeHourlyChartInstance.destroy();
-            oeeHourlyChartInstance = null;
-        }
+        destroyOeeHourlyCharts();
 
         titleEl.textContent = `OEE per Jam — ${machineName}`;
         if (emptyEl) emptyEl.style.display = 'none';
-        if (wrapperEl) wrapperEl.style.display = 'none';
+        if (chartsWrap) chartsWrap.style.display = 'none';
         if (loadingEl) loadingEl.style.display = 'block';
         modal.style.display = 'flex';
         modal.style.alignItems = 'center';

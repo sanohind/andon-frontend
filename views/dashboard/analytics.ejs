@@ -354,9 +354,9 @@
         </div>
     </main>
 
-    <!-- Modal: OEE per Jam (line + stacked A/P/Q) -->
+    <!-- Modal: OEE — line per jam & stacked A/P/Q akumulasi shift (terpisah) -->
     <div class="modal" id="oeeHourlyModal" style="display: none;">
-        <div class="modal-content quantity-hourly-modal-content" style="max-width: 820px;">
+        <div class="modal-content quantity-hourly-modal-content oee-hourly-modal-content">
             <div class="modal-header">
                 <h3 id="oeeHourlyModalTitle">OEE per Jam</h3>
                 <button type="button" class="modal-close" id="oeeHourlyModalClose" aria-label="Tutup">&times;</button>
@@ -370,8 +370,19 @@
                     <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
                     <p>Memuat data...</p>
                 </div>
-                <div class="chart-wrapper" id="oeeHourlyChartWrapper" style="height: 400px; display: none;">
-                    <canvas id="oeeHourlyChartCanvas"></canvas>
+                <div id="oeeHourlyChartsWrap" class="oee-hourly-charts-wrap" style="display: none;">
+                    <div class="oee-hourly-chart-block">
+                        <h4 class="oee-hourly-chart-title">OEE per jam</h4>
+                        <div class="chart-wrapper oee-hourly-line-wrap">
+                            <canvas id="oeeHourlyLineCanvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="oee-hourly-chart-block">
+                        <h4 class="oee-hourly-chart-title">Availability, Performance, Quality — akumulasi shift</h4>
+                        <div class="chart-wrapper oee-hourly-stack-wrap">
+                            <canvas id="oeeHourlyStackCanvas"></canvas>
+                        </div>
+                    </div>
                 </div>
                 <div class="quantity-hourly-footer" style="margin-top: 1rem; display: flex; justify-content: flex-end;">
                     <button class="btn btn-secondary btn-sm" id="oeeHourlyExportBtn" type="button" style="display: none;">

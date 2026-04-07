@@ -786,3 +786,34 @@
     width: 92%;
 }
 
+.oee-hourly-modal-content {
+    max-width: 880px;
+}
+
+.oee-hourly-charts-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-top: 0.25rem;
+}
+
+.oee-hourly-chart-block {
+    margin: 0;
+}
+
+.oee-hourly-chart-title {
+    margin: 0 0 0.65rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-color, #1e40af);
+}
+
+.oee-hourly-line-wrap {
+    height: 300px;
+}
+
+.oee-hourly-stack-wrap {
+    height: 240px;
+    max-width: 100%;
+}
+
