@@ -918,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
                 if (emptyEl) emptyEl.style.display = 'flex';
-                if (wrapperEl) wrapperEl.style.display = 'none';
+                if (chartsWrap) chartsWrap.style.display = 'none';
                 return;
             }
 
@@ -927,58 +927,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const labels = json.data.map((d) => d.snapshot_at);
             const oeeVals = json.data.map((d) => (d.oee_percent != null ? Number(d.oee_percent) : null));
-            const aVals = json.data.map((d) => (d.availability_percent != null ? Number(d.availability_percent) : 0));
-            const pVals = json.data.map((d) => (d.performance_percent != null ? Number(d.performance_percent) : 0));
-            const qVals = json.data.map((d) => (d.quality_percent != null ? Number(d.quality_percent) : 100));
 
-            if (wrapperEl) wrapperEl.style.display = 'block';
-            const ctx = canvas.getContext('2d');
-            oeeHourlyChartInstance = new Chart(ctx, {
-                type: 'bar',
+            const lastRow = json.data[json.data.length - 1];
+            const aLast = lastRow && lastRow.availability_percent != null ? Number(lastRow.availability_percent) : 0;
+            const pLast = lastRow && lastRow.performance_percent != null ? Number(lastRow.performance_percent) : 0;
+            const qLast = lastRow && lastRow.quality_percent != null ? Number(lastRow.quality_percent) : 100;
+            const stackLabel = `${date} (${shift === 'malam' ? 'Malam' : 'Pagi'})`;
+
+            if (chartsWrap) chartsWrap.style.display = 'flex';
+
+            oeeHourlyLineChartInstance = new Chart(lineCanvas.getContext('2d'), {
+                type: 'line',
                 data: {
                     labels,
-                    datasets: [
-                        {
-                            type: 'line',
-                            label: 'OEE (%)',
-                            data: oeeVals,
-                            borderColor: '#ca8a04',
-                            backgroundColor: 'rgba(202, 138, 4, 0.12)',
-                            borderWidth: 2,
-                            tension: 0.2,
-                            spanGaps: true,
-                            yAxisID: 'y',
-                            pointRadius: 3,
-                            pointBackgroundColor: '#ca8a04'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Availability (%)',
-                            data: aVals,
-                            backgroundColor: 'rgba(34, 197, 94, 0.75)',
-                            stack: 'apq',
-                            yAxisID: 'y1',
-                            maxBarThickness: 28
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Performance (%)',
-                            data: pVals,
-                            backgroundColor: 'rgba(76, 110, 245, 0.75)',
-                            stack: 'apq',
-                            yAxisID: 'y1',
-                            maxBarThickness: 28
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Quality (%)',
-                            data: qVals,
-                            backgroundColor: 'rgba(148, 163, 184, 0.85)',
-                            stack: 'apq',
-                            yAxisID: 'y1',
-                            maxBarThickness: 28
-                        }
-                    ]
+                    datasets: [{
+                        label: 'OEE (%)',
+                        data: oeeVals,
+                        borderColor: '#ca8a04',
+                        backgroundColor: 'rgba(202, 138, 4, 0.12)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        spanGaps: true,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#ca8a04',
+                        fill: true
+                    }]
                 },
                 options: {
                     responsive: true,
@@ -990,9 +963,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             callbacks: {
                                 label(c) {
                                     const v = c.parsed.y;
-                                    if (c.dataset.label === 'OEE (%)' && (v == null || Number.isNaN(v))) {
-                                        return `${c.dataset.label}: —`;
-                                    }
                                     if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
                                     return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
                                 }
@@ -1002,26 +972,67 @@ document.addEventListener('DOMContentLoaded', () => {
                     scales: {
                         x: {
                             display: true,
-                            title: { display: true, text: 'Waktu' },
+                            title: { display: false },
                             ticks: { maxRotation: 45, minRotation: 0 }
                         },
                         y: {
-                            type: 'linear',
-                            position: 'left',
-                            title: { display: true, text: 'OEE (%)' },
                             beginAtZero: true,
                             suggestedMax: 110,
-                            ticks: { callback: (v) => `${v}%` },
-                            grid: { drawOnChartArea: true }
+                            ticks: { callback: (v) => `${v}%` }
+                        }
+                    }
+                }
+            });
+
+            oeeHourlyStackChartInstance = new Chart(stackCanvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: [stackLabel],
+                    datasets: [
+                        {
+                            label: 'Availability (%)',
+                            data: [aLast],
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            stack: 'shift'
                         },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
+                        {
+                            label: 'Performance (%)',
+                            data: [pLast],
+                            backgroundColor: 'rgba(76, 110, 245, 0.8)',
+                            stack: 'shift'
+                        },
+                        {
+                            label: 'Quality (%)',
+                            data: [qLast],
+                            backgroundColor: 'rgba(148, 163, 184, 0.9)',
+                            stack: 'shift'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(c) {
+                                    const v = c.parsed.y;
+                                    if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
+                                    return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
                             stacked: true,
-                            title: { display: true, text: 'Availability / Performance / Quality (%)' },
+                            ticks: { maxRotation: 0 }
+                        },
+                        y: {
+                            stacked: true,
                             beginAtZero: true,
                             suggestedMax: 300,
-                            grid: { drawOnChartArea: false },
                             ticks: { callback: (v) => `${v}%` }
                         }
                     }
@@ -1045,10 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeOeeHourlyModal() {
         const modal = document.getElementById('oeeHourlyModal');
-        if (oeeHourlyChartInstance) {
-            oeeHourlyChartInstance.destroy();
-            oeeHourlyChartInstance = null;
-        }
+        destroyOeeHourlyCharts();
         if (modal) {
             modal.classList.remove('show');
             modal.style.display = 'none';
