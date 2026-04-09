@@ -399,71 +399,62 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.getElementById(chartId);
             if (!canvas) return;
 
-            const stackKey = 'qty';
             const datasets = [];
 
-            // Target ditampilkan sebagai "sisa" (remaining) supaya makin menipis saat aktual mendekati target.
-            // Aktual berada di layer paling atas, solid.
+            // Model overlay:
+            // - Target (Reguler + OT) = stacked bar yang lebih lebar (background)
+            // - Aktual = bar solid lebih sempit, ditumpuk di atas/di tengah (foreground)
             const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
             const totalTargets = targets.map((t, i) => (Number(t) || 0) + (hasOt ? (targetOtFilled[i] || 0) : 0));
 
-            // Clamp aktual agar berada "di dalam" total target (untuk visual perbandingan).
-            // (Jika aktual > target total, tetap tersimpan di rawActuals untuk tooltip)
+            // Simpan aktual asli untuk tooltip. Visual aktual dikunci agar tetap "di dalam" target total.
             const rawActuals = actuals.slice();
             const actualShown = actuals.map((a, i) => Math.min(Number(a) || 0, Number(totalTargets[i]) || 0));
 
-            // Alokasikan konsumsi aktual ke target reguler dulu, lalu target OT.
-            const remainingReguler = targets.map((t, i) => {
-                const tr = Number(t) || 0;
-                const a = actualShown[i] || 0;
-                return Math.max(tr - a, 0);
-            });
-            const remainingOt = hasOt
-                ? targetOtFilled.map((tot, i) => {
-                    const tr = Number(targets[i]) || 0;
-                    const a = actualShown[i] || 0;
-                    const aAfterReg = Math.max(a - tr, 0);
-                    return Math.max((Number(tot) || 0) - aAfterReg, 0);
-                })
-                : null;
+            const stackTarget = 'target';
+            const stackActual = 'actual';
 
-            // 1) Sisa Target Reguler (bawah) — hijau arsir
+            // 1) Target Reguler (lebih lebar) — hijau arsir
             datasets.push({
                 type: 'bar',
-                label: 'Sisa Target Reguler',
-                data: remainingReguler,
+                label: 'Target Reguler',
+                data: targets,
                 backgroundColor: getDiagonalHatchPattern({
                     stroke: TARGET_HATCH_STROKE,
                     background: 'rgba(34, 197, 94, 0.18)'
                 }),
                 borderColor: TARGET_REGULER_COLOR,
                 borderWidth: 1,
-                borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
-                maxBarThickness: 36,
-                stack: stackKey,
-                yAxisID: 'y'
+                borderRadius: hasOt
+                    ? { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 }
+                    : 6,
+                maxBarThickness: 44,
+                stack: stackTarget,
+                yAxisID: 'y',
+                order: 1
             });
 
-            // 2) Sisa Target OT (tengah) — kuning arsir (arsir sama)
-            if (hasOt && remainingOt) {
+            // 2) Target OT (lebih lebar) — kuning arsir
+            if (hasOt) {
                 datasets.push({
                     type: 'bar',
-                    label: 'Sisa Target OT',
-                    data: remainingOt,
+                    label: 'Target OT',
+                    data: targetOtFilled,
                     backgroundColor: getDiagonalHatchPattern({
                         stroke: TARGET_HATCH_STROKE,
                         background: 'rgba(212, 160, 23, 0.18)'
                     }),
                     borderColor: OT_PATTERN_COLOR,
                     borderWidth: 1,
-                    borderRadius: 0,
-                    maxBarThickness: 36,
-                    stack: stackKey,
-                    yAxisID: 'y'
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    maxBarThickness: 44,
+                    stack: stackTarget,
+                    yAxisID: 'y',
+                    order: 1
                 });
             }
 
-            // 3) Aktual (paling atas) — biru solid
+            // 3) Aktual (lebih sempit) — biru solid, paling atas secara visual
             datasets.push({
                 type: 'bar',
                 label: 'Aktual',
@@ -471,16 +462,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 backgroundColor: '#4c6ef5',
                 borderColor: '#4c6ef5',
                 borderWidth: 1,
-                borderRadius: (ctx) => {
-                    const i = ctx.dataIndex;
-                    const below = (remainingReguler[i] || 0) + (hasOt && remainingOt ? (remainingOt[i] || 0) : 0);
-                    // Jika tidak ada sisa target, aktual jadi bar penuh (rounded semua).
-                    if (below <= 0) return 6;
-                    return { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 };
-                },
-                maxBarThickness: 36,
-                stack: stackKey,
-                yAxisID: 'y'
+                borderRadius: 6,
+                maxBarThickness: 28,
+                stack: stackActual,
+                yAxisID: 'y',
+                order: 2
             });
 
             const chart = new Chart(canvas.getContext('2d'), {
@@ -545,6 +531,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                         }
+                    },
+                    datasets: {
+                        // Overlay bars (target lebih lebar, aktual lebih sempit) pada kategori yang sama.
+                        bar: { grouped: false }
                     },
                     scales: {
                         x: {
