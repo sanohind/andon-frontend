@@ -407,9 +407,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
             const totalTargets = targets.map((t, i) => (Number(t) || 0) + (hasOt ? (targetOtFilled[i] || 0) : 0));
 
-            // Simpan aktual asli untuk tooltip. Visual aktual dikunci agar tetap "di dalam" target total.
+            // Simpan aktual asli untuk tooltip. Visual aktual dikunci ke target total hanya jika target > 0.
+            // Jika target 0/null (mis. data lama tanpa jadwal di backend), jangan clamp — kalau tidak bar aktual hilang.
             const rawActuals = actuals.slice();
-            const actualShown = actuals.map((a, i) => Math.min(Number(a) || 0, Number(totalTargets[i]) || 0));
+            const actualShown = actuals.map((a, i) => {
+                const av = Number(a) || 0;
+                const cap = Number(totalTargets[i]) || 0;
+                if (cap <= 0) return av;
+                return Math.min(av, cap);
+            });
 
             const stackTarget = 'target';
             const stackActual = 'actual';
