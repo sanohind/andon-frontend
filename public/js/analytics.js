@@ -106,6 +106,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return quantityFormatter.format(Math.round(value));
     }
+
+    const OT_PATTERN_COLOR = '#d4a017';
+    const TARGET_REGULER_COLOR = '#22c55e';
+
+    // Cache pattern agar tidak bikin canvas berulang-ulang per chart
+    const patternCache = new Map();
+    function getDiagonalHatchPattern({ stroke = OT_PATTERN_COLOR, background = 'rgba(212, 160, 23, 0.18)', size = 10, lineWidth = 2 } = {}) {
+        const key = `${stroke}|${background}|${size}|${lineWidth}`;
+        if (patternCache.has(key)) return patternCache.get(key);
+
+        const pCanvas = document.createElement('canvas');
+        pCanvas.width = size;
+        pCanvas.height = size;
+        const pCtx = pCanvas.getContext('2d');
+        if (!pCtx) return background;
+
+        // base fill
+        pCtx.fillStyle = background;
+        pCtx.fillRect(0, 0, size, size);
+
+        // diagonal stripes
+        pCtx.strokeStyle = stroke;
+        pCtx.lineWidth = lineWidth;
+        pCtx.beginPath();
+        pCtx.moveTo(-size, size);
+        pCtx.lineTo(size, -size);
+        pCtx.moveTo(0, size * 2);
+        pCtx.lineTo(size * 2, 0);
+        pCtx.stroke();
+
+        const pattern = pCtx.createPattern(pCanvas, 'repeat');
+        patternCache.set(key, pattern);
+        return pattern;
+    }
     
     // Helper: get selected global division
     function getSelectedDivision() {
@@ -364,68 +398,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.getElementById(chartId);
             if (!canvas) return;
 
-            const datasets = [
-                {
-                    type: 'line',
-                    label: 'Target',
-                    data: targets,
-                    borderColor: '#e67700',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    tension: 0,
-                    pointRadius: 5,
-                    pointBackgroundColor: '#e67700',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 1,
-                    yAxisID: 'y'
-                }
-            ];
+            const stackKey = 'qty';
+            const datasets = [];
+
+            // 1) Aktual (bawah) — biru
+            datasets.push({
+                type: 'bar',
+                label: 'Aktual',
+                data: actuals,
+                backgroundColor: '#4c6ef5',
+                borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
+                maxBarThickness: 36,
+                stack: stackKey,
+                yAxisID: 'y'
+            });
+
+            // 2) Target Reguler (tengah) — hijau (samakan dengan dashboard production)
+            datasets.push({
+                type: 'bar',
+                label: 'Target Reguler',
+                data: targets,
+                backgroundColor: TARGET_REGULER_COLOR,
+                borderRadius: hasOt
+                    ? 0
+                    : { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                maxBarThickness: 36,
+                stack: stackKey,
+                yAxisID: 'y'
+            });
+
+            // 3) Target OT (atas) — kuning + arsir
             if (hasOt) {
                 datasets.push({
-                    type: 'line',
+                    type: 'bar',
                     label: 'Target OT',
                     data: targetsOt,
-                    borderColor: '#d4a017',
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    borderDash: [4, 2],
-                    tension: 0,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#d4a017',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 1,
-                    yAxisID: 'y'
-                });
-            }
-            if (hasOt && actualsOt.some(v => v > 0)) {
-                datasets.push({
-                    type: 'bar',
-                    label: 'Aktual Reguler',
-                    data: actualsRegular,
-                    backgroundColor: '#4c6ef5',
-                    borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
-                    maxBarThickness: 36,
-                    stack: 'actual',
-                    yAxisID: 'y'
-                });
-                datasets.push({
-                    type: 'bar',
-                    label: 'Aktual OT',
-                    data: actualsOt,
-                    backgroundColor: '#d4a017',
+                    backgroundColor: getDiagonalHatchPattern(),
+                    borderColor: OT_PATTERN_COLOR,
+                    borderWidth: 1,
                     borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
                     maxBarThickness: 36,
-                    stack: 'actual',
-                    yAxisID: 'y'
-                });
-            } else {
-                datasets.push({
-                    type: 'bar',
-                    label: 'Aktual',
-                    data: actuals,
-                    backgroundColor: '#4c6ef5',
-                    borderRadius: 6,
-                    maxBarThickness: 36,
+                    stack: stackKey,
                     yAxisID: 'y'
                 });
             }
@@ -481,11 +494,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         x: {
                             display: true,
                             title: { display: false },
-                            ticks: { maxRotation: 45, minRotation: 0 }
+                            ticks: { maxRotation: 45, minRotation: 0 },
+                            stacked: true
                         },
                         y: {
                             beginAtZero: true,
-                            stacked: hasOt && actualsOt.some(v => v > 0),
+                            stacked: true,
                             title: { display: false },
                             ticks: { callback: (v) => formatQuantityValue(v) }
                         }
