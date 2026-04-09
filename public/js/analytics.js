@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const OT_PATTERN_COLOR = '#d4a017';
     const TARGET_REGULER_COLOR = '#22c55e';
+    const TARGET_HATCH_STROKE = 'rgba(0, 0, 0, 0.35)'; // arsir sama untuk target reguler & OT
 
     // Cache pattern agar tidak bikin canvas berulang-ulang per chart
     const patternCache = new Map();
@@ -401,47 +402,86 @@ document.addEventListener('DOMContentLoaded', () => {
             const stackKey = 'qty';
             const datasets = [];
 
-            // 1) Aktual (bawah) — biru
+            // Target ditampilkan sebagai "sisa" (remaining) supaya makin menipis saat aktual mendekati target.
+            // Aktual berada di layer paling atas, solid.
+            const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
+            const totalTargets = targets.map((t, i) => (Number(t) || 0) + (hasOt ? (targetOtFilled[i] || 0) : 0));
+
+            // Clamp aktual agar berada "di dalam" total target (untuk visual perbandingan).
+            // (Jika aktual > target total, tetap tersimpan di rawActuals untuk tooltip)
+            const rawActuals = actuals.slice();
+            const actualShown = actuals.map((a, i) => Math.min(Number(a) || 0, Number(totalTargets[i]) || 0));
+
+            // Alokasikan konsumsi aktual ke target reguler dulu, lalu target OT.
+            const remainingReguler = targets.map((t, i) => {
+                const tr = Number(t) || 0;
+                const a = actualShown[i] || 0;
+                return Math.max(tr - a, 0);
+            });
+            const remainingOt = hasOt
+                ? targetOtFilled.map((tot, i) => {
+                    const tr = Number(targets[i]) || 0;
+                    const a = actualShown[i] || 0;
+                    const aAfterReg = Math.max(a - tr, 0);
+                    return Math.max((Number(tot) || 0) - aAfterReg, 0);
+                })
+                : null;
+
+            // 1) Sisa Target Reguler (bawah) — hijau arsir
             datasets.push({
                 type: 'bar',
-                label: 'Aktual',
-                data: actuals,
-                backgroundColor: '#4c6ef5',
+                label: 'Sisa Target Reguler',
+                data: remainingReguler,
+                backgroundColor: getDiagonalHatchPattern({
+                    stroke: TARGET_HATCH_STROKE,
+                    background: 'rgba(34, 197, 94, 0.18)'
+                }),
+                borderColor: TARGET_REGULER_COLOR,
+                borderWidth: 1,
                 borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 },
                 maxBarThickness: 36,
                 stack: stackKey,
                 yAxisID: 'y'
             });
 
-            // 2) Target Reguler (tengah) — hijau (samakan dengan dashboard production)
-            datasets.push({
-                type: 'bar',
-                label: 'Target Reguler',
-                data: targets,
-                backgroundColor: TARGET_REGULER_COLOR,
-                borderRadius: hasOt
-                    ? 0
-                    : { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
-                maxBarThickness: 36,
-                stack: stackKey,
-                yAxisID: 'y'
-            });
-
-            // 3) Target OT (atas) — kuning + arsir
-            if (hasOt) {
+            // 2) Sisa Target OT (tengah) — kuning arsir (arsir sama)
+            if (hasOt && remainingOt) {
                 datasets.push({
                     type: 'bar',
-                    label: 'Target OT',
-                    data: targetsOt,
-                    backgroundColor: getDiagonalHatchPattern(),
+                    label: 'Sisa Target OT',
+                    data: remainingOt,
+                    backgroundColor: getDiagonalHatchPattern({
+                        stroke: TARGET_HATCH_STROKE,
+                        background: 'rgba(212, 160, 23, 0.18)'
+                    }),
                     borderColor: OT_PATTERN_COLOR,
                     borderWidth: 1,
-                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    borderRadius: 0,
                     maxBarThickness: 36,
                     stack: stackKey,
                     yAxisID: 'y'
                 });
             }
+
+            // 3) Aktual (paling atas) — biru solid
+            datasets.push({
+                type: 'bar',
+                label: 'Aktual',
+                data: actualShown,
+                backgroundColor: '#4c6ef5',
+                borderColor: '#4c6ef5',
+                borderWidth: 1,
+                borderRadius: (ctx) => {
+                    const i = ctx.dataIndex;
+                    const below = (remainingReguler[i] || 0) + (hasOt && remainingOt ? (remainingOt[i] || 0) : 0);
+                    // Jika tidak ada sisa target, aktual jadi bar penuh (rounded semua).
+                    if (below <= 0) return 6;
+                    return { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 };
+                },
+                maxBarThickness: 36,
+                stack: stackKey,
+                yAxisID: 'y'
+            });
 
             const chart = new Chart(canvas.getContext('2d'), {
                 type: 'bar',
@@ -482,10 +522,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         tooltip: {
                             callbacks: {
                                 label(context) {
-                                    const rawValue = typeof context.parsed === 'object'
+                                    const i = context.dataIndex;
+                                    const dsLabel = context.dataset.label || '';
+                                    const parsedVal = typeof context.parsed === 'object'
                                         ? (context.parsed.y != null ? context.parsed.y : context.parsed.x)
                                         : context.parsed;
-                                    return `${context.dataset.label}: ${formatQuantityValue(rawValue)}`;
+
+                                    if (dsLabel === 'Aktual') {
+                                        const rawA = rawActuals[i];
+                                        const tReg = Number(targets[i]) || 0;
+                                        const tOt = hasOt ? (targetOtFilled[i] || 0) : 0;
+                                        const tTotal = (tReg + tOt);
+                                        return [
+                                            `Aktual: ${formatQuantityValue(Number(rawA) || 0)}`,
+                                            `Target Reguler: ${formatQuantityValue(tReg)}`,
+                                            hasOt ? `Target OT: ${formatQuantityValue(tOt)}` : null,
+                                            `Target Total: ${formatQuantityValue(tTotal)}`
+                                        ].filter(Boolean).join(' | ');
+                                    }
+
+                                    return `${dsLabel}: ${formatQuantityValue(Number(parsedVal) || 0)}`;
                                 }
                             }
                         }
