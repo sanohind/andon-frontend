@@ -710,6 +710,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const parseHourFromLabel = (label) => {
                 if (!label) return -1;
                 const s = String(label);
+                const m = moment(s, ['YYYY-MM-DD HH:mm', 'YYYY-MM-DD H:mm', moment.ISO_8601], true);
+                if (m.isValid()) return m.hour();
                 const match = s.match(/(\d{1,2}):?\d{0,2}$/);
                 if (match) return parseInt(match[1], 10);
                 const parts = s.split(/\s+/);
@@ -744,7 +746,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const h = parseHourFromLabel(labels[i]);
                 return isOtHour(h) ? q : null;
             }) : null;
-            const hasOtData = otEnabled && dataOt && dataOt.some(v => v != null && v > 0);
 
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
@@ -775,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     segment: { borderColor: '#4c6ef5' }
                 }
             ];
-            if (hasOtData && dataOt) {
+            if (otEnabled && dataOt) {
                 hourlyDatasets.push({
                     label: 'Aktual OT',
                     data: dataOt,
