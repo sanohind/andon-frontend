@@ -1174,6 +1174,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Data tidak tersedia untuk line ini.');
             return;
         }
+        const machines = lineData.machines;
+        const targetsOt = machines.map((m) => (m.ot_enabled && m.target_ot != null) ? Number(m.target_ot) : null);
+        const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
+        const hasOt = targetsOt.some((t) => t != null && t > 0);
+
         const period = params?.period || 'daily';
         const ts = (period === 'daily')
             ? (params?.date || '-')
@@ -1183,13 +1188,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rows = [];
         let id = 1;
-        lineData.machines.forEach(m => {
+        machines.forEach((m, i) => {
+            const tReg = Number(m.target_quantity) || 0;
+            const tOt = hasOt ? (targetOtFilled[i] || 0) : 0;
+            const quantityTargetCombined = tReg + tOt;
             rows.push([
                 id++,
                 m.name || '-',
                 shiftLabel,
                 ts,
-                Number(m.target_quantity) || 0,
+                quantityTargetCombined,
                 Number(m.actual_quantity) || 0
             ]);
         });
