@@ -621,6 +621,72 @@ app.get('/api/server-time', async (req, res) => {
   }
 });
 
+// Machine Notes - proxy ke Laravel (pakai user token karena catatan tersimpan per user session)
+app.get('/api/machine-notes/current', requireAuthAPI, async (req, res) => {
+  try {
+    const queryString = new URLSearchParams(req.query || {}).toString();
+    const url = queryString
+      ? `${LARAVEL_API_BASE}/machine-notes/current?${queryString}`
+      : `${LARAVEL_API_BASE}/machine-notes/current`;
+
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Machine notes current proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || 'Failed to fetch machine note'
+    });
+  }
+});
+
+app.put('/api/machine-notes/current', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/machine-notes/current`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Machine notes upsert proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || 'Failed to save machine note'
+    });
+  }
+});
+
+app.get('/api/machine-notes/by-shift', requireAuthAPI, async (req, res) => {
+  try {
+    const queryString = new URLSearchParams(req.query || {}).toString();
+    const url = queryString
+      ? `${LARAVEL_API_BASE}/machine-notes/by-shift?${queryString}`
+      : `${LARAVEL_API_BASE}/machine-notes/by-shift`;
+
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Machine notes by-shift proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || 'Failed to fetch machine notes'
+    });
+  }
+});
+
 // API Routes - Proxy to Laravel backend dengan Authorization header
 app.get('/api/dashboard/status', requireAuthAPI, async (req, res) => {
   try {

@@ -57,6 +57,20 @@ class DashboardManager {
         this.init();
     }
 
+    escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    makeMachineNoteDomId(machineName, lineName) {
+        const raw = `${machineName || ''}__${lineName || ''}`;
+        return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
     getCookieValue(name) {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
@@ -1243,6 +1257,7 @@ class DashboardManager {
                 const machineStatus = await this.getCurrentMachineStatus(machine, machineLine);
                 console.log('Machine status received:', machineStatus);
                 modalBody.innerHTML = this.createMachineDetailHTML(machine, machineStatus);
+                this.bindMachineNotesUI(machine, machineStatus);
                 // Leader Set OT feature removed
             }
         } catch (error) {
@@ -1353,6 +1368,8 @@ class DashboardManager {
 
         const lastCheck = machineStatus.last_check ? moment(machineStatus.last_check).format('DD/MM/YYYY HH:mm:ss') : 'N/A';
         const lineName = machineStatus.line_name || 'N/A';
+        const isLeader = this.userRole === 'leader';
+        const noteDomId = this.makeMachineNoteDomId(machine, lineName);
 
         let messageBoxHTML = '';
         if (isPlcOffline) {
@@ -1429,9 +1446,138 @@ class DashboardManager {
 
                 ${messageBoxHTML}
 
-                <!-- Leader Set OT feature removed -->
+                ${isLeader ? `
+                <div class="machine-notes-section" style="margin-top: 14px;">
+                    <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px;">
+                        <button class="btn btn-secondary" type="button" id="machineNoteToggle_${noteDomId}" style="display:inline-flex; align-items:center; gap:8px; font-weight:700;">
+                            <i class="fas fa-sticky-note"></i>
+                            Catatan
+                        </button>
+                        <div id="machineNoteMeta_${noteDomId}" style="font-size: 12px; color:#6b7280; text-align:right;"></div>
+                    </div>
+
+                    <div id="machineNotePanel_${noteDomId}" style="display:none; margin-top: 10px; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; padding: 12px; background: #fafafa;">
+                        <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                            <div style="font-weight:800; color:#111827;">Catatan Shift Ini</div>
+                            <button class="btn btn-primary btn-sm" type="button" id="machineNoteSave_${noteDomId}" style="font-weight:800;">
+                                <i class="fas fa-save"></i> Simpan
+                            </button>
+                        </div>
+                        <textarea id="machineNoteTextarea_${noteDomId}" rows="4" placeholder="Tulis catatan untuk mesin ini pada shift ini..." style="width:100%; resize: vertical; padding: 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);"></textarea>
+                        <div id="machineNoteStatus_${noteDomId}" style="margin-top:6px; font-size:12px; color:#6b7280;"></div>
+
+                        <div style="margin-top: 12px;">
+                            <div style="font-weight:800; color:#111827; margin-bottom: 8px;">Riwayat Catatan</div>
+                            <div id="machineNoteHistory_${noteDomId}" style="display:flex; flex-direction: column; gap: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
             </div>
         `;
+    }
+
+    bindMachineNotesUI(machine, machineStatus) {
+        if (this.userRole !== 'leader') return;
+        const lineName = machineStatus?.line_name || 'N/A';
+        const noteDomId = this.makeMachineNoteDomId(machine, lineName);
+
+        const toggleBtn = document.getElementById(`machineNoteToggle_${noteDomId}`);
+        const panel = document.getElementById(`machineNotePanel_${noteDomId}`);
+        const textarea = document.getElementById(`machineNoteTextarea_${noteDomId}`);
+        const saveBtn = document.getElementById(`machineNoteSave_${noteDomId}`);
+        const statusEl = document.getElementById(`machineNoteStatus_${noteDomId}`);
+        const metaEl = document.getElementById(`machineNoteMeta_${noteDomId}`);
+        const historyEl = document.getElementById(`machineNoteHistory_${noteDomId}`);
+        if (!toggleBtn || !panel || !textarea || !saveBtn) return;
+
+        const load = async () => {
+            if (statusEl) statusEl.textContent = 'Memuat catatan...';
+            try {
+                const qs = new URLSearchParams({
+                    machine_name: machine,
+                    line_name: lineName
+                });
+                const res = await fetch(`/api/machine-notes/current?${qs.toString()}`, { headers: this.getAuthHeaders() });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat catatan');
+
+                const data = json.data || {};
+                if (metaEl) {
+                    const shiftLabel = data.shift ? String(data.shift).toUpperCase() : '-';
+                    metaEl.textContent = `Shift: ${shiftLabel}`;
+                }
+                textarea.value = data.note || '';
+                if (statusEl) statusEl.textContent = data.updated_at ? `Terakhir update: ${moment(data.updated_at).format('DD/MM/YYYY HH:mm:ss')}` : '';
+
+                if (historyEl) {
+                    const history = Array.isArray(data.history) ? data.history : [];
+                    if (!history.length) {
+                        historyEl.innerHTML = `<div style="font-size:12px; color:#6b7280;">Belum ada catatan.</div>`;
+                    } else {
+                        historyEl.innerHTML = history
+                            .filter(h => h && (h.note != null) && String(h.note).trim() !== '')
+                            .map(h => {
+                                const shift = (h.shift || '').toString().toUpperCase();
+                                const ts = h.shift_start_at ? moment(h.shift_start_at).format('DD/MM/YYYY HH:mm') : '-';
+                                const note = this.escapeHtml(h.note);
+                                return `
+                                    <div style="border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; padding: 10px; background: white;">
+                                        <div style="display:flex; justify-content: space-between; gap: 10px; align-items:center;">
+                                            <div style="font-weight:800; color:#111827;">${shift} • ${ts}</div>
+                                            <div style="font-size:12px; color:#6b7280;">${this.escapeHtml(h.shift_key || '')}</div>
+                                        </div>
+                                        <div style="margin-top:6px; white-space: pre-wrap; color:#111827;">${note}</div>
+                                    </div>
+                                `;
+                            })
+                            .join('');
+                    }
+                }
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Gagal memuat catatan: ${e.message || e}`;
+            }
+        };
+
+        toggleBtn.addEventListener('click', async () => {
+            const isOpen = panel.style.display !== 'none';
+            panel.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) {
+                await load();
+            }
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            const note = textarea.value ?? '';
+            saveBtn.disabled = true;
+            if (statusEl) statusEl.textContent = 'Menyimpan...';
+            try {
+                const res = await fetch('/api/machine-notes/current', {
+                    method: 'PUT',
+                    headers: this.getAuthHeaders(),
+                    body: JSON.stringify({
+                        machine_name: machine,
+                        line_name: lineName,
+                        note
+                    })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.message || 'Gagal menyimpan catatan');
+
+                if (statusEl) statusEl.textContent = 'Tersimpan.';
+                await load();
+                if (this.showSweetAlert) {
+                    this.showSweetAlert('success', 'Tersimpan', 'Catatan berhasil disimpan.');
+                }
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Gagal menyimpan: ${e.message || e}`;
+                if (this.showSweetAlert) {
+                    this.showSweetAlert('error', 'Gagal', e.message || 'Gagal menyimpan catatan.');
+                }
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
     }
 
     async createProblemDetailHTML(problem) {

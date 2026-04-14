@@ -44,6 +44,60 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    // --- Machine Notes (for tooltip "Production Quantity") ---
+    const machineNotesCache = new Map(); // cacheKey -> Map(machineKey -> noteText)
+    const machineNotesInFlight = new Set(); // cacheKey
+
+    function buildShiftKey(dateStr, shift) {
+        const s = String(shift || '').toLowerCase();
+        if (!dateStr || !moment(dateStr, 'YYYY-MM-DD', true).isValid()) return null;
+        if (!['pagi', 'malam'].includes(s)) return null;
+        const start = s === 'pagi'
+            ? moment.tz ? moment.tz(`${dateStr} 07:00`, 'YYYY-MM-DD HH:mm', 'Asia/Jakarta') : moment(`${dateStr} 07:00`, 'YYYY-MM-DD HH:mm')
+            : moment.tz ? moment.tz(`${dateStr} 20:00`, 'YYYY-MM-DD HH:mm', 'Asia/Jakarta') : moment(`${dateStr} 20:00`, 'YYYY-MM-DD HH:mm');
+        return `${start.format('YYYY-MM-DD')}_${s}_${start.format('HHmm')}`;
+    }
+
+    async function ensureMachineNotesLoaded({ dateStr, shift, lineName }) {
+        const shiftKey = buildShiftKey(dateStr, shift);
+        if (!shiftKey) return;
+        const cacheKey = `${shiftKey}__${lineName || ''}`;
+        if (machineNotesCache.has(cacheKey) || machineNotesInFlight.has(cacheKey)) return;
+
+        machineNotesInFlight.add(cacheKey);
+        try {
+            const qs = new URLSearchParams({ date: dateStr, shift: String(shift || '') });
+            if (lineName) qs.set('line_name', String(lineName));
+            const res = await fetch(`/api/machine-notes/by-shift?${qs.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.message || 'Failed to load notes');
+            const notes = (json.data && Array.isArray(json.data.notes)) ? json.data.notes : [];
+            const map = new Map();
+            notes.forEach(n => {
+                if (!n || !n.machine_name) return;
+                const key = `${String(n.machine_name)}__${String(n.line_name || '')}`;
+                const text = (n.note == null) ? '' : String(n.note);
+                if (text.trim() === '') return;
+                map.set(key, text);
+            });
+            machineNotesCache.set(cacheKey, map);
+        } catch (e) {
+            // silent: tooltip will just not show notes
+            machineNotesCache.set(cacheKey, new Map());
+        } finally {
+            machineNotesInFlight.delete(cacheKey);
+        }
+    }
+
+    function getCachedMachineNote({ dateStr, shift, machineName, lineName }) {
+        const shiftKey = buildShiftKey(dateStr, shift);
+        if (!shiftKey) return null;
+        const cacheKey = `${shiftKey}__${lineName || ''}`;
+        const map = machineNotesCache.get(cacheKey);
+        if (!map) return null;
+        return map.get(`${String(machineName)}__${String(lineName || '')}`) || null;
+    }
+
     // Helper function to get cookie value
     function getCookieValue(name) {
         const value = `; ${document.cookie}`;
@@ -340,6 +394,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const machines = lineData.machines || [];
             if (machines.length === 0) return;
 
+            // Prefetch machine notes for tooltip (best-effort)
+            const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+            if (period === 'daily') {
+                const dateStr = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                ensureMachineNotesLoaded({ dateStr, shift, lineName });
+            }
+
             const labels = machines.map(m => m.name);
             const targets = machines.map(m => Number(m.target_quantity) || 0);
             const actuals = machines.map(m => Number(m.actual_quantity) || 0);
@@ -525,12 +587,26 @@ document.addEventListener('DOMContentLoaded', () => {
                                         const tReg = Number(targets[i]) || 0;
                                         const tOt = hasOt ? (targetOtFilled[i] || 0) : 0;
                                         const tTotal = (tReg + tOt);
-                                        return [
+                                        const baseLines = [
                                             `Aktual: ${formatQuantityValue(Number(rawA) || 0)}`,
                                             `Target Reguler: ${formatQuantityValue(tReg)}`,
                                             hasOt ? `Target OT: ${formatQuantityValue(tOt)}` : null,
                                             `Target Total: ${formatQuantityValue(tTotal)}`
-                                        ].filter(Boolean).join(' | ');
+                                        ].filter(Boolean);
+
+                                        // Append machine note (only when exists)
+                                        const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+                                        const dateStr = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                                        const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                                        const machineName = (machines && machines[i]) ? machines[i].name : labels[i];
+                                        const noteText = (period === 'daily')
+                                            ? getCachedMachineNote({ dateStr, shift, machineName, lineName })
+                                            : null;
+                                        if (noteText && String(noteText).trim() !== '') {
+                                            baseLines.push(`Catatan: ${String(noteText).replace(/\s+/g, ' ').trim()}`);
+                                        }
+
+                                        return baseLines.join(' | ');
                                     }
 
                                     return `${dsLabel}: ${formatQuantityValue(Number(parsedVal) || 0)}`;
