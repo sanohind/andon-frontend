@@ -167,7 +167,12 @@
                 <% } %>
                 <% if (user.role !== 'management') { %>
                 <div class="form-container">
-                    <h3>Tambah Schedule</h3>
+                    <div class="schedule-header-row">
+                        <h3>Tambah Schedule</h3>
+                        <button type="button" id="openAddWeekSchedule" class="btn btn-secondary">
+                            <i class="fas fa-calendar-week"></i> Tambah 1 Minggu
+                        </button>
+                    </div>
                     <form id="addScheduleForm" class="schedule-form">
                         <div class="schedule-form-grid">
                             <div class="form-group">
@@ -200,10 +205,8 @@
                                 <label>Durasi OT</label>
                                 <select id="scheduleOtDuration">
                                     <option value="">-- Pilih --</option>
-                                    <option value="2h_pagi">2 jam shift pagi</option>
-                                    <option value="2h_malam">2 jam shift malam</option>
-                                    <option value="3.5h_pagi">3,5 jam shift pagi</option>
                                 </select>
+                                <small style="color:#666;display:block;margin-top:4px;">Pilihan mengikuti shift: pagi = 2 jam / 3,5 jam; malam = 2 jam.</small>
                             </div>
                             <div class="form-group ot-fields" id="scheduleOtTargetWrap" style="display:none;">
                                 <label>Target OT</label>
@@ -219,8 +222,22 @@
                     <div class="filter-container">
                         <div class="filter-row">
                             <div class="filter-group">
-                                <label><i class="fas fa-search"></i> Cari</label>
-                                <input type="text" id="filterScheduleSearch" placeholder="Tanggal, mesin..." class="filter-input">
+                                <label><i class="fas fa-calendar-day"></i> Tanggal</label>
+                                <input type="date" id="filterScheduleDate" class="filter-input">
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-industry"></i> Mesin</label>
+                                <select id="filterScheduleMachine" class="filter-select">
+                                    <option value="">Semua Mesin</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-clock"></i> Shift</label>
+                                <select id="filterScheduleShift" class="filter-select">
+                                    <option value="">Semua Shift</option>
+                                    <option value="pagi">Pagi</option>
+                                    <option value="malam">Malam</option>
+                                </select>
                             </div>
                             <div class="filter-group">
                                 <label>Tampilkan</label>
@@ -230,7 +247,14 @@
                                     <option value="50">50</option>
                                 </select>
                             </div>
-                            <button type="button" id="clearScheduleFilters" class="btn-clear-filters"><i class="fas fa-times"></i> Reset</button>
+                            <div class="filter-group schedule-filter-actions">
+                                <button type="button" id="applyScheduleFilters" class="btn btn-primary">
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                                <button type="button" id="clearScheduleFilters" class="btn-clear-filters">
+                                    <i class="fas fa-times"></i> Reset
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <table id="scheduleTable" class="data-table">
@@ -396,10 +420,8 @@
                     <label>Durasi OT</label>
                     <select id="editScheduleOtDuration">
                         <option value="">-- Pilih --</option>
-                        <option value="2h_pagi">2 jam shift pagi</option>
-                        <option value="2h_malam">2 jam shift malam</option>
-                        <option value="3.5h_pagi">3,5 jam shift pagi</option>
                     </select>
+                    <small style="color:#666;display:block;margin-top:4px;">Pilihan mengikuti shift: pagi = 2 jam / 3,5 jam; malam = 2 jam.</small>
                 </div>
                 <div class="form-group" id="editScheduleTargetOtWrap" style="display:none;">
                     <label>Target OT</label>
@@ -407,6 +429,42 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" id="cancelEditSchedule">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Week Schedule Modal -->
+    <div class="modal" id="addWeekScheduleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Tambah Schedule 1 Minggu</h3>
+                <button type="button" class="modal-close" id="closeAddWeekSchedule">×</button>
+            </div>
+            <form id="addWeekScheduleForm">
+                <div class="form-group">
+                    <label>Tanggal Mulai</label>
+                    <input type="date" id="weekScheduleStartDate" required>
+                    <small>Schedule akan dibuat untuk 7 hari (mulai dari tanggal ini).</small>
+                </div>
+                <div class="form-group">
+                    <label>Mesin</label>
+                    <select id="weekScheduleMachine" required><option value="">Pilih Mesin</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Shift</label>
+                    <select id="weekScheduleShift">
+                        <option value="pagi" selected>Pagi</option>
+                        <option value="malam">Malam</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target</label>
+                    <input type="number" id="weekScheduleTarget" min="0" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelAddWeekSchedule">Batal</button>
                     <button type="submit" class="btn btn-primary">Simpan</button>
                 </div>
             </form>

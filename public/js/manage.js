@@ -370,7 +370,45 @@
     // --- SCHEDULE ---
     let schedulePage = 1;
     let schedulePageSize = 10;
-    let scheduleSearch = '';
+    let scheduleAppliedFilter = { schedule_date: '', machine_address: '', shift: '' };
+    let scheduleDraftFilter = { schedule_date: '', machine_address: '', shift: '' };
+
+    /** Nilai internal tetap 2h_pagi / 3.5h_pagi / 2h_malam (selaras RunningHourOtExtension). */
+    function scheduleOtOptionsForShift(shift) {
+        const s = shift === 'malam' ? 'malam' : 'pagi';
+        if (s === 'malam') {
+            return [{ value: '2h_malam', label: '2 jam' }];
+        }
+        return [
+            { value: '2h_pagi', label: '2 jam' },
+            { value: '3.5h_pagi', label: '3,5 jam' }
+        ];
+    }
+
+    function fillScheduleOtDurationSelect(selectId, shift, preferredValue) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const opts = scheduleOtOptionsForShift(shift);
+        const allowed = opts.map(o => o.value);
+        let html = '<option value="">-- Pilih --</option>';
+        opts.forEach(o => {
+            html += `<option value="${o.value}">${escapeHtml(o.label)}</option>`;
+        });
+        sel.innerHTML = html;
+        const pick = preferredValue && allowed.includes(preferredValue) ? preferredValue : '';
+        sel.value = pick;
+    }
+
+    function scheduleOtDurationTableLabel(shift, otDurationType) {
+        if (!otDurationType) return '';
+        const s = shift === 'malam' ? 'malam' : 'pagi';
+        if (s === 'malam') {
+            return otDurationType === '2h_malam' ? '2 jam' : String(otDurationType);
+        }
+        if (otDurationType === '2h_pagi') return '2 jam';
+        if (otDurationType === '3.5h_pagi') return '3,5 jam';
+        return String(otDurationType);
+    }
 
     async function loadScheduleMachines() {
         try {
@@ -382,7 +420,11 @@
             }
             const sel = document.getElementById('scheduleMachine');
             const editSel = document.getElementById('editScheduleMachine');
-            [sel, editSel].forEach(select => {
+            const filterSel = document.getElementById('filterScheduleMachine');
+            const weekSel = document.getElementById('weekScheduleMachine');
+
+            // Add & Edit & Week dropdowns
+            [sel, editSel, weekSel].forEach(select => {
                 if (!select) return;
                 const cur = select.value;
                 select.innerHTML = '<option value="">Pilih Mesin</option>';
@@ -394,6 +436,19 @@
                     select.appendChild(opt);
                 });
             });
+
+            // Filter dropdown
+            if (filterSel) {
+                const cur = filterSel.value;
+                filterSel.innerHTML = '<option value="">Semua Mesin</option>';
+                list.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.address || m.id;
+                    opt.textContent = m.name || m.address;
+                    if (cur === (m.address || m.id)) opt.selected = true;
+                    filterSel.appendChild(opt);
+                });
+            }
         } catch (e) {}
     }
 
@@ -404,7 +459,9 @@
         if (!tbody) return;
         try {
             const params = new URLSearchParams({ page: schedulePage, per_page: schedulePageSize });
-            if (scheduleSearch) params.set('search', scheduleSearch);
+            if (scheduleAppliedFilter.schedule_date) params.set('schedule_date', scheduleAppliedFilter.schedule_date);
+            if (scheduleAppliedFilter.machine_address) params.set('machine_address', scheduleAppliedFilter.machine_address);
+            if (scheduleAppliedFilter.shift) params.set('shift', scheduleAppliedFilter.shift);
             const res = await fetch(`${API}/machine-schedules?${params}`, { credentials: 'include', headers: getAuthHeaders() });
             const json = await res.json();
             if (!json.success) throw new Error(json.message || 'Gagal');
@@ -420,12 +477,10 @@
                         </div>
                     </td>`;
             tbody.innerHTML = list.map(s => {
-                const shiftLabel = (s.shift || 'pagi') === 'malam' ? 'Malam' : 'Pagi';
+                const shiftKey = (s.shift || 'pagi') === 'malam' ? 'malam' : 'pagi';
+                const shiftLabel = shiftKey === 'malam' ? 'Malam' : 'Pagi';
                 const otLabel = s.ot_enabled ? 'Aktif' : 'Nonaktif';
-                let durasiLabel = '';
-                if (s.ot_duration_type === '2h_pagi') durasiLabel = '2 jam (pagi)';
-                else if (s.ot_duration_type === '2h_malam') durasiLabel = '2 jam (malam)';
-                else if (s.ot_duration_type === '3.5h_pagi') durasiLabel = '3,5 jam (pagi)';
+                const durasiLabel = s.ot_enabled ? scheduleOtDurationTableLabel(shiftKey, s.ot_duration_type) : '';
                 const targetOtLabel = s.target_ot != null ? s.target_ot : '-';
                 return `
                 <tr data-id="${s.id}">
@@ -476,7 +531,7 @@
         document.getElementById('editScheduleShift').value = row.shift || 'pagi';
         document.getElementById('editScheduleTarget').value = row.target_quantity;
         document.getElementById('editScheduleOtEnabled').checked = row.ot_enabled || false;
-        document.getElementById('editScheduleOtDuration').value = row.ot_duration_type || '';
+        fillScheduleOtDurationSelect('editScheduleOtDuration', row.shift || 'pagi', row.ot_duration_type || '');
         document.getElementById('editScheduleTargetOt').value = row.target_ot || '';
         const otWrap = document.getElementById('editScheduleOtFields');
         const otTargetWrap = document.getElementById('editScheduleTargetOtWrap');
@@ -738,10 +793,24 @@
         // Schedule
         const addScheduleForm = document.getElementById('addScheduleForm');
         if (addScheduleForm) {
+            const initAddOtSelect = () => {
+                const sh = document.getElementById('scheduleShift')?.value || 'pagi';
+                fillScheduleOtDurationSelect('scheduleOtDuration', sh, '');
+            };
+            initAddOtSelect();
+            document.getElementById('scheduleShift')?.addEventListener('change', function () {
+                const cur = document.getElementById('scheduleOtDuration')?.value || '';
+                fillScheduleOtDurationSelect('scheduleOtDuration', this.value || 'pagi', cur);
+            });
             document.getElementById('scheduleOtEnabled')?.addEventListener('change', function () {
                 const show = this.checked;
                 document.getElementById('scheduleOtFields').style.display = show ? 'block' : 'none';
                 document.getElementById('scheduleOtTargetWrap').style.display = show ? 'block' : 'none';
+                if (show) {
+                    const sh = document.getElementById('scheduleShift')?.value || 'pagi';
+                    const cur = document.getElementById('scheduleOtDuration')?.value || '';
+                    fillScheduleOtDurationSelect('scheduleOtDuration', sh, cur);
+                }
             });
             addScheduleForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -762,6 +831,7 @@
                     addScheduleForm.reset();
                     document.getElementById('scheduleOtFields').style.display = 'none';
                     document.getElementById('scheduleOtTargetWrap').style.display = 'none';
+                    initAddOtSelect();
                     loadSchedules();
                     showScheduleSuccess('Data Schedule berhasil disimpan.');
                 } catch (err) { alert(err.message); }
@@ -771,6 +841,15 @@
             const show = this.checked;
             document.getElementById('editScheduleOtFields').style.display = show ? 'block' : 'none';
             document.getElementById('editScheduleTargetOtWrap').style.display = show ? 'block' : 'none';
+            if (show) {
+                const sh = document.getElementById('editScheduleShift')?.value || 'pagi';
+                const cur = document.getElementById('editScheduleOtDuration')?.value || '';
+                fillScheduleOtDurationSelect('editScheduleOtDuration', sh, cur);
+            }
+        });
+        document.getElementById('editScheduleShift')?.addEventListener('change', function () {
+            const cur = document.getElementById('editScheduleOtDuration')?.value || '';
+            fillScheduleOtDurationSelect('editScheduleOtDuration', this.value || 'pagi', cur);
         });
         document.getElementById('editScheduleForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -800,16 +879,70 @@
             schedulePage = 1;
             loadSchedules();
         });
-        document.getElementById('filterScheduleSearch')?.addEventListener('input', function () {
-            scheduleSearch = this.value;
+        // Draft filter changes should NOT reload table until "Filter" clicked
+        document.getElementById('filterScheduleDate')?.addEventListener('change', function () {
+            scheduleDraftFilter.schedule_date = this.value || '';
+        });
+        document.getElementById('filterScheduleMachine')?.addEventListener('change', function () {
+            scheduleDraftFilter.machine_address = this.value || '';
+        });
+        document.getElementById('filterScheduleShift')?.addEventListener('change', function () {
+            scheduleDraftFilter.shift = this.value || '';
+        });
+        document.getElementById('applyScheduleFilters')?.addEventListener('click', () => {
+            scheduleAppliedFilter = { ...scheduleDraftFilter };
             schedulePage = 1;
             loadSchedules();
         });
         document.getElementById('clearScheduleFilters')?.addEventListener('click', () => {
-            scheduleSearch = '';
-            document.getElementById('filterScheduleSearch').value = '';
-            schedulePage = 1;
-            loadSchedules();
+            // Always clear inputs, but only reload table if filters were already applied
+            const hadApplied =
+                !!(scheduleAppliedFilter.schedule_date || scheduleAppliedFilter.machine_address || scheduleAppliedFilter.shift);
+            scheduleDraftFilter = { schedule_date: '', machine_address: '', shift: '' };
+            document.getElementById('filterScheduleDate').value = '';
+            document.getElementById('filterScheduleMachine').value = '';
+            document.getElementById('filterScheduleShift').value = '';
+            if (hadApplied) {
+                scheduleAppliedFilter = { schedule_date: '', machine_address: '', shift: '' };
+                schedulePage = 1;
+                loadSchedules();
+            }
+        });
+
+        // Add week schedule modal
+        const openWeekBtn = document.getElementById('openAddWeekSchedule');
+        openWeekBtn?.addEventListener('click', async () => {
+            await loadScheduleMachines();
+            document.getElementById('addWeekScheduleModal')?.classList.add('show');
+        });
+        document.getElementById('closeAddWeekSchedule')?.addEventListener('click', () => closeModal('addWeekScheduleModal'));
+        document.getElementById('cancelAddWeekSchedule')?.addEventListener('click', () => closeModal('addWeekScheduleModal'));
+        document.getElementById('addWeekScheduleForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                start_date: document.getElementById('weekScheduleStartDate').value,
+                machine_address: document.getElementById('weekScheduleMachine').value,
+                shift: document.getElementById('weekScheduleShift')?.value || 'pagi',
+                target_quantity: parseInt(document.getElementById('weekScheduleTarget').value, 10)
+            };
+            if (!payload.start_date || !payload.machine_address) return alert('Isi Tanggal Mulai dan Mesin.');
+            if (Number.isNaN(payload.target_quantity)) return alert('Target tidak valid.');
+            try {
+                const res = await fetch(`${API}/machine-schedules/week`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(payload)
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.message || 'Gagal');
+                closeModal('addWeekScheduleModal');
+                document.getElementById('addWeekScheduleForm').reset();
+                loadSchedules();
+                showScheduleSuccess(json.message || 'Schedule 1 minggu berhasil dibuat.');
+            } catch (err) {
+                alert(err.message);
+            }
         });
 
         // Lines

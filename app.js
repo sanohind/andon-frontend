@@ -1874,6 +1874,17 @@ app.get('/api/machine-schedules', requireAuthAPI, async (req, res) => {
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
   }
 });
+app.post('/api/machine-schedules/week', requireAuth, async (req, res) => {
+  if (!['admin', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  try {
+    const response = await axios.post(`${LARAVEL_API_BASE}/machine-schedules/week`, req.body, {
+      headers: { 'Authorization': `Bearer ${req.user.token || req.session?.token || process.env.LARAVEL_API_TOKEN}`, 'Accept': 'application/json', 'Content-Type': 'application/json' }
+    });
+    res.status(201).json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).json(error.response?.data || { message: 'Server error' });
+  }
+});
 app.post('/api/machine-schedules', requireAuth, async (req, res) => {
   if (!['admin', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {

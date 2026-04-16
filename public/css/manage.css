@@ -158,6 +158,24 @@
 .btn-clear-filters { padding: 10px 16px; background: #6c757d; color: #fff; border: none; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; display: inline-flex; align-items: center; gap: 6px; height: 40px; align-self: flex-end; }
 .btn-clear-filters:hover { opacity: 0.9; }
 
+/* Schedule header row (title + add week button) */
+.schedule-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.schedule-filter-actions {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: auto;
+}
+.schedule-filter-actions .btn {
+    height: 40px;
+}
+
 /* ===================================================
    SCHEDULE FORM - FIX KOLOM BERTUMPUK
    =================================================== */
