@@ -463,9 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const datasets = [];
 
-            // Model overlay:
-            // - Target (Reguler + OT) = stacked bar yang lebih lebar (background)
-            // - Aktual = bar solid lebih sempit, ditumpuk di atas/di tengah (foreground)
+            // Model grouped:
+            // - Target Reguler, Target OT, dan Aktual ditampilkan berdampingan.
             const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
             const totalTargets = targets.map((t, i) => (Number(t) || 0) + (hasOt ? (targetOtFilled[i] || 0) : 0));
 
@@ -478,9 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (cap <= 0) return av;
                 return Math.min(av, cap);
             });
-
-            const stackTarget = 'target';
-            const stackActual = 'actual';
 
             // 1) Target Reguler (lebih lebar) — hijau arsir
             datasets.push({
@@ -497,7 +493,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 }
                     : 6,
                 maxBarThickness: 44,
-                stack: stackTarget,
                 yAxisID: 'y',
                 order: 1
             });
@@ -516,7 +511,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderWidth: 1,
                     borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
                     maxBarThickness: 44,
-                    stack: stackTarget,
                     yAxisID: 'y',
                     order: 1
                 });
@@ -532,7 +526,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderWidth: 1,
                 borderRadius: 6,
                 maxBarThickness: 28,
-                stack: stackActual,
                 yAxisID: 'y',
                 order: 2
             });
@@ -618,19 +611,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     },
                     datasets: {
-                        // Overlay bars (target lebih lebar, aktual lebih sempit) pada kategori yang sama.
-                        bar: { grouped: false }
+                        bar: { grouped: true }
                     },
                     scales: {
                         x: {
                             display: true,
                             title: { display: false },
                             ticks: { maxRotation: 45, minRotation: 0 },
-                            stacked: true
+                            stacked: false
                         },
                         y: {
                             beginAtZero: true,
-                            stacked: true,
+                            stacked: false,
                             title: { display: false },
                             ticks: { callback: (v) => formatQuantityValue(v) }
                         }
