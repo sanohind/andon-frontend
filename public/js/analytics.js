@@ -553,22 +553,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         const isBar = ds && ds.type === 'bar';
                         if (!isBar) return;
                         const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
-                        if (period !== 'daily') {
-                            alert('Pilih periode Harian untuk melihat grafik quantity per jam.');
-                            return;
-                        }
                         const machines = chart.quantityChartMachines;
                         const dataIndex = hit.index;
                         if (!machines || !machines[dataIndex]) return;
                         const machine = machines[dataIndex];
-                        const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
                         const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                        const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                        const month = (quantityMonthInput && quantityMonthInput.value) || moment().format('YYYY-MM');
+                        const year = String((quantityYearInput && quantityYearInput.value) || moment().format('YYYY'));
                         openQuantityHourlyModal(
                             machine.name,
                             machine.address,
-                            date,
-                            shift,
-                            Number(machine.target_quantity) || 0
+                            {
+                                period,
+                                date,
+                                month,
+                                year,
+                                shift,
+                                targetPerShift: Number(machine.target_quantity) || 0
+                            }
                         );
                     },
                     plugins: {
@@ -723,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastQuantityHourlyData = null;
     let lastQuantityHourlyMeta = null;
 
-    async function openQuantityHourlyModal(machineName, machineAddress, date, shift, targetPerShift) {
+    async function openQuantityHourlyModal(machineName, machineAddress, options = {}) {
         const modal = document.getElementById('quantityHourlyModal');
         const titleEl = document.getElementById('quantityHourlyModalTitle');
         const emptyEl = document.getElementById('quantityHourlyChartEmpty');
@@ -733,15 +736,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const exportBtn = document.getElementById('quantityHourlyExportBtn');
         if (!modal || !titleEl || !canvas) return;
 
+        const period = options.period || 'daily';
+        const shift = options.shift || 'pagi';
+        const date = options.date || moment().format('YYYY-MM-DD');
+        const month = options.month || moment().format('YYYY-MM');
+        const year = String(options.year || moment().format('YYYY'));
+        const targetPerShift = Number(options.targetPerShift) || 0;
+        const periodTitleMap = {
+            daily: 'Quantity per Jam',
+            monthly: 'Quantity per Hari',
+            yearly: 'Quantity per Bulan'
+        };
+        const periodEmptyMap = {
+            daily: 'Tidak ada data hourly untuk mesin ini pada tanggal dan shift yang dipilih.',
+            monthly: 'Tidak ada data harian untuk mesin ini pada bulan dan shift yang dipilih.',
+            yearly: 'Tidak ada data bulanan untuk mesin ini pada tahun dan shift yang dipilih.'
+        };
+
         if (quantityHourlyChartInstance) {
             quantityHourlyChartInstance.destroy();
             quantityHourlyChartInstance = null;
         }
 
-        titleEl.textContent = `Quantity per Jam - ${machineName}`;
+        titleEl.textContent = `${periodTitleMap[period] || periodTitleMap.daily} - ${machineName}`;
         emptyEl.style.display = 'none';
         const emptyMsg = emptyEl.querySelector('p');
-        if (emptyMsg) emptyMsg.textContent = 'Tidak ada data hourly untuk mesin ini pada tanggal dan shift yang dipilih.';
+        if (emptyMsg) emptyMsg.textContent = periodEmptyMap[period] || periodEmptyMap.daily;
         wrapperEl.style.display = 'none';
         loadingEl.style.display = 'block';
         modal.style.display = 'flex';
@@ -758,8 +778,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
-            const res = await fetch(`/api/dashboard/analytics/quantity-hourly?${params.toString()}`, { headers: getAuthHeaders() });
+            const params = new URLSearchParams({ period, shift, machine_address: machineAddress });
+            if (period === 'daily') {
+                params.append('date', date);
+            } else if (period === 'monthly') {
+                params.append('month', month);
+            } else {
+                params.append('year', year);
+            }
+
+            const res = await fetch(`/api/dashboard/analytics/quantity-drilldown?${params.toString()}`, { headers: getAuthHeaders() });
             const json = await res.json();
             loadingEl.style.display = 'none';
 
@@ -773,12 +801,16 @@ document.addEventListener('DOMContentLoaded', () => {
             lastQuantityHourlyMeta = {
                 machineName,
                 machineAddress,
+                period,
                 date,
+                month,
+                year,
                 shift,
                 target: Number(targetPerShift) || 0
             };
 
-            const labels = json.data.map(d => d.snapshot_at);
+            const granularity = json.granularity || (period === 'daily' ? 'hourly' : (period === 'monthly' ? 'daily' : 'monthly'));
+            const labels = json.data.map(d => d.label || d.snapshot_at);
             const quantities = json.data.map(d => d.quantity);
             const idealQuantities = json.data.map(d => Number(d.ideal_quantity ?? 0));
             const otEnabled = !!json.ot_enabled;
@@ -799,72 +831,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 return -1;
             };
 
-            const isPagi = shift === 'pagi';
-            // Reguler: pagi sampai 15:58 (hour<=15), malam sampai 04:58 (hour>=20 atau hour<=4)
-            // OT: pagi dari 16:58 (hour>=16), malam dari 05:58 (hour 5-6). Hanya jika ot_enabled.
-            const isRegulerHour = (h) => {
-                if (h < 0) return true;
-                if (isPagi) return h <= 15;
-                return h >= 20 || h <= 4;
-            };
-            const isOtHour = (h) => {
-                if (h < 0) return false;
-                if (isPagi) return h >= 16;
-                return h >= 5 && h <= 6;
-            };
-
-            const dataReguler = quantities.map((q, i) => {
-                const h = parseHourFromLabel(labels[i]);
-                if (!otEnabled) return q; // Semua aktual reguler jika OT tidak diaktifkan
-                return isRegulerHour(h) ? q : null;
-            });
-            const dataOt = otEnabled ? quantities.map((q, i) => {
-                const h = parseHourFromLabel(labels[i]);
-                return isOtHour(h) ? q : null;
-            }) : null;
-
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
-            const hourlyDatasets = [
-                {
-                    label: 'Ideal Qty',
-                    data: idealQuantities,
-                    borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.05)',
-                    borderWidth: 2,
-                    borderDash: [6, 4],
-                    fill: false,
-                    tension: 0.2,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#22c55e',
-                    segment: { borderColor: '#22c55e' }
-                },
-                {
-                    label: otEnabled ? 'Aktual Reguler' : 'Quantity',
-                    data: dataReguler,
-                    borderColor: '#4c6ef5',
-                    backgroundColor: 'rgba(76, 110, 245, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#4c6ef5',
-                    segment: { borderColor: '#4c6ef5' }
-                }
-            ];
-            if (otEnabled && dataOt) {
-                hourlyDatasets.push({
-                    label: 'Aktual OT',
-                    data: dataOt,
-                    borderColor: '#d4a017',
-                    backgroundColor: 'rgba(212, 160, 23, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#d4a017',
-                    segment: { borderColor: '#d4a017' }
+            let hourlyDatasets = [];
+            if (granularity === 'hourly') {
+                const isPagi = shift === 'pagi';
+                // Reguler: pagi sampai 15:58 (hour<=15), malam sampai 04:58 (hour>=20 atau hour<=4)
+                // OT: pagi dari 16:58 (hour>=16), malam dari 05:58 (hour 5-6). Hanya jika ot_enabled.
+                const isRegulerHour = (h) => {
+                    if (h < 0) return true;
+                    if (isPagi) return h <= 15;
+                    return h >= 20 || h <= 4;
+                };
+                const isOtHour = (h) => {
+                    if (h < 0) return false;
+                    if (isPagi) return h >= 16;
+                    return h >= 5 && h <= 6;
+                };
+
+                const dataReguler = quantities.map((q, i) => {
+                    const h = parseHourFromLabel(json.data[i]?.snapshot_at || labels[i]);
+                    if (!otEnabled) return q; // Semua aktual reguler jika OT tidak diaktifkan
+                    return isRegulerHour(h) ? q : null;
                 });
+                const dataOt = otEnabled ? quantities.map((q, i) => {
+                    const h = parseHourFromLabel(json.data[i]?.snapshot_at || labels[i]);
+                    return isOtHour(h) ? q : null;
+                }) : null;
+
+                hourlyDatasets = [
+                    {
+                        label: 'Ideal Qty',
+                        data: idealQuantities,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#22c55e',
+                        segment: { borderColor: '#22c55e' }
+                    },
+                    {
+                        label: otEnabled ? 'Aktual Reguler' : 'Quantity',
+                        data: dataReguler,
+                        borderColor: '#4c6ef5',
+                        backgroundColor: 'rgba(76, 110, 245, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#4c6ef5',
+                        segment: { borderColor: '#4c6ef5' }
+                    }
+                ];
+
+                if (otEnabled && dataOt) {
+                    hourlyDatasets.push({
+                        label: 'Aktual OT',
+                        data: dataOt,
+                        borderColor: '#d4a017',
+                        backgroundColor: 'rgba(212, 160, 23, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#d4a017',
+                        segment: { borderColor: '#d4a017' }
+                    });
+                }
+            } else {
+                hourlyDatasets = [
+                    {
+                        label: 'Quantity',
+                        data: quantities,
+                        borderColor: '#4c6ef5',
+                        backgroundColor: 'rgba(76, 110, 245, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#4c6ef5',
+                        segment: { borderColor: '#4c6ef5' }
+                    }
+                ];
             }
 
             quantityHourlyChartInstance = new Chart(ctx, {
@@ -891,7 +942,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     scales: {
                         x: {
                             display: true,
-                            title: { display: true, text: 'Waktu' },
+                            title: {
+                                display: true,
+                                text: granularity === 'hourly' ? 'Waktu' : (granularity === 'daily' ? 'Hari' : 'Bulan')
+                            },
                             ticks: { maxRotation: 45, minRotation: 0 }
                         },
                         y: {
@@ -908,7 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 exportBtn.onclick = () => exportQuantityHourlyExcel();
             }
         } catch (err) {
-            console.error('Fetch quantity hourly:', err);
+            console.error('Fetch quantity drilldown:', err);
             loadingEl.style.display = 'none';
             emptyEl.style.display = 'flex';
             emptyEl.querySelector('p').textContent = 'Gagal memuat data. Coba lagi.';
@@ -942,10 +996,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const meta = lastQuantityHourlyMeta || {};
+        const period = meta.period || 'daily';
         const shiftRaw = meta.shift || 'pagi';
         const shiftLabel = shiftRaw === 'malam' ? 'Malam' : 'Pagi';
-        const ts = meta.date || '-';
+        const ts = period === 'daily'
+            ? (meta.date || '-')
+            : (period === 'monthly' ? (meta.month || '-') : (meta.year || '-'));
         const target = Number(meta.target) || 0;
+        const periodLabel = period === 'daily' ? 'Harian' : (period === 'monthly' ? 'Bulanan' : 'Tahunan');
+        const pointHeader = period === 'daily' ? 'Timestamp' : (period === 'monthly' ? 'Hari' : 'Bulan');
 
         const rows = [];
         let id = 1;
@@ -954,9 +1013,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 id++,
                 meta.machineName || '-',
                 shiftLabel,
-                d.snapshot_at || '-',
-                target,
-                Number(d.ideal_quantity ?? 0) || 0,
+                periodLabel,
+                d.label || d.snapshot_at || '-',
+                period === 'daily' ? target : '-',
+                period === 'daily' ? (Number(d.ideal_quantity ?? 0) || 0) : '-',
                 Number(d.quantity) || 0
             ]);
         });
@@ -964,12 +1024,12 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Tidak ada data hourly untuk diunduh.');
             return;
         }
-        const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'QuantityHourly');
+        XLSX.utils.book_append_sheet(wb, ws, 'QuantityDrilldown');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
-        const fileName = `quantity_hourly_${safeName}_${ts}_${shiftLabel}.xlsx`;
+        const fileName = `quantity_${period}_${safeName}_${ts}_${shiftLabel}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 
