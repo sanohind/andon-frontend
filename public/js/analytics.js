@@ -902,6 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             } else {
+                const hasIdealSeries = idealQuantities.some(v => Number(v) > 0);
                 hourlyDatasets = [
                     {
                         label: 'Quantity',
@@ -916,6 +917,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         segment: { borderColor: '#4c6ef5' }
                     }
                 ];
+                if (hasIdealSeries) {
+                    hourlyDatasets.unshift({
+                        label: 'Ideal Qty',
+                        data: idealQuantities,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#22c55e',
+                        segment: { borderColor: '#22c55e' }
+                    });
+                }
             }
 
             quantityHourlyChartInstance = new Chart(ctx, {
@@ -1009,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = [];
         let id = 1;
         lastQuantityHourlyData.forEach(d => {
+            const idealExport = Number(d.ideal_quantity ?? 0);
             rows.push([
                 id++,
                 meta.machineName || '-',
@@ -1016,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 periodLabel,
                 d.label || d.snapshot_at || '-',
                 period === 'daily' ? target : '-',
-                period === 'daily' ? (Number(d.ideal_quantity ?? 0) || 0) : '-',
+                period === 'daily' ? idealExport : (idealExport > 0 ? idealExport : '-'),
                 Number(d.quantity) || 0
             ]);
         });
