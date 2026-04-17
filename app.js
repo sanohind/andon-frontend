@@ -1024,6 +1024,28 @@ app.get('/api/dashboard/analytics/quantity-hourly', requireAuthAPI, async (req, 
   }
 });
 
+// Endpoint untuk quantity drilldown (daily->hourly, monthly->daily, yearly->monthly)
+app.get('/api/dashboard/analytics/quantity-drilldown', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, date, month, year, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/quantity-drilldown`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, date, month, year, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching quantity drilldown:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch quantity drilldown',
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/dashboard/analytics/line-oee', requireAuthAPI, async (req, res) => {
   try {
     const { period, date, month, year, shift } = req.query;
