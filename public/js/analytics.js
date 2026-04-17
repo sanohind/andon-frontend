@@ -463,8 +463,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const datasets = [];
 
-            // Model grouped:
-            // - Target Reguler, Target OT, dan Aktual ditampilkan berdampingan.
+            // Model grouped by stack:
+            // - Target (Reguler + OT) tetap stacked jadi satu grup.
+            // - Aktual berada di grup terpisah agar tampil berdampingan.
             const targetOtFilled = targetsOt.map((v) => (v == null ? 0 : Number(v) || 0));
             const totalTargets = targets.map((t, i) => (Number(t) || 0) + (hasOt ? (targetOtFilled[i] || 0) : 0));
 
@@ -477,6 +478,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (cap <= 0) return av;
                 return Math.min(av, cap);
             });
+
+            const stackTarget = 'target';
+            const stackActual = 'actual';
 
             // 1) Target Reguler (lebih lebar) — hijau arsir
             datasets.push({
@@ -493,6 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? { topLeft: 0, topRight: 0, bottomLeft: 6, bottomRight: 6 }
                     : 6,
                 maxBarThickness: 44,
+                stack: stackTarget,
                 yAxisID: 'y',
                 order: 1
             });
@@ -511,6 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderWidth: 1,
                     borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
                     maxBarThickness: 44,
+                    stack: stackTarget,
                     yAxisID: 'y',
                     order: 1
                 });
@@ -525,7 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderColor: '#4c6ef5',
                 borderWidth: 1,
                 borderRadius: 6,
-                maxBarThickness: 28,
+                maxBarThickness: 44,
+                stack: stackActual,
                 yAxisID: 'y',
                 order: 2
             });
@@ -618,11 +625,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             display: true,
                             title: { display: false },
                             ticks: { maxRotation: 45, minRotation: 0 },
-                            stacked: false
+                            stacked: true
                         },
                         y: {
                             beginAtZero: true,
-                            stacked: false,
+                            stacked: true,
                             title: { display: false },
                             ticks: { callback: (v) => formatQuantityValue(v) }
                         }
