@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const runtimeSeconds = safeNumber(st.runtime_seconds || 0);
       const runningHourSec = safeNumber(st.running_hour_seconds || 0);
 
-      // Determine status untuk UI (dot indicator, ideal qty styling)
+      // Determine status untuk UI (dot indicator, Total Product styling — Ideal-Qty tetap hijau)
       const problemType = st.problem_type || st.tipe_problem || '';
       const statusNorm = String(st.status || '').toLowerCase();
       const isProblem = statusNorm === 'problem';
@@ -466,10 +466,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const idealEl = document.getElementById(`b${blockIdx}_ideal_${keyAddr}`);
         if (idealEl) {
           idealEl.classList.remove('rt-ideal-warn', 'rt-ideal-bad');
-          if (isProblem) idealEl.classList.add('rt-ideal-bad');
-          else if (isIdle || isWarning) idealEl.classList.add('rt-ideal-warn');
         }
         setText('total', String(totalProduct));
+        const totalEl = document.getElementById(`b${blockIdx}_total_${keyAddr}`);
+        if (totalEl) {
+          totalEl.classList.remove('rt-total-warn', 'rt-total-bad');
+          if (isProblem) totalEl.classList.add('rt-total-bad');
+          else if (isIdle || isWarning) totalEl.classList.add('rt-total-warn');
+        }
         setText('ng', '0');
         setText('runtime', fmtHHMMSS(runtimeSeconds));
         setText('runninghour', fmtHHMMSS(runningHourSec));

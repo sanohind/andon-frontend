@@ -9,6 +9,8 @@
     --rt-cyan: #0284c7;
     --rt-yellow: #ca8a04;
     --rt-red: #e11d48;
+    /* Total Product default (tema terang / embedded): teks gelap agar kontras di sel putih */
+    --rt-total-default: #0f172a;
 }
 
 /* Dark palette hanya untuk single page public monitoring */
@@ -35,6 +37,8 @@
     --rt-cyan: #00bcd4;
     --rt-yellow: #ffff00;
     --rt-red: #ff0000;
+    /* Total Product default di single page gelap: putih */
+    --rt-total-default: #ffffff;
 }
 
 .rt-oee-body {
@@ -197,7 +201,7 @@
     line-height: 1.05;
 }
 .rt-value.ideal { color: var(--rt-green); }
-.rt-value.total { color: #0f172a; }
+.rt-value.total { color: var(--rt-total-default, #0f172a); }
 .rt-value.ng { color: var(--rt-cyan); }
 .rt-value.time { color: #0f172a; font-size: 1.5rem; }
 .rt-value.oee { color: var(--rt-yellow); }
@@ -213,21 +217,20 @@
 .rt-oee-public-body .rt-cell.rt-header {
     color: #f9fafb;
 }
-.rt-oee-public-body .rt-value.total,
 .rt-oee-public-body .rt-value.time {
     color: #f9fafb;
 }
 .rt-value.ideal.rt-ideal-ot { color: #d4a017; }
-/* Ideal Qty berkedip mengikuti warna status saat idle atau problem */
+/* Kedip status (idle/problem) — dipakai Total Product & OEE rendah */
 @keyframes rt-ideal-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
-.rt-value.ideal.rt-ideal-warn {
+.rt-value.total.rt-total-warn {
   color: var(--rt-yellow);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
-.rt-value.ideal.rt-ideal-bad {
+.rt-value.total.rt-total-bad {
   color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
@@ -247,7 +250,7 @@
     .rt-value.target { font-size: 1.1rem; }
 }
 
-/* OEE blinking sama seperti Ideal-Qty ketika idle/problem */
+/* OEE di bawah ambang: merah + kedip (animasi sama seperti Total Product idle/problem) */
 .rt-value.oee.rt-oee-low {
   color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
