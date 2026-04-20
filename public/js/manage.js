@@ -671,11 +671,23 @@
             addMachineForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const fd = new FormData(addMachineForm);
-                const payload = { name: fd.get('name'), division: fd.get('division'), line_name: fd.get('line_name') };
-                if (!payload.name || !payload.division || !payload.line_name) return alert('Isi semua field.');
+                const machineId = String(fd.get('machine_id') || '').trim();
+                const payload = {
+                    machine_id: machineId,
+                    name: fd.get('name'),
+                    division: fd.get('division'),
+                    line_name: fd.get('line_name'),
+                };
+                if (!machineId || !payload.name || !payload.division || !payload.line_name) {
+                    return alert('Isi semua field, termasuk ID Mesin.');
+                }
                 try {
                     const res = await fetch(`${API}/inspect-tables`, { method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-                    if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
+                    const body = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = body.message || body.errors?.machine_id?.[0] || body.errors?.name?.[0] || 'Gagal';
+                        throw new Error(typeof msg === 'string' ? msg : 'Gagal validasi.');
+                    }
                     addMachineForm.reset();
                     loadMachines();
                 } catch (err) { alert(err.message); }
