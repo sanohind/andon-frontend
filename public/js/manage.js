@@ -186,8 +186,11 @@
         const name = tr.dataset.name;
         const division = tr.dataset.division;
         const line = tr.dataset.line;
+        const machineId = tr.dataset.machineId || '';
         const divisionLineMap = await loadDivisionsForMachine();
         document.getElementById('editMachineId').value = id;
+        const midEl = document.getElementById('editMachineMachineId');
+        if (midEl) midEl.value = machineId;
         document.getElementById('editMachineName').value = name;
         populateMachineDropdowns(divisionLineMap, 'editMachineDivision', 'editMachineLine', division, line);
         document.getElementById('editMachineModal').classList.add('show');
@@ -683,14 +686,21 @@
             editMachineForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const id = document.getElementById('editMachineId').value;
+                const machineId = (document.getElementById('editMachineMachineId')?.value || '').trim();
                 const payload = {
+                    machine_id: machineId,
                     name: document.getElementById('editMachineName').value,
                     division: document.getElementById('editMachineDivision').value,
                     line_name: document.getElementById('editMachineLine').value
                 };
+                if (!machineId) return alert('Isi ID Mesin.');
                 try {
                     const res = await fetch(`${API}/inspect-tables/${id}`, { method: 'PUT', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-                    if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
+                    const body = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = body.message || body.errors?.machine_id?.[0] || body.errors?.name?.[0] || 'Gagal';
+                        throw new Error(typeof msg === 'string' ? msg : 'Gagal validasi.');
+                    }
                     closeModal('editMachineModal');
                     loadMachines();
                 } catch (err) { alert(err.message); }
