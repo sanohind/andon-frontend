@@ -106,7 +106,10 @@
         let list = allMachines.slice();
         if (machineFilter.name) {
             const q = machineFilter.name.toLowerCase();
-            list = list.filter(m => (m.name || '').toLowerCase().includes(q));
+            list = list.filter(m =>
+                (m.name || '').toLowerCase().includes(q) ||
+                String(m.machine_id || '').toLowerCase().includes(q)
+            );
         }
         if (machineFilter.division) list = list.filter(m => (m.division || '') === machineFilter.division);
         if (machineFilter.line) list = list.filter(m => (m.line_name || m.line) === machineFilter.line);
@@ -133,7 +136,8 @@
                     </div>
                 </td>`;
         tbody.innerHTML = pageData.map(m => `
-            <tr data-id="${m.id}" data-address="${m.address || ''}" data-name="${escapeHtml(m.name || '')}" data-division="${m.division || ''}" data-line="${m.line_name || m.line || ''}" data-cycle="${m.cycle_time || ''}" data-cavity="${m.cavity || ''}" data-warning="${m.warning_cycle_count || ''}" data-problem="${m.problem_cycle_count || ''}">
+            <tr data-id="${m.id}" data-machine-id="${escapeHtml(m.machine_id || '')}" data-address="${m.address || ''}" data-name="${escapeHtml(m.name || '')}" data-division="${m.division || ''}" data-line="${m.line_name || m.line || ''}" data-cycle="${m.cycle_time || ''}" data-cavity="${m.cavity || ''}" data-warning="${m.warning_cycle_count || ''}" data-problem="${m.problem_cycle_count || ''}">
+                <td>${escapeHtml(m.machine_id || '')}</td>
                 <td>${escapeHtml(m.name || '')}</td>
                 <td>${escapeHtml(m.division || '')}</td>
                 <td>${escapeHtml(m.line_name || m.line || '')}</td>
@@ -142,7 +146,7 @@
                 <td>${m.address || ''}</td>
                 ${actionCellHtml}
             </tr>
-        `).join('') || '<tr><td colspan="7" style="text-align:center;">Tidak ada data</td></tr>';
+        `).join('') || '<tr><td colspan="8" style="text-align:center;">Tidak ada data</td></tr>';
 
         if (infoEl) infoEl.textContent = `Menampilkan ${start + 1}-${Math.min(start + machinePageSize, total)} dari ${total} mesin`;
         if (ctrlEl) {

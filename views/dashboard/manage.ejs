@@ -32,7 +32,14 @@
                 <div class="form-container">
                     <h3>Tambah Mesin</h3>
                     <form id="addMachineForm">
-                        <input type="text" name="name" placeholder="Nama Mesin (e.g., Mesin 1)" required>
+                        <div class="add-machine-field-group">
+                            <label for="addMachineIdDisplay" class="add-machine-label">ID Mesin</label>
+                            <input type="text" id="addMachineIdDisplay" readonly placeholder="Otomatis (TEMP-…)" title="Setelah disimpan, ID diisi otomatis berbentuk TEMP-{nomor}">
+                        </div>
+                        <div class="add-machine-field-group add-machine-field-grow">
+                            <label for="addMachineNameInput" class="add-machine-label">Nama Mesin</label>
+                            <input type="text" id="addMachineNameInput" name="name" placeholder="e.g., Mesin 1" required>
+                        </div>
                         <select name="division" id="machineDivisionSelect" required>
                             <option value="">Pilih Divisi</option>
                         </select>
@@ -48,8 +55,8 @@
                     <div class="filter-container">
                         <div class="filter-row">
                             <div class="filter-group">
-                                <label><i class="fas fa-search"></i> Nama</label>
-                                <input type="text" id="filterMachineName" placeholder="Cari nama mesin..." class="filter-input">
+                                <label><i class="fas fa-search"></i> Nama / ID</label>
+                                <input type="text" id="filterMachineName" placeholder="Cari nama atau ID mesin..." class="filter-input">
                             </div>
                             <div class="filter-group">
                                 <label><i class="fas fa-building"></i> Divisi</label>
@@ -76,6 +83,7 @@
                     <table id="machinesTable" class="data-table">
                         <thead>
                             <tr>
+                                <th>ID</th>
                                 <th>Nama</th>
                                 <th>Divisi</th>
                                 <th>Line</th>

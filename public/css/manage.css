@@ -43,6 +43,21 @@
     flex-wrap: wrap;
     align-items: flex-end;
 }
+.add-machine-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.add-machine-field-grow {
+    flex: 1;
+    min-width: 180px;
+}
+.add-machine-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color, #0A2856);
+}
 #addMachineForm input[type="text"],
 #addMachineForm select {
     padding: 10px 14px;
@@ -50,7 +65,14 @@
     border-radius: var(--border-radius);
     font-size: 1em;
 }
-#addMachineForm input[type="text"] { min-width: 200px; flex: 1; }
+#addMachineForm #addMachineIdDisplay {
+    min-width: 140px;
+    max-width: 180px;
+    background: #f4f6f9;
+    color: #555;
+    cursor: default;
+}
+#addMachineForm .add-machine-field-grow input[type="text"] { width: 100%; min-width: 200px; }
 #addMachineForm select { min-width: 140px; }
 #addMachineForm button {
     background: var(--primary-color);
