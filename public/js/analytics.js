@@ -821,51 +821,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const idealQuantities = json.data.map(d => Number(d.ideal_quantity ?? 0));
             const otEnabled = !!json.ot_enabled;
 
-            /** Untuk hourly: klasifikasi Reguler vs OT memakai jam awal selang (period_start), bukan akhir snapshot. */
-            const parseHourFromLabel = (label) => {
-                if (!label) return -1;
-                const s = String(label);
-                const m = moment(s, ['YYYY-MM-DD HH:mm', 'YYYY-MM-DD H:mm', moment.ISO_8601], true);
-                if (m.isValid()) return m.hour();
-                const match = s.match(/(\d{1,2}):?\d{0,2}$/);
-                if (match) return parseInt(match[1], 10);
-                const parts = s.split(/\s+/);
-                if (parts.length >= 2) {
-                    const timePart = parts[1];
-                    const h = parseInt(timePart.split(':')[0], 10);
-                    return Number.isFinite(h) ? h : -1;
-                }
-                return -1;
-            };
-
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
             let hourlyDatasets = [];
             if (granularity === 'hourly') {
-                const isPagi = shift === 'pagi';
-                // Pagi: reguler jam kerja s.d. 15, OT jam 16+ (sampai akhir window shift di backend).
-                // Malam: OT jam 5–6; selain itu reguler (termasuk jam 7 = akhir shift sebelum reset 07:01).
-                const isRegulerHour = (h) => {
-                    if (h < 0) return true;
-                    if (isPagi) return h <= 15;
-                    const ot = h >= 5 && h <= 6;
-                    return !ot;
-                };
-                const isOtHour = (h) => {
-                    if (h < 0) return false;
-                    if (isPagi) return h >= 16;
-                    return h >= 5 && h <= 6;
-                };
-
-                const dataReguler = quantities.map((q, i) => {
-                    const h = parseHourFromLabel(json.data[i]?.period_start || json.data[i]?.snapshot_at || labels[i]);
-                    if (!otEnabled) return q; // Semua aktual reguler jika OT tidak diaktifkan
-                    return isRegulerHour(h) ? q : null;
-                });
-                const dataOt = otEnabled ? quantities.map((q, i) => {
-                    const h = parseHourFromLabel(json.data[i]?.period_start || json.data[i]?.snapshot_at || labels[i]);
-                    return isOtHour(h) ? q : null;
-                }) : null;
+                // Backend: quantity & ideal kumulatif per titik (garis menanjak). Split Reguler/OT dari backend bila ada.
+                const hasOtCumulative = otEnabled && json.data.length > 0
+                    && typeof json.data[0].quantity_cumulative_regular !== 'undefined'
+                    && typeof json.data[0].quantity_cumulative_ot !== 'undefined';
+                const cumReg = hasOtCumulative
+                    ? json.data.map(d => Number(d.quantity_cumulative_regular ?? 0))
+                    : null;
+                const cumOt = hasOtCumulative
+                    ? json.data.map(d => Number(d.quantity_cumulative_ot ?? 0))
+                    : null;
+                const cumTotal = json.data.map(d => Number(d.quantity ?? 0));
 
                 hourlyDatasets = [
                     {
@@ -882,8 +852,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         segment: { borderColor: '#22c55e' }
                     },
                     {
-                        label: otEnabled ? 'Aktual Reguler' : 'Quantity',
-                        data: dataReguler,
+                        label: hasOtCumulative ? 'Aktual Reguler' : 'Quantity',
+                        data: hasOtCumulative ? cumReg : cumTotal,
                         borderColor: '#4c6ef5',
                         backgroundColor: 'rgba(76, 110, 245, 0.1)',
                         borderWidth: 2,
@@ -895,10 +865,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 ];
 
-                if (otEnabled && dataOt) {
+                if (hasOtCumulative && cumOt) {
                     hourlyDatasets.push({
                         label: 'Aktual OT',
-                        data: dataOt,
+                        data: cumOt,
                         borderColor: '#d4a017',
                         backgroundColor: 'rgba(212, 160, 23, 0.1)',
                         borderWidth: 2,
@@ -976,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: granularity === 'hourly' ? 'Quantity (per selang waktu)' : 'Quantity'
+                                text: granularity === 'hourly' ? 'Quantity (kumulatif)' : 'Quantity'
                             },
                             ticks: { callback: v => formatQuantityValue(v) }
                         }
@@ -1074,7 +1044,9 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Tidak ada data hourly untuk diunduh.');
             return;
         }
-        const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
+        const headers = period === 'daily'
+            ? ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty (kumulatif)', 'Quantity Aktual (kumulatif)']
+            : ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityDrilldown');
