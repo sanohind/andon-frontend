@@ -843,12 +843,13 @@ document.addEventListener('DOMContentLoaded', () => {
             let hourlyDatasets = [];
             if (granularity === 'hourly') {
                 const isPagi = shift === 'pagi';
-                // Reguler: pagi sampai 15:58 (hour<=15), malam sampai 04:58 (hour>=20 atau hour<=4)
-                // OT: pagi dari 16:58 (hour>=16), malam dari 05:58 (hour 5-6). Hanya jika ot_enabled.
+                // Pagi: reguler jam kerja s.d. 15, OT jam 16+ (sampai akhir window shift di backend).
+                // Malam: OT jam 5–6; selain itu reguler (termasuk jam 7 = akhir shift sebelum reset 07:01).
                 const isRegulerHour = (h) => {
                     if (h < 0) return true;
                     if (isPagi) return h <= 15;
-                    return h >= 20 || h <= 4;
+                    const ot = h >= 5 && h <= 6;
+                    return !ot;
                 };
                 const isOtHour = (h) => {
                     if (h < 0) return false;
