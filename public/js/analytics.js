@@ -98,6 +98,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return map.get(`${String(machineName)}__${String(lineName || '')}`) || null;
     }
 
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     // Helper function to get cookie value
     function getCookieValue(name) {
         const value = `; ${document.cookie}`;
@@ -570,6 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 month,
                                 year,
                                 shift,
+                                lineName,
                                 targetPerShift: Number(machine.target_quantity) || 0
                             }
                         );
@@ -585,31 +595,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                         ? (context.parsed.y != null ? context.parsed.y : context.parsed.x)
                                         : context.parsed;
 
+                                    // Tooltip harus terpisah per bar (jangan digabung).
                                     if (dsLabel === 'Aktual') {
                                         const rawA = rawActuals[i];
-                                        const tReg = Number(targets[i]) || 0;
-                                        const tOt = hasOt ? (targetOtFilled[i] || 0) : 0;
-                                        const tTotal = (tReg + tOt);
-                                        const baseLines = [
-                                            `Aktual: ${formatQuantityValue(Number(rawA) || 0)}`,
-                                            `Target Reguler: ${formatQuantityValue(tReg)}`,
-                                            hasOt ? `Target OT: ${formatQuantityValue(tOt)}` : null,
-                                            `Target Total: ${formatQuantityValue(tTotal)}`
-                                        ].filter(Boolean);
-
-                                        // Append machine note (only when exists)
-                                        const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
-                                        const dateStr = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
-                                        const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
-                                        const machineName = (machines && machines[i]) ? machines[i].name : labels[i];
-                                        const noteText = (period === 'daily')
-                                            ? getCachedMachineNote({ dateStr, shift, machineName, lineName })
-                                            : null;
-                                        if (noteText && String(noteText).trim() !== '') {
-                                            baseLines.push(`Catatan: ${String(noteText).replace(/\s+/g, ' ').trim()}`);
-                                        }
-
-                                        return baseLines.join(' | ');
+                                        return `Aktual: ${formatQuantityValue(Number(rawA) || 0)}`;
+                                    }
+                                    if (dsLabel === 'Target Reguler') {
+                                        return `Target Reguler: ${formatQuantityValue(Number(targets[i]) || 0)}`;
+                                    }
+                                    if (dsLabel === 'Target OT') {
+                                        return `Target OT: ${formatQuantityValue(Number(targetOtFilled[i]) || 0)}`;
                                     }
 
                                     return `${dsLabel}: ${formatQuantityValue(Number(parsedVal) || 0)}`;
@@ -733,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const wrapperEl = document.getElementById('quantityHourlyChartWrapper');
         const canvas = document.getElementById('quantityHourlyChartCanvas');
         const exportBtn = document.getElementById('quantityHourlyExportBtn');
+        const noteEl = document.getElementById('quantityHourlyNote');
         if (!modal || !titleEl || !canvas) return;
 
         const period = options.period || 'daily';
@@ -741,6 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const month = options.month || moment().format('YYYY-MM');
         const year = String(options.year || moment().format('YYYY'));
         const targetPerShift = Number(options.targetPerShift) || 0;
+        const lineName = options.lineName || '';
         const periodTitleMap = {
             daily: 'Quantity per Jam',
             monthly: 'Quantity per Hari',
@@ -763,6 +760,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (emptyMsg) emptyMsg.textContent = periodEmptyMap[period] || periodEmptyMap.daily;
         wrapperEl.style.display = 'none';
         loadingEl.style.display = 'block';
+        if (noteEl) {
+            noteEl.style.display = 'none';
+            noteEl.textContent = '';
+        }
         modal.style.display = 'flex';
         modal.style.alignItems = 'center';
         modal.style.justifyContent = 'center';
@@ -777,6 +778,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            // Notes ditampilkan di bawah chart (bukan tooltip Production Quantity).
+            // Preload (non-blocking) agar biasanya sudah ada di cache saat render.
+            if (period === 'daily' && lineName) {
+                ensureMachineNotesLoaded({ dateStr: date, shift, lineName }).catch(() => {});
+            }
+
             const params = new URLSearchParams({ period, shift, machine_address: machineAddress });
             if (period === 'daily') {
                 params.append('date', date);
@@ -976,19 +983,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 exportBtn.style.display = 'inline-flex';
                 exportBtn.onclick = () => exportQuantityHourlyExcel();
             }
+
+            // Render note AFTER chart is shown (so it won't be clipped like tooltip).
+            if (noteEl && period === 'daily') {
+                const noteText = getCachedMachineNote({ dateStr: date, shift, machineName, lineName });
+                const trimmed = (noteText == null) ? '' : String(noteText).replace(/\s+/g, ' ').trim();
+                if (trimmed !== '') {
+                    noteEl.innerHTML = `<strong>Catatan:</strong> ${escapeHtml(trimmed)}`;
+                    noteEl.style.display = 'block';
+                } else {
+                    noteEl.style.display = 'none';
+                    noteEl.textContent = '';
+                }
+            }
         } catch (err) {
             console.error('Fetch quantity drilldown:', err);
             loadingEl.style.display = 'none';
             emptyEl.style.display = 'flex';
             emptyEl.querySelector('p').textContent = 'Gagal memuat data. Coba lagi.';
+            if (noteEl) {
+                noteEl.style.display = 'none';
+                noteEl.textContent = '';
+            }
         }
     }
 
     function closeQuantityHourlyModal() {
         const modal = document.getElementById('quantityHourlyModal');
+        const noteEl = document.getElementById('quantityHourlyNote');
         if (quantityHourlyChartInstance) {
             quantityHourlyChartInstance.destroy();
             quantityHourlyChartInstance = null;
+        }
+        if (noteEl) {
+            noteEl.style.display = 'none';
+            noteEl.textContent = '';
         }
         if (modal) {
             modal.classList.remove('show');
