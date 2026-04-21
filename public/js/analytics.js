@@ -814,6 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const idealQuantities = json.data.map(d => Number(d.ideal_quantity ?? 0));
             const otEnabled = !!json.ot_enabled;
 
+            /** Untuk hourly: klasifikasi Reguler vs OT memakai jam awal selang (period_start), bukan akhir snapshot. */
             const parseHourFromLabel = (label) => {
                 if (!label) return -1;
                 const s = String(label);
@@ -849,12 +850,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 const dataReguler = quantities.map((q, i) => {
-                    const h = parseHourFromLabel(json.data[i]?.snapshot_at || labels[i]);
+                    const h = parseHourFromLabel(json.data[i]?.period_start || json.data[i]?.snapshot_at || labels[i]);
                     if (!otEnabled) return q; // Semua aktual reguler jika OT tidak diaktifkan
                     return isRegulerHour(h) ? q : null;
                 });
                 const dataOt = otEnabled ? quantities.map((q, i) => {
-                    const h = parseHourFromLabel(json.data[i]?.snapshot_at || labels[i]);
+                    const h = parseHourFromLabel(json.data[i]?.period_start || json.data[i]?.snapshot_at || labels[i]);
                     return isOtHour(h) ? q : null;
                 }) : null;
 
@@ -965,7 +966,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         y: {
                             beginAtZero: true,
-                            title: { display: true, text: 'Quantity' },
+                            title: {
+                                display: true,
+                                text: granularity === 'hourly' ? 'Quantity (per selang waktu)' : 'Quantity'
+                            },
                             ticks: { callback: v => formatQuantityValue(v) }
                         }
                     }
