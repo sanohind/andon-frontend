@@ -114,6 +114,20 @@
                         </div>
                     </div>
                 </div>
+                <div class="chart-card oee-analytics-card">
+                    <div class="chart-card-header oee-analytics-card-header">
+                        <h3>Efisiensi (OEE) — Akumulasi per Line</h3>
+                    </div>
+                    <div class="quantity-chart-body oee-analytics-card-body">
+                        <div class="chart-wrapper" style="height: 520px;">
+                            <canvas id="efficiencyDailyChart"></canvas>
+                        </div>
+                        <div class="chart-empty-state" id="efficiencyDailyEmptyState" style="display: none;">
+                            <i class="fas fa-chart-bar"></i>
+                            <p>Belum ada data efisiensi untuk rentang tanggal yang dipilih.</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="chart-card">
                     <h3>Frekuensi Masalah per Mesin</h3>
                     <div class="chart-wrapper">
@@ -388,6 +402,40 @@
                     <button class="btn btn-secondary btn-sm" id="oeeHourlyExportBtn" type="button" style="display: none;">
                         <i class="fas fa-file-excel"></i> Download Excel
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Efisiensi Drilldown (Reguler vs OT) -->
+    <div class="modal" id="efficiencyDrilldownModal" style="display: none;">
+        <div class="modal-content quantity-hourly-modal-content oee-hourly-modal-content">
+            <div class="modal-header">
+                <h3 id="efficiencyDrilldownTitle">Efisiensi Detail</h3>
+                <button type="button" class="modal-close" id="efficiencyDrilldownClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="efficiencyDrilldownLoading" style="display: none; text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p>Memuat data...</p>
+                </div>
+                <div id="efficiencyDrilldownEmpty" class="chart-empty-state" style="display: none;">
+                    <i class="fas fa-chart-bar"></i>
+                    <p>Tidak ada data efisiensi untuk line & tanggal ini.</p>
+                </div>
+                <div id="efficiencyDrilldownCharts" style="display: none;">
+                    <div class="oee-hourly-chart-block">
+                        <h4 class="oee-hourly-chart-title">Jam Reguler</h4>
+                        <div class="chart-wrapper" style="height: 360px;">
+                            <canvas id="efficiencyDrilldownRegularCanvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="oee-hourly-chart-block" style="margin-top: 1rem;">
+                        <h4 class="oee-hourly-chart-title">Jam OT</h4>
+                        <div class="chart-wrapper" style="height: 360px;">
+                            <canvas id="efficiencyDrilldownOtCanvas"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

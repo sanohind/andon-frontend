@@ -346,12 +346,18 @@
     // --- OEE ---
     async function loadOeeSettings() {
         const input = document.getElementById('oeeWarningThresholdInput');
-        if (!input) return;
+        const targetInput = document.getElementById('oeeTargetEfficiencyInput');
+        if (!input && !targetInput) return;
         try {
             const res = await fetch(`${API}/oee-settings`, { headers: getAuthHeaders() });
             const json = await res.json();
-            if (json.success && json.data && typeof json.data.warning_threshold_percent !== 'undefined') {
-                input.value = Number(json.data.warning_threshold_percent);
+            if (json.success && json.data) {
+                if (input && typeof json.data.warning_threshold_percent !== 'undefined') {
+                    input.value = Number(json.data.warning_threshold_percent);
+                }
+                if (targetInput && typeof json.data.target_efficiency_percent !== 'undefined') {
+                    targetInput.value = Number(json.data.target_efficiency_percent);
+                }
             }
         } catch (e) {}
     }
@@ -369,6 +375,24 @@
             const json = await res.json();
             if (!res.ok || !json.success) throw new Error(json.message || 'Gagal');
             alert('Threshold OEE disimpan.');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function saveOeeTargetEfficiency() {
+        const input = document.getElementById('oeeTargetEfficiencyInput');
+        if (!input) return;
+        const val = Number(input.value);
+        if (Number.isNaN(val) || val < 0 || val > 100) {
+            alert('Nilai 0–100.');
+            return;
+        }
+        try {
+            const res = await fetch(`${API}/oee-settings`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ target_efficiency_percent: val }) });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.message || 'Gagal');
+            alert('Target efisiensi disimpan.');
         } catch (e) {
             alert('Error: ' + e.message);
         }
@@ -815,6 +839,7 @@
 
         // OEE
         document.getElementById('saveOeeThresholdBtn')?.addEventListener('click', saveOeeThreshold);
+        document.getElementById('saveOeeTargetEfficiencyBtn')?.addEventListener('click', saveOeeTargetEfficiency);
 
         // Schedule
         const addScheduleForm = document.getElementById('addScheduleForm');

@@ -158,6 +158,19 @@
                         </div>
                     </div>
                 </div>
+                <div class="form-container oee-threshold-card" style="margin-top: 1rem;">
+                    <h3><i class="fas fa-bullseye"></i> Set Target Efisiensi (OEE)</h3>
+                    <div class="oee-threshold-row">
+                        <label for="oeeTargetEfficiencyInput">
+                            Target Efisiensi (%)<br>
+                            <small>Dipakai sebagai pembanding pada chart Efisiensi (default 96%).</small>
+                        </label>
+                        <div class="oee-threshold-input-wrap">
+                            <input type="number" id="oeeTargetEfficiencyInput" min="0" max="100" step="0.01" value="96">
+                            <button type="button" id="saveOeeTargetEfficiencyBtn" class="btn btn-primary"><i class="fas fa-save"></i> Simpan</button>
+                        </div>
+                    </div>
+                </div>
                 <% } else { %>
                 <p class="text-muted">Hanya admin yang dapat mengatur threshold OEE.</p>
                 <% } %>

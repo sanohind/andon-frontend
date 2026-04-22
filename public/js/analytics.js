@@ -27,6 +27,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const lineQuantityEmptyState = document.getElementById('lineQuantityEmptyState');
     const oeeChartsContainer = document.getElementById('oeeChartsContainer');
     const lineOeeEmptyState = document.getElementById('lineOeeEmptyState');
+    const efficiencyDailyCanvas = document.getElementById('efficiencyDailyChart');
+    const efficiencyDailyEmptyState = document.getElementById('efficiencyDailyEmptyState');
+
+    const efficiencyDrilldownModal = document.getElementById('efficiencyDrilldownModal');
+    const efficiencyDrilldownTitle = document.getElementById('efficiencyDrilldownTitle');
+    const efficiencyDrilldownClose = document.getElementById('efficiencyDrilldownClose');
+    const efficiencyDrilldownLoading = document.getElementById('efficiencyDrilldownLoading');
+    const efficiencyDrilldownEmpty = document.getElementById('efficiencyDrilldownEmpty');
+    const efficiencyDrilldownCharts = document.getElementById('efficiencyDrilldownCharts');
+    const efficiencyDrilldownRegularCanvas = document.getElementById('efficiencyDrilldownRegularCanvas');
+    const efficiencyDrilldownOtCanvas = document.getElementById('efficiencyDrilldownOtCanvas');
 
     // Determine what to show based on role
     const showCharts = ['admin', 'management', 'manager'].includes(userRole);
@@ -256,6 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn('Detailed forward analytics not available:', forwardErr);
                 }
             }
+
+            // Efisiensi (OEE) — Akumulasi per line (berdasarkan date-range picker + divisi)
+            if (showCharts) {
+                fetchEfficiencyDaily(startDate, endDate);
+            }
         } catch (error) {
             console.error('Fetch Error:', error);
         }
@@ -266,6 +282,223 @@ document.addEventListener('DOMContentLoaded', () => {
         if (quantityDateGroup) quantityDateGroup.style.display = period === 'daily' ? 'flex' : 'none';
         if (quantityMonthGroup) quantityMonthGroup.style.display = period === 'monthly' ? 'flex' : 'none';
         if (quantityYearGroup) quantityYearGroup.style.display = period === 'yearly' ? 'flex' : 'none';
+    }
+
+    // ========== EFFICIENCY (OEE) — daily accumulation + drilldown ==========
+    let efficiencyDailyChartInstance = null;
+    let efficiencyDrilldownRegularChartInstance = null;
+    let efficiencyDrilldownOtChartInstance = null;
+
+    function toggleEfficiencyDailyEmpty(show) {
+        if (efficiencyDailyEmptyState) efficiencyDailyEmptyState.style.display = show ? 'flex' : 'none';
+        if (efficiencyDailyCanvas) efficiencyDailyCanvas.style.display = show ? 'none' : 'block';
+    }
+
+    function openModal(el) { if (el) el.style.display = 'flex'; }
+    function closeModal(el) { if (el) el.style.display = 'none'; }
+
+    async function fetchEfficiencyDaily(startDate, endDate) {
+        if (!showCharts || !efficiencyDailyCanvas) return;
+        if (!startDate || !endDate) return;
+
+        const division = getSelectedDivision();
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        if (division) params.set('division', division);
+
+        try {
+            const res = await fetch(`/api/dashboard/analytics/efficiency-daily?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (!res.ok || !json.success || !json.data) throw new Error(json.message || 'Gagal memuat efisiensi');
+
+            const dates = Array.isArray(json.data.dates) ? json.data.dates : [];
+            const lines = Array.isArray(json.data.lines) ? json.data.lines : [];
+            const target = (json.data.target_efficiency_percent != null) ? Number(json.data.target_efficiency_percent) : 96;
+
+            const hasData = dates.length > 0 && lines.length > 0 && lines.some(l => Array.isArray(l.daily) && l.daily.some(d => d && d.oee_percent != null));
+            if (!hasData) {
+                if (efficiencyDailyChartInstance) {
+                    efficiencyDailyChartInstance.destroy();
+                    efficiencyDailyChartInstance = null;
+                }
+                toggleEfficiencyDailyEmpty(true);
+                return;
+            }
+
+            toggleEfficiencyDailyEmpty(false);
+            if (efficiencyDailyChartInstance) {
+                efficiencyDailyChartInstance.destroy();
+                efficiencyDailyChartInstance = null;
+            }
+
+            const palette = [
+                '#2563eb', '#16a34a', '#f97316', '#db2777', '#7c3aed',
+                '#0ea5e9', '#22c55e', '#eab308', '#ef4444', '#64748b'
+            ];
+
+            const datasets = lines.map((l, idx) => {
+                const daily = Array.isArray(l.daily) ? l.daily : [];
+                const byDate = {};
+                daily.forEach(d => { if (d && d.date) byDate[d.date] = d.oee_percent; });
+                const data = dates.map(ds => (byDate[ds] == null ? null : Number(byDate[ds])));
+                const color = palette[idx % palette.length];
+                return {
+                    label: l.line_name || `Line ${idx + 1}`,
+                    data,
+                    backgroundColor: color,
+                    borderColor: color,
+                    borderWidth: 1
+                };
+            });
+
+            datasets.push({
+                type: 'line',
+                label: `Target (${Number(target).toFixed(2)}%)`,
+                data: dates.map(() => Number(target)),
+                borderColor: 'rgba(0,0,0,0.65)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0,
+            });
+
+            efficiencyDailyChartInstance = new Chart(efficiencyDailyCanvas.getContext('2d'), {
+                type: 'bar',
+                data: { labels: dates, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'OEE (%)' },
+                            ticks: { callback: (v) => `${v}%` }
+                        },
+                        y: { title: { display: true, text: 'Tanggal' } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    if (ctx.dataset.type === 'line') return `${ctx.dataset.label}`;
+                                    const v = ctx.raw;
+                                    if (v == null) return `${ctx.dataset.label}: (tidak ada data)`;
+                                    return `${ctx.dataset.label}: ${Number(v).toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    onClick: async (evt, elements) => {
+                        if (!elements || elements.length === 0) return;
+                        const el = elements[0];
+                        const ds = efficiencyDailyChartInstance.data.datasets[el.datasetIndex];
+                        if (!ds || ds.type === 'line') return;
+                        const dateStr = efficiencyDailyChartInstance.data.labels[el.index];
+                        const lineName = ds.label;
+                        await openEfficiencyDrilldown({ division, lineName, dateStr });
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Fetch efficiency daily:', e);
+            toggleEfficiencyDailyEmpty(true);
+        }
+    }
+
+    async function openEfficiencyDrilldown({ division, lineName, dateStr }) {
+        if (!efficiencyDrilldownModal) return;
+
+        if (efficiencyDrilldownTitle) {
+            efficiencyDrilldownTitle.textContent = `Efisiensi Detail — ${lineName} (${dateStr})`;
+        }
+
+        if (efficiencyDrilldownLoading) efficiencyDrilldownLoading.style.display = 'block';
+        if (efficiencyDrilldownEmpty) efficiencyDrilldownEmpty.style.display = 'none';
+        if (efficiencyDrilldownCharts) efficiencyDrilldownCharts.style.display = 'none';
+
+        openModal(efficiencyDrilldownModal);
+
+        if (efficiencyDrilldownRegularChartInstance) { efficiencyDrilldownRegularChartInstance.destroy(); efficiencyDrilldownRegularChartInstance = null; }
+        if (efficiencyDrilldownOtChartInstance) { efficiencyDrilldownOtChartInstance.destroy(); efficiencyDrilldownOtChartInstance = null; }
+
+        try {
+            const params = new URLSearchParams({ line_name: lineName, date: dateStr });
+            if (division) params.set('division', division);
+            const res = await fetch(`/api/dashboard/analytics/efficiency-drilldown?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (!res.ok || !json.success || !json.data) throw new Error(json.message || 'Gagal memuat detail efisiensi');
+
+            const machines = Array.isArray(json.data.machines) ? json.data.machines : [];
+            const tgt = (json.data.target_efficiency_percent != null) ? Number(json.data.target_efficiency_percent) : 96;
+
+            if (machines.length === 0) {
+                if (efficiencyDrilldownEmpty) efficiencyDrilldownEmpty.style.display = 'flex';
+                return;
+            }
+
+            const labels = machines.map(m => m.name || m.address);
+            const regPagi = machines.map(m => (m?.regular?.pagi == null ? null : Number(m.regular.pagi)));
+            const regMalam = machines.map(m => (m?.regular?.malam == null ? null : Number(m.regular.malam)));
+            const otPagi = machines.map(m => (m?.ot?.pagi == null ? null : Number(m.ot.pagi)));
+            const otMalam = machines.map(m => (m?.ot?.malam == null ? null : Number(m.ot.malam)));
+
+            const makeChart = (canvas, dataPagi, dataMalam) => new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Shift Pagi', data: dataPagi, backgroundColor: '#2563eb' },
+                        { label: 'Shift Malam', data: dataMalam, backgroundColor: '#16a34a' },
+                        {
+                            type: 'line',
+                            label: `Target (${tgt.toFixed(2)}%)`,
+                            data: labels.map(() => tgt),
+                            borderColor: 'rgba(0,0,0,0.65)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { min: 0, max: 100, title: { display: true, text: 'OEE (%)' }, ticks: { callback: (v) => `${v}%` } },
+                        y: { title: { display: false, text: '' } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    if (ctx.dataset.type === 'line') return `${ctx.dataset.label}`;
+                                    const v = ctx.raw;
+                                    if (v == null) return `${ctx.dataset.label}: (tidak ada data)`;
+                                    return `${ctx.dataset.label}: ${Number(v).toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (efficiencyDrilldownRegularCanvas) {
+                efficiencyDrilldownRegularChartInstance = makeChart(efficiencyDrilldownRegularCanvas, regPagi, regMalam);
+            }
+            if (efficiencyDrilldownOtCanvas) {
+                efficiencyDrilldownOtChartInstance = makeChart(efficiencyDrilldownOtCanvas, otPagi, otMalam);
+            }
+
+            if (efficiencyDrilldownCharts) efficiencyDrilldownCharts.style.display = 'block';
+        } catch (e) {
+            console.error('Efficiency drilldown:', e);
+            if (efficiencyDrilldownEmpty) efficiencyDrilldownEmpty.style.display = 'flex';
+        } finally {
+            if (efficiencyDrilldownLoading) efficiencyDrilldownLoading.style.display = 'none';
+        }
     }
 
     let lastLineQuantityData = null;
@@ -1302,6 +1535,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (closeBtn) closeBtn.addEventListener('click', closeOeeHourlyModal);
         if (modal) {
             modal.addEventListener('click', (e) => { if (e.target === modal) closeOeeHourlyModal(); });
+        }
+    })();
+
+    (function initEfficiencyDrilldownModal() {
+        if (efficiencyDrilldownClose) {
+            efficiencyDrilldownClose.addEventListener('click', () => closeModal(efficiencyDrilldownModal));
+        }
+        if (efficiencyDrilldownModal) {
+            efficiencyDrilldownModal.addEventListener('click', (e) => {
+                if (e.target === efficiencyDrilldownModal) closeModal(efficiencyDrilldownModal);
+            });
         }
     })();
 
