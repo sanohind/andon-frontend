@@ -824,11 +824,14 @@ document.addEventListener('DOMContentLoaded', () => {
             wrapperEl.style.display = 'block';
             const ctx = canvas.getContext('2d');
             let hourlyDatasets = [];
+            /** Aktual OT ditumpuk di atas Aktual Reguler (Chart.js stack), Ideal stack terpisah. */
+            let quantityHourlyStackActualOt = false;
             if (granularity === 'hourly') {
                 // Backend: quantity & ideal kumulatif per titik (garis menanjak). Split Reguler/OT dari backend bila ada.
                 const hasOtCumulative = otEnabled && json.data.length > 0
                     && typeof json.data[0].quantity_cumulative_regular !== 'undefined'
                     && typeof json.data[0].quantity_cumulative_ot !== 'undefined';
+                quantityHourlyStackActualOt = hasOtCumulative;
                 const cumReg = hasOtCumulative
                     ? json.data.map(d => Number(d.quantity_cumulative_regular ?? 0))
                     : null;
@@ -841,6 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Ideal Qty',
                         data: idealQuantities,
+                        ...(hasOtCumulative ? { stack: 'qty-ideal' } : {}),
                         borderColor: '#22c55e',
                         backgroundColor: 'rgba(34, 197, 94, 0.05)',
                         borderWidth: 2,
@@ -854,6 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: hasOtCumulative ? 'Aktual Reguler' : 'Quantity',
                         data: hasOtCumulative ? cumReg : cumTotal,
+                        ...(hasOtCumulative ? { stack: 'qty-actual', order: 1 } : {}),
                         borderColor: '#4c6ef5',
                         backgroundColor: 'rgba(76, 110, 245, 0.1)',
                         borderWidth: 2,
@@ -869,8 +874,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     hourlyDatasets.push({
                         label: 'Aktual OT',
                         data: cumOt,
+                        stack: 'qty-actual',
+                        order: 2,
                         borderColor: '#d4a017',
-                        backgroundColor: 'rgba(212, 160, 23, 0.1)',
+                        backgroundColor: 'rgba(212, 160, 23, 0.18)',
                         borderWidth: 2,
                         fill: true,
                         tension: 0.2,
@@ -944,6 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         y: {
                             beginAtZero: true,
+                            stacked: granularity === 'hourly' && quantityHourlyStackActualOt,
                             title: {
                                 display: true,
                                 text: granularity === 'hourly' ? 'Quantity (kumulatif)' : 'Quantity'
