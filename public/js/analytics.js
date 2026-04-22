@@ -29,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const lineOeeEmptyState = document.getElementById('lineOeeEmptyState');
     const efficiencyDailyCanvas = document.getElementById('efficiencyDailyChart');
     const efficiencyDailyEmptyState = document.getElementById('efficiencyDailyEmptyState');
+    const efficiencyPeriodSelect = document.getElementById('efficiencyPeriodSelect');
+    const efficiencyMonthInput = document.getElementById('efficiencyMonthInput');
+    const efficiencyYearInput = document.getElementById('efficiencyYearInput');
+    const efficiencyMonthGroup = document.getElementById('efficiencyMonthGroup');
+    const efficiencyYearGroup = document.getElementById('efficiencyYearGroup');
 
     const efficiencyDrilldownModal = document.getElementById('efficiencyDrilldownModal');
     const efficiencyDrilldownTitle = document.getElementById('efficiencyDrilldownTitle');
@@ -268,10 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Efisiensi (OEE) — Akumulasi per line (berdasarkan date-range picker + divisi)
-            if (showCharts) {
-                fetchEfficiencyDaily(startDate, endDate);
-            }
+            // Efisiensi (OEE) pakai kontrolnya sendiri (monthly/yearly), jadi tidak ikut date-range picker.
         } catch (error) {
             console.error('Fetch Error:', error);
         }
@@ -297,12 +299,30 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal(el) { if (el) el.style.display = 'flex'; }
     function closeModal(el) { if (el) el.style.display = 'none'; }
 
-    async function fetchEfficiencyDaily(startDate, endDate) {
+    function updateEfficiencyPeriodVisibility() {
+        const period = (efficiencyPeriodSelect && efficiencyPeriodSelect.value) || 'monthly';
+        if (efficiencyMonthGroup) efficiencyMonthGroup.style.display = period === 'monthly' ? 'flex' : 'none';
+        if (efficiencyYearGroup) efficiencyYearGroup.style.display = period === 'yearly' ? 'flex' : 'none';
+    }
+
+    function getEfficiencyParams() {
+        const period = (efficiencyPeriodSelect && efficiencyPeriodSelect.value) || 'monthly';
+        if (period === 'yearly') {
+            const yearVal = (efficiencyYearInput && String(efficiencyYearInput.value || '').trim()) || moment().format('YYYY');
+            return { period: 'yearly', year: yearVal };
+        }
+        const monthVal = (efficiencyMonthInput && String(efficiencyMonthInput.value || '').trim()) || moment().format('YYYY-MM');
+        return { period: 'monthly', month: monthVal };
+    }
+
+    async function fetchEfficiency() {
         if (!showCharts || !efficiencyDailyCanvas) return;
-        if (!startDate || !endDate) return;
 
         const division = getSelectedDivision();
-        const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+        const p = getEfficiencyParams();
+        const params = new URLSearchParams({ period: p.period });
+        if (p.period === 'yearly') params.set('year', p.year);
+        if (p.period === 'monthly') params.set('month', p.month);
         if (division) params.set('division', division);
 
         try {
@@ -374,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             title: { display: true, text: 'OEE (%)' },
                             ticks: { callback: (v) => `${v}%` }
                         },
-                        y: { title: { display: true, text: 'Tanggal' } }
+                        y: { title: { display: true, text: p.period === 'yearly' ? 'Bulan' : 'Tanggal' } }
                     },
                     plugins: {
                         legend: { position: 'bottom' },
@@ -391,6 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     onClick: async (evt, elements) => {
                         if (!elements || elements.length === 0) return;
+                        if (p.period !== 'monthly') return; // drilldown hanya untuk tanggal (bulanan)
                         const el = elements[0];
                         const ds = efficiencyDailyChartInstance.data.datasets[el.datasetIndex];
                         if (!ds || ds.type === 'line') return;
@@ -1744,7 +1765,22 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchAnalyticsData(start, end);
             if (showTables) fetchTicketingData(start, end);
             if (showCharts) fetchLineQuantityAnalytics();
+            if (showCharts) fetchEfficiency();
         });
+    }
+
+    // Efficiency controls (separate from Production/OEE controls)
+    if (efficiencyPeriodSelect) {
+        efficiencyPeriodSelect.addEventListener('change', function () {
+            updateEfficiencyPeriodVisibility();
+            fetchEfficiency();
+        });
+    }
+    if (efficiencyMonthInput) {
+        efficiencyMonthInput.addEventListener('change', fetchEfficiency);
+    }
+    if (efficiencyYearInput) {
+        efficiencyYearInput.addEventListener('change', fetchEfficiency);
     }
 
     if (quantityPeriodSelect) {
@@ -2666,6 +2702,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (quantityMonthInput) quantityMonthInput.value = moment().format('YYYY-MM');
             if (quantityYearInput) quantityYearInput.value = moment().format('YYYY');
             fetchLineQuantityAnalytics();
+
+            // Efisiensi (OEE) — kontrol terpisah (default: Bulanan bulan ini)
+            updateEfficiencyPeriodVisibility();
+            if (efficiencyMonthInput) efficiencyMonthInput.value = moment().format('YYYY-MM');
+            if (efficiencyYearInput) efficiencyYearInput.value = moment().format('YYYY');
+            if (efficiencyPeriodSelect) efficiencyPeriodSelect.value = 'monthly';
+            fetchEfficiency();
         }
     })();
 });

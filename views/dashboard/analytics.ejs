@@ -116,7 +116,26 @@
                 </div>
                 <div class="chart-card oee-analytics-card">
                     <div class="chart-card-header oee-analytics-card-header">
-                        <h3>Efisiensi (OEE) — Akumulasi per Line</h3>
+                        <div style="display:flex; align-items:flex-end; justify-content:space-between; gap: 1rem; flex-wrap:wrap;">
+                            <h3 style="margin:0;">Efisiensi (OEE) — Akumulasi per Line</h3>
+                            <div class="chart-controls chart-controls-compact" style="margin-left:auto;">
+                                <div class="chart-control-group">
+                                    <label for="efficiencyPeriodSelect">Periode</label>
+                                    <select id="efficiencyPeriodSelect" class="line-select line-select-short">
+                                        <option value="monthly" selected>Bulanan</option>
+                                        <option value="yearly">Tahunan</option>
+                                    </select>
+                                </div>
+                                <div class="chart-control-group" id="efficiencyMonthGroup">
+                                    <label for="efficiencyMonthInput">Bulan</label>
+                                    <input type="month" id="efficiencyMonthInput" class="line-select line-select-short" title="Pilih bulan">
+                                </div>
+                                <div class="chart-control-group" id="efficiencyYearGroup" style="display:none;">
+                                    <label for="efficiencyYearInput">Tahun</label>
+                                    <input type="number" id="efficiencyYearInput" class="line-select line-select-short" min="2020" max="2030" placeholder="Tahun" title="Pilih tahun">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="quantity-chart-body oee-analytics-card-body">
                         <div class="chart-wrapper" style="height: 520px;">
@@ -124,7 +143,7 @@
                         </div>
                         <div class="chart-empty-state" id="efficiencyDailyEmptyState" style="display: none;">
                             <i class="fas fa-chart-bar"></i>
-                            <p>Belum ada data efisiensi untuk rentang tanggal yang dipilih.</p>
+                            <p>Belum ada data efisiensi untuk periode yang dipilih.</p>
                         </div>
                     </div>
                 </div>
