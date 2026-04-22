@@ -334,8 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const lines = Array.isArray(json.data.lines) ? json.data.lines : [];
             const target = (json.data.target_efficiency_percent != null) ? Number(json.data.target_efficiency_percent) : 96;
 
-            const hasData = dates.length > 0 && lines.length > 0 && lines.some(l => Array.isArray(l.daily) && l.daily.some(d => d && d.oee_percent != null));
-            if (!hasData) {
+            const hasAnyLine = dates.length > 0 && lines.length > 0;
+            if (!hasAnyLine) {
                 if (efficiencyDailyChartInstance) {
                     efficiencyDailyChartInstance.destroy();
                     efficiencyDailyChartInstance = null;
