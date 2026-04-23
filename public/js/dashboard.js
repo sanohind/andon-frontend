@@ -800,13 +800,17 @@ class DashboardManager {
                     const oeeEl = document.getElementById(`oee-${machineId}-line-${machineLineName}`);
                     if (metrics && targetEl) targetEl.textContent = metrics.target_quantity ?? '-';
 
-                    // Real-time OEE: compute from current actual quantity and cached cycle_time
+                    // Real-time OEE: prioritize running hour from realtime status payload (OT-aware)
                     if (metrics && oeeEl) {
                         const cycle = Number(metrics.cycle_time);
                         const actual = Number((machineData && machineData.quantity !== undefined) ? machineData.quantity : 0);
-                        const runningHour = Number(metrics.running_hour) || 8; // Default 8 hours if not set
-                        if (cycle > 0) {
-                            const oee = ((actual * cycle) / (runningHour * 3600)) * 100;
+                        const runningHourSeconds = Number(
+                            machineData?.running_hour_seconds
+                            ?? metrics.running_hour_seconds
+                            ?? 0
+                        );
+                        if (cycle > 0 && runningHourSeconds > 0) {
+                            const oee = ((actual * cycle) / runningHourSeconds) * 100;
                             oeeEl.textContent = `${oee.toFixed(2)}%`;
                         } else {
                             oeeEl.textContent = '-';
