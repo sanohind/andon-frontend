@@ -318,6 +318,16 @@
                                 <input type="text" id="addPartName" required maxlength="255" placeholder="Nama part">
                             </div>
                             <div class="form-group">
+                                <label>Channel</label>
+                                <input type="number" id="addPartChannel" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Line</label>
+                                <select id="addPartLineName" required>
+                                    <option value="">Pilih Line</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label>Cycle Time (detik)</label>
                                 <input type="number" id="addPartCycleTime" min="0" required>
                             </div>
@@ -366,6 +376,8 @@
                                 <th>ID</th>
                                 <th>Part Number</th>
                                 <th>Part Name</th>
+                                <th>Channel</th>
+                                <th>Line</th>
                                 <th>Cycle Time</th>
                                 <th>Aksi</th>
                             </tr>
@@ -500,6 +512,16 @@
                 <div class="form-group">
                     <label>Part Name</label>
                     <input type="text" id="editPartName" required maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label>Channel</label>
+                    <input type="number" id="editPartChannel" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Line</label>
+                    <select id="editPartLineName" required>
+                        <option value="">Pilih Line</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Cycle Time (detik)</label>

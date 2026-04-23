@@ -593,6 +593,36 @@
     let partAppliedFilter = { part_number: '', part_name: '' };
     let partDraftFilter = { part_number: '', part_name: '' };
 
+    async function loadPartLineOptions(selectedAdd = '', selectedEdit = '') {
+        const addSel = document.getElementById('addPartLineName');
+        const editSel = document.getElementById('editPartLineName');
+        if (!addSel && !editSel) return;
+        try {
+            const res = await fetch(`${API}/division-lines`, { credentials: 'include', headers: getAuthHeaders() });
+            const json = await res.json();
+            const divisions = json.success && Array.isArray(json.data) ? json.data : [];
+            const lines = [];
+            divisions.forEach(d => {
+                (d.lines || []).forEach(l => {
+                    const name = typeof l === 'string' ? l : l.name;
+                    if (name) lines.push(String(name));
+                });
+            });
+            const uniq = [...new Set(lines)].sort((a, b) => a.localeCompare(b));
+            const options = '<option value="">Pilih Line</option>' + uniq.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            if (addSel) {
+                addSel.innerHTML = options;
+                addSel.value = uniq.includes(selectedAdd) ? selectedAdd : '';
+            }
+            if (editSel) {
+                editSel.innerHTML = options;
+                editSel.value = uniq.includes(selectedEdit) ? selectedEdit : '';
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
     async function loadPartFilterOptions() {
         const filterNum = document.getElementById('filterPartPartNumber');
         const filterName = document.getElementById('filterPartPartName');
@@ -644,10 +674,12 @@
                     <td>${p.id}</td>
                     <td>${escapeHtml(p.part_number || '')}</td>
                     <td>${escapeHtml(p.part_name || '')}</td>
+                    <td>${(p.channel ?? '') === '' || p.channel == null ? '-' : p.channel}</td>
+                    <td>${escapeHtml(p.line_name || '-')}</td>
                     <td>${(p.cycle_time ?? '') === '' || p.cycle_time == null ? '-' : p.cycle_time}</td>
                     ${partActionCell}
                 </tr>
-            `).join('') || '<tr><td colspan="5">Tidak ada data</td></tr>';
+            `).join('') || '<tr><td colspan="7">Tidak ada data</td></tr>';
 
             if (infoEl) infoEl.textContent = `Menampilkan ${list.length} dari ${total} part`;
             if (ctrlEl) {
@@ -668,7 +700,7 @@
                 });
             }
         } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="5">Error: ' + escapeHtml(e.message) + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7">Error: ' + escapeHtml(e.message) + '</td></tr>';
         }
     }
 
@@ -683,7 +715,9 @@
             document.getElementById('editPartId').value = p.id;
             document.getElementById('editPartNumber').value = p.part_number || '';
             document.getElementById('editPartName').value = p.part_name || '';
+            document.getElementById('editPartChannel').value = p.channel != null && p.channel !== '' ? p.channel : '';
             document.getElementById('editPartCycleTime').value = p.cycle_time != null && p.cycle_time !== '' ? p.cycle_time : '';
+            await loadPartLineOptions('', p.line_name || '');
             document.getElementById('editPartModal').classList.add('show');
         } catch (e) {
             alert('Error: ' + e.message);
@@ -1109,12 +1143,18 @@
         document.getElementById('addPartForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const ctEl = document.getElementById('addPartCycleTime');
+            const channelEl = document.getElementById('addPartChannel');
+            const lineEl = document.getElementById('addPartLineName');
             const payload = {
                 part_number: document.getElementById('addPartNumber').value.trim(),
                 part_name: document.getElementById('addPartName').value.trim(),
+                channel: !channelEl ? null : parseInt(channelEl.value, 10),
+                line_name: lineEl ? lineEl.value : '',
                 cycle_time: !ctEl ? null : parseInt(ctEl.value, 10)
             };
             if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
+            if (!lineEl || !payload.line_name) return alert('Pilih Line.');
+            if (!channelEl || channelEl.value === '' || Number.isNaN(payload.channel) || payload.channel < 0) return alert('Channel wajib dan harus angka >= 0.');
             if (ctEl && (ctEl.value === '' || Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time wajib dan harus angka >= 0.');
             try {
                 const res = await fetch(`${API}/part-configurations`, {
@@ -1141,12 +1181,18 @@
             e.preventDefault();
             const id = document.getElementById('editPartId').value;
             const ctEl = document.getElementById('editPartCycleTime');
+            const channelEl = document.getElementById('editPartChannel');
+            const lineEl = document.getElementById('editPartLineName');
             const payload = {
                 part_number: document.getElementById('editPartNumber').value.trim(),
                 part_name: document.getElementById('editPartName').value.trim(),
+                channel: !channelEl ? null : parseInt(channelEl.value, 10),
+                line_name: lineEl ? lineEl.value : '',
                 cycle_time: !ctEl ? null : parseInt(ctEl.value, 10)
             };
             if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
+            if (!lineEl || !payload.line_name) return alert('Pilih Line.');
+            if (!channelEl || channelEl.value === '' || Number.isNaN(payload.channel) || payload.channel < 0) return alert('Channel wajib dan harus angka >= 0.');
             if (ctEl && (ctEl.value === '' || Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time wajib dan harus angka >= 0.');
             try {
                 const res = await fetch(`${API}/part-configurations/${id}`, {
@@ -1284,7 +1330,7 @@
             const fm = document.getElementById('filterPartPartName');
             partDraftFilter = { part_number: fn?.value || '', part_name: fm?.value || '' };
             partAppliedFilter = { ...partDraftFilter };
-            loadPartFilterOptions().then(() => loadParts());
+            loadPartLineOptions().then(() => loadPartFilterOptions()).then(() => loadParts());
         } else if (currentSection === 'lines') {
             loadDivisions();
         }
