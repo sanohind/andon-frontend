@@ -587,6 +587,122 @@
         }
     }
 
+    // --- PART (master part list) ---
+    let partPage = 1;
+    let partPageSize = 10;
+    let partAppliedFilter = { part_number: '', part_name: '' };
+    let partDraftFilter = { part_number: '', part_name: '' };
+
+    async function loadPartFilterOptions() {
+        const filterNum = document.getElementById('filterPartPartNumber');
+        const filterName = document.getElementById('filterPartPartName');
+        if (!filterNum || !filterName) return;
+        try {
+            const res = await fetch(`${API}/part-configurations`, { credentials: 'include', headers: getAuthHeaders() });
+            const json = await res.json();
+            const list = json.data || [];
+            const nums = [...new Set(list.map(p => String(p.part_number || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            const names = [...new Set(list.map(p => String(p.part_name || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            filterNum.innerHTML = '<option value="">Semua Part Number</option>' + nums.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            filterName.innerHTML = '<option value="">Semua Part Name</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            const wantN = partDraftFilter.part_number || '';
+            const wantM = partDraftFilter.part_name || '';
+            filterNum.value = nums.includes(wantN) ? wantN : '';
+            filterName.value = names.includes(wantM) ? wantM : '';
+            if (!nums.includes(wantN)) partDraftFilter.part_number = '';
+            if (!names.includes(wantM)) partDraftFilter.part_name = '';
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async function loadParts() {
+        const tbody = document.querySelector('#partsTable tbody');
+        const infoEl = document.getElementById('partPaginationInfo');
+        const ctrlEl = document.getElementById('partPaginationControls');
+        if (!tbody) return;
+        try {
+            const params = new URLSearchParams({ page: partPage, per_page: partPageSize });
+            if (partAppliedFilter.part_number) params.set('part_number', partAppliedFilter.part_number);
+            if (partAppliedFilter.part_name) params.set('part_name', partAppliedFilter.part_name);
+            const res = await fetch(`${API}/part-configurations?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'Gagal');
+            const list = json.data || [];
+            const total = json.total || 0;
+            const lastPage = json.last_page || 1;
+            const partActionCell = isManagementViewOnly
+                ? '<td class="text-muted">—</td>'
+                : `<td>
+                        <div class="action-buttons-container">
+                            <button class="btn-edit btn-part-row-edit" type="button" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn-delete btn-part-row-delete" type="button" title="Hapus"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>`;
+            tbody.innerHTML = list.map(p => `
+                <tr data-id="${p.id}">
+                    <td>${p.id}</td>
+                    <td>${escapeHtml(p.part_number || '')}</td>
+                    <td>${escapeHtml(p.part_name || '')}</td>
+                    <td>${(p.cycle_time ?? '') === '' || p.cycle_time == null ? '-' : p.cycle_time}</td>
+                    ${partActionCell}
+                </tr>
+            `).join('') || '<tr><td colspan="5">Tidak ada data</td></tr>';
+
+            if (infoEl) infoEl.textContent = `Menampilkan ${list.length} dari ${total} part`;
+            if (ctrlEl) {
+                ctrlEl.innerHTML = `
+                    <button type="button" data-page="prev" ${partPage <= 1 ? 'disabled' : ''}>Prev</button>
+                    <span>${partPage} / ${lastPage}</span>
+                    <button type="button" data-page="next" ${partPage >= lastPage ? 'disabled' : ''}>Next</button>
+                `;
+                ctrlEl.querySelector('[data-page="prev"]').addEventListener('click', () => { partPage--; loadParts(); });
+                ctrlEl.querySelector('[data-page="next"]').addEventListener('click', () => { partPage++; loadParts(); });
+            }
+            if (!isManagementViewOnly) {
+                tbody.querySelectorAll('.btn-part-row-edit').forEach(btn => {
+                    btn.addEventListener('click', () => openEditPart(btn.closest('tr')));
+                });
+                tbody.querySelectorAll('.btn-part-row-delete').forEach(btn => {
+                    btn.addEventListener('click', () => deletePart(btn.closest('tr')));
+                });
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="5">Error: ' + escapeHtml(e.message) + '</td></tr>';
+        }
+    }
+
+    async function openEditPart(tr) {
+        const id = tr && tr.dataset ? tr.dataset.id : null;
+        if (!id) return;
+        try {
+            const res = await fetch(`${API}/part-configurations/${id}`, { credentials: 'include', headers: getAuthHeaders() });
+            const json = await res.json();
+            if (!json.success || !json.data) throw new Error(json.message || 'Gagal memuat part');
+            const p = json.data;
+            document.getElementById('editPartId').value = p.id;
+            document.getElementById('editPartNumber').value = p.part_number || '';
+            document.getElementById('editPartName').value = p.part_name || '';
+            document.getElementById('editPartCycleTime').value = p.cycle_time != null && p.cycle_time !== '' ? p.cycle_time : '';
+            document.getElementById('editPartModal').classList.add('show');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deletePart(tr) {
+        if (!tr || !confirm('Hapus part ini?')) return;
+        const id = tr.dataset.id;
+        try {
+            const res = await fetch(`${API}/part-configurations/${id}`, { method: 'DELETE', credentials: 'include', headers: getAuthHeaders() });
+            if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
+            await loadPartFilterOptions();
+            loadParts();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
     // --- LINES (reuse manage-lines logic via global functions from manage-lines.js is not included; we implement minimal here)
     let divisions = [];
     async function loadDivisions() {
@@ -960,6 +1076,97 @@
             }
         });
 
+        // Part (master)
+        document.getElementById('filterPartPartNumber')?.addEventListener('change', function () {
+            partDraftFilter.part_number = this.value || '';
+        });
+        document.getElementById('filterPartPartName')?.addEventListener('change', function () {
+            partDraftFilter.part_name = this.value || '';
+        });
+        document.getElementById('applyPartFilters')?.addEventListener('click', () => {
+            partAppliedFilter = { ...partDraftFilter };
+            partPage = 1;
+            loadParts();
+        });
+        document.getElementById('clearPartFilters')?.addEventListener('click', () => {
+            const hadApplied = !!(partAppliedFilter.part_number || partAppliedFilter.part_name);
+            partDraftFilter = { part_number: '', part_name: '' };
+            const fn = document.getElementById('filterPartPartNumber');
+            const fm = document.getElementById('filterPartPartName');
+            if (fn) fn.value = '';
+            if (fm) fm.value = '';
+            if (hadApplied) {
+                partAppliedFilter = { part_number: '', part_name: '' };
+                partPage = 1;
+                loadParts();
+            }
+        });
+        document.getElementById('partPageSize')?.addEventListener('change', function () {
+            partPageSize = parseInt(this.value, 10);
+            partPage = 1;
+            loadParts();
+        });
+        document.getElementById('addPartForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const ctEl = document.getElementById('addPartCycleTime');
+            const payload = {
+                part_number: document.getElementById('addPartNumber').value.trim(),
+                part_name: document.getElementById('addPartName').value.trim(),
+                cycle_time: !ctEl || ctEl.value === '' ? null : parseInt(ctEl.value, 10)
+            };
+            if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
+            if (ctEl && ctEl.value !== '' && (Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time tidak valid.');
+            try {
+                const res = await fetch(`${API}/part-configurations`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(body.message || 'Gagal');
+                document.getElementById('addPartForm').reset();
+                await loadPartFilterOptions();
+                loadParts();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Berhasil', 'Part berhasil ditambahkan.', 'success');
+                } else {
+                    alert('Part berhasil ditambahkan.');
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+        document.getElementById('editPartForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editPartId').value;
+            const ctEl = document.getElementById('editPartCycleTime');
+            const payload = {
+                part_number: document.getElementById('editPartNumber').value.trim(),
+                part_name: document.getElementById('editPartName').value.trim(),
+                cycle_time: !ctEl || ctEl.value === '' ? null : parseInt(ctEl.value, 10)
+            };
+            if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
+            if (ctEl && ctEl.value !== '' && (Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time tidak valid.');
+            try {
+                const res = await fetch(`${API}/part-configurations/${id}`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
+                closeModal('editPartModal');
+                await loadPartFilterOptions();
+                loadParts();
+                showScheduleSuccess('Part berhasil diperbarui.');
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+        document.getElementById('closeEditPart')?.addEventListener('click', () => closeModal('editPartModal'));
+        document.getElementById('cancelEditPart')?.addEventListener('click', () => closeModal('editPartModal'));
+
         // Add week schedule modal
         const openWeekBtn = document.getElementById('openAddWeekSchedule');
         openWeekBtn?.addEventListener('click', async () => {
@@ -1072,6 +1279,12 @@
         } else if (currentSection === 'schedule') {
             loadScheduleMachines();
             loadSchedules();
+        } else if (currentSection === 'part') {
+            const fn = document.getElementById('filterPartPartNumber');
+            const fm = document.getElementById('filterPartPartName');
+            partDraftFilter = { part_number: fn?.value || '', part_name: fm?.value || '' };
+            partAppliedFilter = { ...partDraftFilter };
+            loadPartFilterOptions().then(() => loadParts());
         } else if (currentSection === 'lines') {
             loadDivisions();
         }

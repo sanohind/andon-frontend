@@ -22,6 +22,7 @@
                 <a href="/manage/shift" class="manage-sub-link <%= section === 'shift' ? 'active' : '' %>"><i class="fas fa-clock"></i> Shift</a>
                 <a href="/manage/oee" class="manage-sub-link <%= section === 'oee' ? 'active' : '' %>"><i class="fas fa-percentage"></i> OEE</a>
                 <a href="/manage/schedule" class="manage-sub-link <%= section === 'schedule' ? 'active' : '' %>"><i class="fas fa-calendar-alt"></i> Schedule</a>
+                <a href="/manage/part" class="manage-sub-link <%= section === 'part' ? 'active' : '' %>"><i class="fas fa-cube"></i> Part</a>
                 <a href="/manage/lines" class="manage-sub-link <%= section === 'lines' ? 'active' : '' %>"><i class="fas fa-sitemap"></i> Lines</a>
             </nav>
             <% } %>
@@ -301,6 +302,83 @@
                 </div>
             </div>
 
+            <!-- SECTION: Part (master part number / cycle time) -->
+            <div id="section-part" class="manage-section" data-section="part" style="display:<%= section === 'part' ? 'block' : 'none' %>">
+                <% if (user.role !== 'management') { %>
+                <div class="form-container">
+                    <h3>Tambah Part</h3>
+                    <form id="addPartForm" class="schedule-form">
+                        <div class="schedule-form-grid">
+                            <div class="form-group">
+                                <label>Part Number</label>
+                                <input type="text" id="addPartNumber" required maxlength="255" autocomplete="off" placeholder="Contoh: PN-00123">
+                            </div>
+                            <div class="form-group">
+                                <label>Part Name</label>
+                                <input type="text" id="addPartName" required maxlength="255" placeholder="Nama part">
+                            </div>
+                            <div class="form-group">
+                                <label>Cycle Time (detik)</label>
+                                <input type="number" id="addPartCycleTime" min="0" placeholder="Opsional">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Simpan Part</button>
+                    </form>
+                </div>
+                <% } %>
+                <div class="table-container">
+                    <h3>Daftar Part</h3>
+                    <div class="filter-container">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label><i class="fas fa-barcode"></i> Part Number</label>
+                                <select id="filterPartPartNumber" class="filter-select">
+                                    <option value="">Semua Part Number</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-tag"></i> Part Name</label>
+                                <select id="filterPartPartName" class="filter-select">
+                                    <option value="">Semua Part Name</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Tampilkan</label>
+                                <select id="partPageSize" class="filter-select">
+                                    <option value="10" selected>10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="filter-group schedule-filter-actions">
+                                <button type="button" id="applyPartFilters" class="btn btn-primary">
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                                <button type="button" id="clearPartFilters" class="btn-clear-filters">
+                                    <i class="fas fa-times"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <table id="partsTable" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Part Number</th>
+                                <th>Part Name</th>
+                                <th>Cycle Time</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="pagination-wrap">
+                        <div class="pagination-info" id="partPaginationInfo"></div>
+                        <div class="pagination-controls" id="partPaginationControls"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- SECTION: Lines -->
             <div id="section-lines" class="manage-section" data-section="lines" style="display:<%= section === 'lines' ? 'block' : 'none' %>">
                 <% if (user.role === 'admin') { %>
@@ -403,6 +481,35 @@
                     </form>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Edit Part Modal -->
+    <div class="modal" id="editPartModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Part</h3>
+                <button type="button" class="modal-close" id="closeEditPart">×</button>
+            </div>
+            <form id="editPartForm">
+                <input type="hidden" id="editPartId">
+                <div class="form-group">
+                    <label>Part Number</label>
+                    <input type="text" id="editPartNumber" required maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label>Part Name</label>
+                    <input type="text" id="editPartName" required maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label>Cycle Time (detik)</label>
+                    <input type="number" id="editPartCycleTime" min="0" placeholder="Opsional">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelEditPart">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -346,7 +346,7 @@ app.get('/manage/:section', requireAuth, async (req, res) => {
   const section = (req.params.section || 'machine').toLowerCase();
   const allowed = req.user.role === 'leader'
     ? ['schedule']
-    : ['machine', 'shift', 'oee', 'schedule', 'lines'];
+    : ['machine', 'shift', 'oee', 'schedule', 'lines', 'part'];
   if (!allowed.includes(section)) return res.redirect('/manage/machine');
   let tableList = [];
   if (section === 'machine') {

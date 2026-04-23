@@ -279,12 +279,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const partConfigModal = document.getElementById('partConfigModal');
     const partConfigForm = document.getElementById('partConfigForm');
     const partConfigId = document.getElementById('partConfigId');
-    const partConfigAddress = document.getElementById('partConfigAddress');
-    const partConfigChannel = document.getElementById('partConfigChannel');
     const partConfigPartNumber = document.getElementById('partConfigPartNumber');
+    const partConfigPartName = document.getElementById('partConfigPartName');
     const partConfigCycleTime = document.getElementById('partConfigCycleTime');
-    const partConfigJumlahBending = document.getElementById('partConfigJumlahBending');
-    const partConfigCavity = document.getElementById('partConfigCavity');
     const partConfigModalTitle = document.getElementById('partConfigModalTitle');
     const cancelPartConfigBtn = document.getElementById('cancelPartConfig');
     const cancelPartConfigFooterBtn = document.getElementById('cancelPartConfigFooter');
@@ -1142,20 +1139,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== PART CONFIGURATIONS FUNCTIONS ==========
     
-    // Load part configurations for a specific address
-    async function loadPartConfigurations(address) {
+    async function loadPartConfigurations() {
         try {
-            const response = await fetch(`/api/part-configurations?address=${encodeURIComponent(address)}`);
+            const response = await fetch('/api/part-configurations', {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
             const result = await response.json();
-            
-            if (result.success && result.data) {
-                renderPartConfigurations(address, result.data);
-            } else {
-                renderPartConfigurations(address, []);
-            }
+            const list = result.success && result.data ? result.data : [];
+            document.querySelectorAll('.part-config-tbody').forEach(tb => {
+                renderPartConfigurations(tb.dataset.address, list);
+            });
         } catch (error) {
             console.error('Error loading part configurations:', error);
-            renderPartConfigurations(address, []);
+            document.querySelectorAll('.part-config-tbody').forEach(tb => {
+                renderPartConfigurations(tb.dataset.address, []);
+            });
         }
     }
 
@@ -1169,7 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (configurations.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="empty-config-message">Tidak ada data part configuration</td>
+                    <td colspan="4" class="empty-config-message">Tidak ada data part</td>
                 </tr>
             `;
             return;
@@ -1178,11 +1177,9 @@ document.addEventListener('DOMContentLoaded', () => {
         configurations.forEach(config => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${config.channel !== null && config.channel !== undefined ? config.channel : '-'}</td>
                 <td>${config.part_number || '-'}</td>
+                <td>${config.part_name || '-'}</td>
                 <td>${config.cycle_time !== null && config.cycle_time !== undefined ? config.cycle_time : '-'}</td>
-                <td>${config.jumlah_bending !== null && config.jumlah_bending !== undefined ? config.jumlah_bending : '-'}</td>
-                <td>${config.cavity !== null && config.cavity !== undefined ? config.cavity : '-'}</td>
                 <td>
                     <div class="part-config-actions-cell">
                         <button class="btn-part-edit" data-id="${config.id}" title="Edit">
@@ -1212,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isExpanded) {
                     // Expand dropdown
                     partConfigRow.classList.add('show');
-                    loadPartConfigurations(address);
+                    loadPartConfigurations();
                 } else {
                     // Collapse dropdown
                     partConfigRow.classList.remove('show');
@@ -1226,8 +1223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = e.target;
         const button = target.closest('.btn-part-add') || (target.classList.contains('btn-part-add') ? target : null);
         if (button) {
-            const address = button.dataset.address;
-            openPartConfigModal(null, address);
+            openPartConfigModal(null);
         }
     });
 
@@ -1277,11 +1273,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (button) {
             const id = button.dataset.id;
             try {
-                const response = await fetch(`/api/part-configurations/${id}`);
+                const response = await fetch(`/api/part-configurations/${id}`, {
+                    credentials: 'include',
+                    headers: getAuthHeaders()
+                });
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    openPartConfigModal(result.data, result.data.address);
+                    openPartConfigModal(result.data);
                 } else {
                     alert('Gagal memuat data part configuration');
                 }
@@ -1305,17 +1304,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 const response = await fetch(`/api/part-configurations/${id}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    credentials: 'include',
+                    headers: getAuthHeaders()
                 });
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Reload configurations for the address
-                    const row = button.closest('tr');
-                    const tbody = row.closest('tbody');
-                    const address = tbody.dataset.address;
-                    await loadPartConfigurations(address);
-                    alert('Part configuration berhasil dihapus');
+                    await loadPartConfigurations();
+                    alert('Part berhasil dihapus');
                 } else {
                     alert(result.message || 'Gagal menghapus part configuration');
                 }
@@ -1327,27 +1324,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Open Part Configuration Modal
-    function openPartConfigModal(config, address) {
+    function openPartConfigModal(config) {
         if (config) {
-            // Edit mode
-            partConfigModalTitle.textContent = 'Edit Part Configuration';
+            partConfigModalTitle.textContent = 'Edit Part';
             partConfigId.value = config.id;
-            partConfigAddress.value = config.address;
-            partConfigChannel.value = config.channel || '';
             partConfigPartNumber.value = config.part_number || '';
-            partConfigCycleTime.value = config.cycle_time || '';
-            partConfigJumlahBending.value = config.jumlah_bending || '';
-            partConfigCavity.value = config.cavity || '';
+            partConfigPartName.value = config.part_name || '';
+            partConfigCycleTime.value = config.cycle_time ?? '';
         } else {
-            // Add mode
-            partConfigModalTitle.textContent = 'Tambah Part Configuration';
+            partConfigModalTitle.textContent = 'Tambah Part';
             partConfigId.value = '';
-            partConfigAddress.value = address;
-            partConfigChannel.value = '';
             partConfigPartNumber.value = '';
+            partConfigPartName.value = '';
             partConfigCycleTime.value = '';
-            partConfigJumlahBending.value = '';
-            partConfigCavity.value = '';
         }
         partConfigModal.classList.add('show');
     }
@@ -1367,41 +1356,39 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             
             const id = partConfigId.value;
-            const address = partConfigAddress.value;
-            const channel = parseInt(partConfigChannel.value, 10);
             const partNumber = partConfigPartNumber.value.trim();
-            const cycleTime = partConfigCycleTime.value ? parseInt(partConfigCycleTime.value, 10) : null;
-            const jumlahBending = parseInt(partConfigJumlahBending.value, 10);
-            const cavity = parseInt(partConfigCavity.value, 10);
+            const partName = partConfigPartName.value.trim();
+            const cycleTime = partConfigCycleTime.value === '' ? null : parseInt(partConfigCycleTime.value, 10);
 
-            if (!partNumber || isNaN(channel) || isNaN(jumlahBending) || isNaN(cavity)) {
-                alert('Mohon isi semua field yang wajib diisi');
+            if (!partNumber || !partName) {
+                alert('Mohon isi Part Number dan Part Name');
+                return;
+            }
+            if (partConfigCycleTime.value !== '' && (Number.isNaN(cycleTime) || cycleTime < 0)) {
+                alert('Cycle time tidak valid');
                 return;
             }
 
             try {
                 const payload = {
-                    address: address,
-                    channel: channel,
                     part_number: partNumber,
-                    cycle_time: cycleTime,
-                    jumlah_bending: jumlahBending,
-                    cavity: cavity
+                    part_name: partName,
+                    cycle_time: cycleTime
                 };
 
                 let response;
                 if (id) {
-                    // Update
                     response = await fetch(`/api/part-configurations/${id}`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
                 } else {
-                    // Create
                     response = await fetch('/api/part-configurations', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
                 }
@@ -1410,8 +1397,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (result.success) {
                     closePartConfigModal();
-                    await loadPartConfigurations(address);
-                    alert(id ? 'Part configuration berhasil diupdate' : 'Part configuration berhasil ditambahkan');
+                    await loadPartConfigurations();
+                    alert(id ? 'Part berhasil diupdate' : 'Part berhasil ditambahkan');
                 } else {
                     alert(result.message || 'Gagal menyimpan part configuration');
                 }
@@ -1427,43 +1414,37 @@ document.addEventListener('DOMContentLoaded', () => {
     // Export part configurations to Excel
     async function exportPartConfigurationsToExcel(address) {
         try {
-            // Load part configurations for the address
-            const response = await fetch(`/api/part-configurations?address=${encodeURIComponent(address)}`);
+            const response = await fetch('/api/part-configurations', {
+                credentials: 'include',
+                headers: getAuthHeaders()
+            });
             const result = await response.json();
             
             if (!result.success || !result.data || result.data.length === 0) {
-                alert('Tidak ada data part configuration untuk diekspor');
+                alert('Tidak ada data part untuk diekspor');
                 return;
             }
 
-            // Prepare data for Excel
             const excelData = result.data.map(config => ({
-                'CH (Channel)': config.channel !== null && config.channel !== undefined ? config.channel : '',
                 'Part Number': config.part_number || '',
-                'Cycle Time': config.cycle_time !== null && config.cycle_time !== undefined ? config.cycle_time : '',
-                'Jumlah Bending': config.jumlah_bending !== null && config.jumlah_bending !== undefined ? config.jumlah_bending : '',
-                'Cavity': config.cavity !== null && config.cavity !== undefined ? config.cavity : ''
+                'Part Name': config.part_name || '',
+                'Cycle Time': config.cycle_time !== null && config.cycle_time !== undefined ? config.cycle_time : ''
             }));
 
-            // Create workbook and worksheet
             const ws = XLSX.utils.json_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Part Configurations');
+            XLSX.utils.book_append_sheet(wb, ws, 'Parts');
 
-            // Set column widths
             ws['!cols'] = [
-                { wch: 12 }, // CH
-                { wch: 20 }, // Part Number
-                { wch: 12 }, // Cycle Time
-                { wch: 15 }, // Jumlah Bending
-                { wch: 10 }  // Cavity
+                { wch: 22 },
+                { wch: 28 },
+                { wch: 12 }
             ];
 
-            // Generate filename with address and current date
             const date = new Date().toISOString().split('T')[0];
-            const filename = `Part_Configuration_${address}_${date}.xlsx`;
+            const suffix = address ? `_${address}` : '';
+            const filename = `Part_Master${suffix}_${date}.xlsx`;
 
-            // Write file
             XLSX.writeFile(wb, filename);
             
             alert('Data berhasil diekspor ke Excel');
@@ -1476,18 +1457,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Import part configurations from Excel
     async function importPartConfigurationsFromExcel(file, address) {
         try {
-            // Read Excel file
             const reader = new FileReader();
             reader.onload = async function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
                     
-                    // Get first sheet
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
                     
-                    // Convert to JSON
                     const jsonData = XLSX.utils.sheet_to_json(worksheet);
                     
                     if (jsonData.length === 0) {
@@ -1495,80 +1473,44 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // Validate and transform data
                     const configurations = [];
                     const errors = [];
 
                     jsonData.forEach((row, index) => {
-                        const rowNum = index + 2; // +2 because index starts at 0 and Excel rows start at 2 (1 is header)
+                        const rowNum = index + 2;
                         
-                        // Map column names (handle variations)
-                        const channel = row['CH (Channel)'] !== undefined ? row['CH (Channel)'] : 
-                                       row['CH'] !== undefined ? row['CH'] : 
-                                       row['Channel'] !== undefined ? row['Channel'] : null;
                         const partNumber = row['Part Number'] !== undefined ? row['Part Number'] : 
                                           row['PartNumber'] !== undefined ? row['PartNumber'] : 
                                           row['Part_Number'] !== undefined ? row['Part_Number'] : '';
+                        const partName = row['Part Name'] !== undefined ? row['Part Name'] : 
+                                        row['PartName'] !== undefined ? row['PartName'] : 
+                                        row['Part_Name'] !== undefined ? row['Part_Name'] : '';
                         const cycleTime = row['Cycle Time'] !== undefined ? row['Cycle Time'] : 
                                          row['CycleTime'] !== undefined ? row['CycleTime'] : 
                                          row['Cycle_Time'] !== undefined ? row['Cycle_Time'] : null;
-                        const jumlahBending = row['Jumlah Bending'] !== undefined ? row['Jumlah Bending'] : 
-                                             row['JumlahBending'] !== undefined ? row['JumlahBending'] : 
-                                             row['Jumlah_Bending'] !== undefined ? row['Jumlah_Bending'] : null;
-                        const cavity = row['Cavity'] !== undefined ? row['Cavity'] : null;
 
-                        // Validate required fields
-                        if (channel === null || channel === undefined || channel === '') {
-                            errors.push(`Baris ${rowNum}: CH (Channel) wajib diisi`);
-                            return;
-                        }
                         if (!partNumber || partNumber.toString().trim() === '') {
                             errors.push(`Baris ${rowNum}: Part Number wajib diisi`);
                             return;
                         }
-                        if (jumlahBending === null || jumlahBending === undefined || jumlahBending === '') {
-                            errors.push(`Baris ${rowNum}: Jumlah Bending wajib diisi`);
-                            return;
-                        }
-                        if (cavity === null || cavity === undefined || cavity === '') {
-                            errors.push(`Baris ${rowNum}: Cavity wajib diisi`);
+                        if (!partName || partName.toString().trim() === '') {
+                            errors.push(`Baris ${rowNum}: Part Name wajib diisi`);
                             return;
                         }
 
-                        // Parse numeric values
-                        const channelNum = parseInt(channel, 10);
                         const cycleTimeNum = cycleTime !== null && cycleTime !== undefined && cycleTime !== '' ? parseInt(cycleTime, 10) : null;
-                        const jumlahBendingNum = parseInt(jumlahBending, 10);
-                        const cavityNum = parseInt(cavity, 10);
-
-                        if (isNaN(channelNum) || channelNum < 0) {
-                            errors.push(`Baris ${rowNum}: CH (Channel) harus berupa angka >= 0`);
-                            return;
-                        }
                         if (cycleTimeNum !== null && (isNaN(cycleTimeNum) || cycleTimeNum < 0)) {
                             errors.push(`Baris ${rowNum}: Cycle Time harus berupa angka >= 0`);
                             return;
                         }
-                        if (isNaN(jumlahBendingNum) || jumlahBendingNum < 0) {
-                            errors.push(`Baris ${rowNum}: Jumlah Bending harus berupa angka >= 0`);
-                            return;
-                        }
-                        if (isNaN(cavityNum) || cavityNum < 0) {
-                            errors.push(`Baris ${rowNum}: Cavity harus berupa angka >= 0`);
-                            return;
-                        }
 
                         configurations.push({
-                            address: address,
-                            channel: channelNum,
                             part_number: partNumber.toString().trim(),
-                            cycle_time: cycleTimeNum,
-                            jumlah_bending: jumlahBendingNum,
-                            cavity: cavityNum
+                            part_name: partName.toString().trim(),
+                            cycle_time: cycleTimeNum
                         });
                     });
 
-                    // Show errors if any
                     if (errors.length > 0) {
                         alert('Error validasi:\n' + errors.join('\n'));
                         return;
@@ -1579,16 +1521,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // Confirm import
-                    const confirmed = confirm(`Apakah Anda yakin ingin mengimport ${configurations.length} part configuration?\n\nCatatan: Data yang sudah ada dengan CH dan Part Number yang sama akan diupdate.`);
+                    const confirmed = confirm(`Import ${configurations.length} part?\nPart number yang sudah ada akan di-update.`);
                     if (!confirmed) {
                         return;
                     }
 
-                    // Import configurations (bulk import)
                     const response = await fetch('/api/part-configurations/bulk-import', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                         body: JSON.stringify({ configurations })
                     });
 
@@ -1596,8 +1537,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (result.success) {
                         alert(`Import berhasil!\n${result.created || 0} data ditambahkan\n${result.updated || 0} data diupdate`);
-                        // Reload part configurations
-                        await loadPartConfigurations(address);
+                        await loadPartConfigurations();
                     } else {
                         alert(result.message || 'Gagal mengimport data');
                     }

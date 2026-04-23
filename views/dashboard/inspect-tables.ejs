@@ -214,12 +214,10 @@
             border-bottom: 1px solid #ddd;
             white-space: nowrap;
         }
-        .part-config-table th:nth-child(1) { width: 8%; }
-        .part-config-table th:nth-child(2) { width: 20%; }
-        .part-config-table th:nth-child(3) { width: 12%; }
-        .part-config-table th:nth-child(4) { width: 15%; }
-        .part-config-table th:nth-child(5) { width: 10%; }
-        .part-config-table th:nth-child(6) { width: 35%; }
+        .part-config-table th:nth-child(1) { width: 22%; }
+        .part-config-table th:nth-child(2) { width: 28%; }
+        .part-config-table th:nth-child(3) { width: 14%; }
+        .part-config-table th:nth-child(4) { width: 36%; }
         .part-config-table td {
             padding: 10px 15px;
             border-bottom: 1px solid #eef2f7;
@@ -630,20 +628,19 @@
                                             <input type="file" accept=".xlsx,.xls" style="display: none;" data-address="<%= table.address %>">
                                         </div>
                                         <div style="overflow-x: auto;">
+                                            <p class="text-muted" style="margin:0 0 8px 0;font-size:0.9em;">Master part (semua mesin). Kelola terpusat di <strong>Manage &gt; Part</strong>.</p>
                                             <table class="part-config-table">
                                                 <thead>
                                                     <tr>
-                                                        <th>CH</th>
                                                         <th>Part Number</th>
+                                                        <th>Part Name</th>
                                                         <th>Cycle Time</th>
-                                                        <th>Jumlah Bending</th>
-                                                        <th>Cavity</th>
                                                         <th>Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody class="part-config-tbody" data-address="<%= table.address %>">
                                                     <tr>
-                                                        <td colspan="6" class="empty-config-message">Loading...</td>
+                                                        <td colspan="4" class="empty-config-message">Loading...</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -1007,26 +1004,17 @@
             <div class="modal-body">
                 <form id="partConfigForm">
                     <input type="hidden" id="partConfigId">
-                    <input type="hidden" id="partConfigAddress">
-                    <div class="form-group">
-                        <label for="partConfigChannel">CH (Channel)</label>
-                        <input type="number" id="partConfigChannel" min="0" required>
-                    </div>
                     <div class="form-group">
                         <label for="partConfigPartNumber">Part Number</label>
                         <input type="text" id="partConfigPartNumber" required>
                     </div>
                     <div class="form-group">
-                        <label for="partConfigCycleTime">Cycle Time</label>
-                        <input type="number" id="partConfigCycleTime" min="0">
+                        <label for="partConfigPartName">Part Name</label>
+                        <input type="text" id="partConfigPartName" required>
                     </div>
                     <div class="form-group">
-                        <label for="partConfigJumlahBending">Jumlah Bending</label>
-                        <input type="number" id="partConfigJumlahBending" min="0" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="partConfigCavity">Cavity</label>
-                        <input type="number" id="partConfigCavity" min="0" required>
+                        <label for="partConfigCycleTime">Cycle Time (detik)</label>
+                        <input type="number" id="partConfigCycleTime" min="0" placeholder="Opsional">
                     </div>
                 </form>
             </div>
