@@ -1112,10 +1112,10 @@
             const payload = {
                 part_number: document.getElementById('addPartNumber').value.trim(),
                 part_name: document.getElementById('addPartName').value.trim(),
-                cycle_time: !ctEl || ctEl.value === '' ? null : parseInt(ctEl.value, 10)
+                cycle_time: !ctEl ? null : parseInt(ctEl.value, 10)
             };
             if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
-            if (ctEl && ctEl.value !== '' && (Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time tidak valid.');
+            if (ctEl && (ctEl.value === '' || Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time wajib dan harus angka >= 0.');
             try {
                 const res = await fetch(`${API}/part-configurations`, {
                     method: 'POST',
@@ -1144,10 +1144,10 @@
             const payload = {
                 part_number: document.getElementById('editPartNumber').value.trim(),
                 part_name: document.getElementById('editPartName').value.trim(),
-                cycle_time: !ctEl || ctEl.value === '' ? null : parseInt(ctEl.value, 10)
+                cycle_time: !ctEl ? null : parseInt(ctEl.value, 10)
             };
             if (!payload.part_number || !payload.part_name) return alert('Isi Part Number dan Part Name.');
-            if (ctEl && ctEl.value !== '' && (Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time tidak valid.');
+            if (ctEl && (ctEl.value === '' || Number.isNaN(payload.cycle_time) || payload.cycle_time < 0)) return alert('Cycle time wajib dan harus angka >= 0.');
             try {
                 const res = await fetch(`${API}/part-configurations/${id}`, {
                     method: 'PUT',

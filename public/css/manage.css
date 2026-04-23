@@ -215,6 +215,20 @@
     box-sizing: border-box;
 }
 
+/* Part form: horizontal like schedule */
+#addPartForm.schedule-form {
+    display: block !important;
+}
+#addPartForm .schedule-form-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
 /* Tiap kolom: PAKSA tidak grow/shrink, ukuran max-width ketat */
 #addScheduleForm .schedule-form-grid > .form-group,
 #addScheduleForm .schedule-form-grid > .form-group-toggle,
