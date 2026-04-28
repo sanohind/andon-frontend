@@ -192,7 +192,7 @@
                     <div class="schedule-header-row">
                         <h3>Tambah Schedule</h3>
                         <button type="button" id="openAddWeekSchedule" class="btn btn-secondary">
-                            <i class="fas fa-calendar-week"></i> Tambah 1 Minggu
+                            <i class="fas fa-calendar-week"></i> Tambah 5 Hari Kerja
                         </button>
                     </div>
                     <form id="addScheduleForm" class="schedule-form">
@@ -593,14 +593,14 @@
     <div class="modal" id="addWeekScheduleModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Tambah Schedule 1 Minggu</h3>
+                <h3>Tambah Schedule 5 Hari Kerja</h3>
                 <button type="button" class="modal-close" id="closeAddWeekSchedule">×</button>
             </div>
             <form id="addWeekScheduleForm">
                 <div class="form-group">
                     <label>Tanggal Mulai</label>
                     <input type="date" id="weekScheduleStartDate" required>
-                    <small>Schedule akan dibuat untuk 7 hari (mulai dari tanggal ini).</small>
+                    <small>Schedule akan dibuat untuk 5 hari berturut-turut mulai tanggal ini (sesuai hari kerja). Dua hari lainnya dalam seminggu bisa ditambahkan manual lewat Tambah Schedule jika diperlukan.</small>
                 </div>
                 <div class="form-group">
                     <label>Mesin</label>

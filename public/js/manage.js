@@ -1243,7 +1243,7 @@
                 closeModal('addWeekScheduleModal');
                 document.getElementById('addWeekScheduleForm').reset();
                 loadSchedules();
-                showScheduleSuccess(json.message || 'Schedule 1 minggu berhasil dibuat.');
+                showScheduleSuccess(json.message || 'Schedule 5 hari kerja berhasil dibuat.');
             } catch (err) {
                 alert(err.message);
             }
