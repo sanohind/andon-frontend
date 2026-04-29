@@ -202,12 +202,20 @@
                                 <input type="date" id="scheduleDate" required>
                             </div>
                             <div class="form-group">
+                                <label>Part Number</label>
+                                <select id="schedulePartNumber" required><option value="">Pilih Part Number</option></select>
+                            </div>
+                            <div class="form-group">
                                 <label>Mesin</label>
-                                <select id="scheduleMachine" required><option value="">Pilih Mesin</option></select>
+                                <button type="button" id="openScheduleMachinePicker" class="machine-picker-input">
+                                    <span id="scheduleMachineSummary">Pilih Mesin</span>
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
                             </div>
                             <div class="form-group">
                                 <label>Shift</label>
                                 <select id="scheduleShift">
+                                    <option value="semua">Semua</option>
                                     <option value="pagi">Pagi</option>
                                     <option value="malam">Malam</option>
                                 </select>
@@ -248,6 +256,18 @@
                                 <input type="date" id="filterScheduleDate" class="filter-input">
                             </div>
                             <div class="filter-group">
+                                <label><i class="fas fa-barcode"></i> Part Number</label>
+                                <select id="filterSchedulePartNumber" class="filter-select">
+                                    <option value="">Semua Part Number</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label><i class="fas fa-sitemap"></i> Line</label>
+                                <select id="filterScheduleLine" class="filter-select">
+                                    <option value="">Semua Line</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
                                 <label><i class="fas fa-industry"></i> Mesin</label>
                                 <select id="filterScheduleMachine" class="filter-select">
                                     <option value="">Semua Mesin</option>
@@ -283,6 +303,8 @@
                         <thead>
                             <tr>
                                 <th>Tanggal</th>
+                                <th>Part Number</th>
+                                <th>Line</th>
                                 <th>Mesin</th>
                                 <th>Shift</th>
                                 <th>Target</th>
@@ -600,15 +622,19 @@
                 <div class="form-group">
                     <label>Tanggal Mulai</label>
                     <input type="date" id="weekScheduleStartDate" required>
-                    <small>Schedule akan dibuat untuk 5 hari berturut-turut mulai tanggal ini (sesuai hari kerja). Dua hari lainnya dalam seminggu bisa ditambahkan manual lewat Tambah Schedule jika diperlukan.</small>
+                </div>
+                <div class="form-group">
+                    <label>Part Number</label>
+                    <select id="weekSchedulePartNumber" required><option value="">Pilih Part Number</option></select>
                 </div>
                 <div class="form-group">
                     <label>Mesin</label>
-                    <select id="weekScheduleMachine" required><option value="">Pilih Mesin</option></select>
+                    <div id="weekScheduleMachineChecklist" class="machine-checklist" role="group" aria-label="Pilih Mesin"></div>
                 </div>
                 <div class="form-group">
                     <label>Shift</label>
                     <select id="weekScheduleShift">
+                        <option value="semua">Semua</option>
                         <option value="pagi" selected>Pagi</option>
                         <option value="malam">Malam</option>
                     </select>
@@ -622,6 +648,24 @@
                     <button type="submit" class="btn btn-primary">Simpan</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Schedule Machine Picker Modal -->
+    <div class="modal" id="scheduleMachinePickerModal">
+        <div class="modal-content machine-picker-modal-content">
+            <div class="modal-header">
+                <h3>Pilih Mesin</h3>
+                <button type="button" class="modal-close" id="closeScheduleMachinePicker">×</button>
+            </div>
+            <div class="form-group">
+                <label>Daftar Mesin</label>
+                <div id="scheduleMachineModalChecklist" class="machine-checklist" role="group" aria-label="Pilih Mesin"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelScheduleMachinePicker">Batal</button>
+                <button type="button" class="btn btn-primary" id="saveScheduleMachinePicker">Simpan Pilihan</button>
+            </div>
         </div>
     </div>
 

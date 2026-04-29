@@ -242,10 +242,10 @@
 
 /* Lebar tiap kolom — paksa dengan width + max-width */
 #addScheduleForm .schedule-form-grid > .form-group:nth-child(1) { width: 140px !important; max-width: 140px !important; } /* Tanggal */
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 155px !important; max-width: 155px !important; } /* Mesin */
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 105px !important; max-width: 105px !important; } /* Shift */
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 95px  !important; max-width: 95px  !important; } /* Target */
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 85px  !important; max-width: 85px  !important; } /* Cavity */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 190px !important; max-width: 190px !important; } /* Part Number */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 155px !important; max-width: 155px !important; } /* Mesin */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 105px !important; max-width: 105px !important; } /* Shift */
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 105px !important; max-width: 105px !important; } /* Target */
 #addScheduleForm .schedule-form-grid > .form-group-toggle        { width: 80px  !important; max-width: 80px  !important; } /* OT toggle */
 #addScheduleForm .schedule-form-grid > #scheduleOtFields         { width: 155px !important; max-width: 155px !important; } /* OT Duration */
 #addScheduleForm .schedule-form-grid > #scheduleOtTargetWrap     { width: 110px !important; max-width: 110px !important; } /* OT Target */
@@ -271,6 +271,16 @@
     font-size: 0.9em;
     box-sizing: border-box !important;
     height: 38px;
+}
+
+#addScheduleForm .schedule-form-grid input[type="checkbox"] {
+    flex: 0 0 auto !important;
+    min-width: 12px !important;
+    width: 12px !important;
+    max-width: 12px !important;
+    height: 12px !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
 }
 
 /* OT Toggle: label atas, toggle bawah */
@@ -361,13 +371,104 @@
 
 /* Lebar tiap kolom */
 #addScheduleForm .schedule-form-grid > .form-group:nth-child(1) { width: 140px !important; }
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 155px !important; }
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 105px !important; }
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 95px  !important; }
-#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 85px  !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(2) { width: 190px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(3) { width: 155px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(4) { width: 105px !important; }
+#addScheduleForm .schedule-form-grid > .form-group:nth-child(5) { width: 105px !important; }
 #addScheduleForm .schedule-form-grid > .form-group-toggle        { width: 80px  !important; }
 #addScheduleForm .schedule-form-grid > #scheduleOtFields         { width: 155px !important; }
 #addScheduleForm .schedule-form-grid > #scheduleOtTargetWrap     { width: 110px !important; }
+
+.machine-checklist {
+    width: 100%;
+    min-height: 84px;
+    max-height: 132px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    background: #fff;
+    padding: 6px 8px;
+}
+.machine-checklist-item {
+    display: flex;          /* ubah ke flex agar checkbox & teks sejajar */
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    padding: 4px 2px;
+    cursor: pointer;
+}
+
+.machine-checklist-item input[type="checkbox"] {
+    margin: 0;
+    flex: 0 0 auto;
+    width: 12px;            /* ukuran kecil tapi tetap terlihat */
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    accent-color: var(--primary-color);
+    transform: translateY(0px);
+}
+.machine-checklist-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.machine-checklist-empty {
+    color: #666;
+    font-size: 0.85em;
+    padding: 4px 0;
+}
+.machine-picker-input {
+    width: 100%;
+    height: 38px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    background: #fff;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    color: #1f2937;
+    font-size: 0.9em;
+}
+.machine-picker-input:hover {
+    border-color: #c6cfda;
+}
+.machine-picker-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(10, 40, 86, 0.1);
+}
+.machine-picker-modal-content {
+    max-width: 560px;
+    max-height: 80vh;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+.machine-picker-modal-content .machine-checklist {
+    min-height: 180px;
+    max-height: none;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    margin-top: 8px;
+    overflow-y: auto;
+}
+.machine-picker-modal-content .form-group {
+    margin: 0;
+    padding: 12px 16px 16px;
+    border-bottom: 1px solid var(--light-color);
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.machine-picker-modal-content .modal-footer {
+    margin-top: auto;
+}
 
 /* Responsive */
 @media (max-width: 1050px) {
