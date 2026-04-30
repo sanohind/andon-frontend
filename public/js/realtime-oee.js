@@ -356,13 +356,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const metricsRows = [
+      { key: 'partnumber', label: 'Part Number' },
       { key: 'ideal', label: 'Ideal-Qty' },
       { key: 'total', label: 'Total Product' },
       { key: 'ng', label: 'No-Good' },
       { key: 'runtime', label: 'Run-Time' },
       { key: 'runninghour', label: 'Running Hour' },
       { key: 'oee', label: 'OEE' },
-      { key: 'target', label: 'Target' }
+      { key: 'target', label: 'Target' },
+      { key: 'targetot', label: 'Target OT' }
     ];
 
     const blocksHtml = blocks.map((block, blockIdx) => {
@@ -386,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cells.push(`<div class="rt-cell rt-label">${r.label}</div>`);
         block.forEach((m) => {
           const id = `b${blockIdx}_${r.key}_${encodeURIComponent(m.address)}`;
-          const cls = `rt-value ${r.key === 'ideal' ? 'ideal' : r.key === 'total' ? 'total' : r.key === 'ng' ? 'ng' : r.key === 'oee' ? 'oee' : r.key === 'target' ? 'target' : 'time'}`;
+          const cls = `rt-value ${r.key === 'ideal' ? 'ideal' : r.key === 'total' ? 'total' : r.key === 'ng' ? 'ng' : r.key === 'oee' ? 'oee' : r.key === 'target' ? 'target' : r.key === 'targetot' ? 'target-ot' : r.key === 'partnumber' ? 'part-number' : 'time'}`;
           if (r.key === 'oee') {
             const tipId = `${id}_tip`;
             cells.push(`<div class="rt-cell rt-oee-cell" tabindex="0"><span class="${cls}" id="${id}">-</span><div class="rt-oee-tooltip" id="${tipId}" role="tooltip"></div></div>`);
@@ -453,6 +455,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const performancePct = computePerformancePct(totalProduct, idealQtyForPerformance);
       const target = (metrics.target_quantity != null) ? safeNumber(metrics.target_quantity) : null;
       const targetOt = (metrics.target_ot != null && metrics.target_ot !== '') ? safeNumber(metrics.target_ot) : null;
+      const partNumber = (metrics.part_number != null && String(metrics.part_number).trim() !== '')
+        ? String(metrics.part_number).trim()
+        : '-';
 
       // write to DOM for each block cell
       blocks.forEach((block, blockIdx) => {
@@ -462,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const el = document.getElementById(`b${blockIdx}_${rowKey}_${keyAddr}`);
           if (el) el.textContent = text;
         };
+        setText('partnumber', partNumber);
         setText('ideal', String(idealQty));
         const idealEl = document.getElementById(`b${blockIdx}_ideal_${keyAddr}`);
         if (idealEl) {
@@ -501,13 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const targetEl = document.getElementById(`b${blockIdx}_target_${keyAddr}`);
         if (targetEl) {
-          if (targetOt != null && metrics.ot_enabled) {
-            targetEl.innerHTML = (target != null ? String(target) : '-') + `<br><span class="rt-target-ot">${targetOt}</span>`;
-            targetEl.classList.add('rt-has-ot-target');
-          } else {
-            targetEl.textContent = (target == null) ? '-' : String(target);
-            targetEl.classList.remove('rt-has-ot-target');
-          }
+          targetEl.textContent = (target == null) ? '-' : String(target);
+        }
+        const targetOtEl = document.getElementById(`b${blockIdx}_targetot_${keyAddr}`);
+        if (targetOtEl) {
+          targetOtEl.textContent = (targetOt != null && metrics.ot_enabled) ? String(targetOt) : '-';
         }
       });
 

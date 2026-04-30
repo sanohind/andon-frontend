@@ -206,6 +206,8 @@
 .rt-value.time { color: #0f172a; font-size: 1.5rem; }
 .rt-value.oee { color: var(--rt-yellow); }
 .rt-value.target { color: var(--rt-green); font-size: 1.3rem; font-weight: 800; }
+.rt-value.target-ot { color: #d4a017; font-size: 1.3rem; font-weight: 900; }
+.rt-value.part-number { color: #0f172a; font-size: 1.1rem; font-weight: 800; }
 
 /* Penyesuaian warna teks untuk tema gelap single page */
 .rt-oee-public-body .rt-cell {
@@ -218,6 +220,9 @@
     color: #f9fafb;
 }
 .rt-oee-public-body .rt-value.time {
+    color: #f9fafb;
+}
+.rt-oee-public-body .rt-value.part-number {
     color: #f9fafb;
 }
 .rt-value.ideal.rt-ideal-ot { color: #d4a017; }
@@ -234,13 +239,7 @@
   color: var(--rt-red);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
-.rt-value.target .rt-target-ot { color: #d4a017; font-size: 1.2rem; font-weight: 900; display: block; margin-top: 2px; }
-.rt-value.target.rt-has-ot-target { line-height: 1.25; }
-
-/* Override warna target OT khusus single page tema gelap: gunakan kuning basic */
-.rt-oee-public-body .rt-value.target .rt-target-ot {
-    color: var(--rt-yellow);
-}
+.rt-oee-public-body .rt-value.target-ot { color: var(--rt-yellow); }
 
 /* Make it compact but readable */
 @media (max-width: 1366px) {
