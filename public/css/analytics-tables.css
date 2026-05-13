@@ -809,6 +809,19 @@
     max-width: 880px;
 }
 
+/* Modal drilldown efisiensi: lebar chart batang per mesin + tetap di tengah viewport */
+#efficiencyDrilldownModal.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.efficiency-drilldown-modal-content {
+    max-width: min(960px, 96vw);
+    width: 94%;
+    max-height: 90vh;
+}
+
 .oee-hourly-charts-wrap {
     display: flex;
     flex-direction: column;

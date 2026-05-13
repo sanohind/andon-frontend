@@ -303,8 +303,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (efficiencyDailyCanvas) efficiencyDailyCanvas.style.display = show ? 'none' : 'block';
     }
 
-    function openModal(el) { if (el) el.style.display = 'flex'; }
-    function closeModal(el) { if (el) el.style.display = 'none'; }
+    function openModal(el) {
+        if (!el) return;
+        el.classList.add('show');
+        el.style.display = 'flex';
+    }
+    function closeModal(el) {
+        if (!el) return;
+        el.classList.remove('show');
+        el.style.display = 'none';
+    }
 
     function updateEfficiencyPeriodVisibility() {
         const period = (efficiencyPeriodSelect && efficiencyPeriodSelect.value) || 'monthly';
@@ -505,10 +513,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
                     scales: {
-                        x: { min: 0, max: 100, title: { display: true, text: 'OEE (%)' }, ticks: { callback: (v) => `${v}%` } },
-                        y: { title: { display: false, text: '' } }
+                        x: {
+                            title: { display: true, text: 'Mesin' },
+                            ticks: { maxRotation: 45, minRotation: 0, autoSkip: false }
+                        },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            beginAtZero: true,
+                            title: { display: true, text: 'OEE (%)' },
+                            ticks: { callback: (v) => `${v}%` }
+                        }
                     },
                     plugins: {
                         legend: { position: 'bottom' },
