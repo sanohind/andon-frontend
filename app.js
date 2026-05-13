@@ -1071,6 +1071,102 @@ app.get('/api/dashboard/analytics/line-oee', requireAuthAPI, async (req, res) =>
   }
 });
 
+app.get('/api/dashboard/analytics/line-non-problem-downtime', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, date, month, year, shift } = req.query;
+    let { division } = req.query;
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-non-problem-downtime`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, date, month, year, shift, division }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching line non-problem downtime:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch line non-problem downtime',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/non-problem-downtime-hourly', requireAuthAPI, async (req, res) => {
+  try {
+    const { date, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/non-problem-downtime-hourly`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { date, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching non-problem downtime hourly:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch non-problem downtime hourly',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/efficiency-daily', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, month, year } = req.query;
+    let { division } = req.query;
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-daily`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, month, year, division }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching efficiency daily:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch efficiency daily',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/efficiency-drilldown', requireAuthAPI, async (req, res) => {
+  try {
+    const { division, line_name, date } = req.query;
+    let div = division;
+    if (req.user && req.user.role === 'manager') {
+      div = req.user.division || div;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-drilldown`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { division: div, line_name, date }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching efficiency drilldown:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch efficiency drilldown',
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/dashboard/analytics/oee-hourly', requireAuthAPI, async (req, res) => {
   try {
     const { date, shift, machine_address } = req.query;

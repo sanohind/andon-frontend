@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const lineQuantityEmptyState = document.getElementById('lineQuantityEmptyState');
     const oeeChartsContainer = document.getElementById('oeeChartsContainer');
     const lineOeeEmptyState = document.getElementById('lineOeeEmptyState');
+    const nonProblemDowntimeChartsContainer = document.getElementById('nonProblemDowntimeChartsContainer');
+    const lineNonProblemDowntimeEmptyState = document.getElementById('lineNonProblemDowntimeEmptyState');
     const efficiencyDailyCanvas = document.getElementById('efficiencyDailyChart');
     const efficiencyDailyEmptyState = document.getElementById('efficiencyDailyEmptyState');
     const efficiencyPeriodSelect = document.getElementById('efficiencyPeriodSelect');
@@ -146,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Chart configs untuk quantity / OEE akan dibuat secara dinamis per line
         chartConfigs.lineQuantity = { charts: {} };
         chartConfigs.lineOee = { charts: {} };
+        chartConfigs.lineNonProblemDowntime = { charts: {} };
     }
 
     let lastSelectedRange = null;
@@ -554,9 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const [qtyResponse, oeeResponse] = await Promise.all([
+            const [qtyResponse, oeeResponse, npdResponse] = await Promise.all([
                 fetch(`/api/dashboard/analytics/line-quantity?${params.toString()}`, { headers: getAuthHeaders() }),
-                fetch(`/api/dashboard/analytics/line-oee?${params.toString()}`, { headers: getAuthHeaders() })
+                fetch(`/api/dashboard/analytics/line-oee?${params.toString()}`, { headers: getAuthHeaders() }),
+                fetch(`/api/dashboard/analytics/line-non-problem-downtime?${params.toString()}`, { headers: getAuthHeaders() })
             ]);
 
             if (!qtyResponse.ok) {
@@ -578,6 +582,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            let npdByLine = {};
+            if (npdResponse.ok) {
+                const npdJson = await npdResponse.json();
+                if (npdJson.success && npdJson.data && Array.isArray(npdJson.data.lines)) {
+                    npdJson.data.lines.forEach((l) => {
+                        npdByLine[l.line_name || ''] = l;
+                    });
+                }
+            }
+
             const { lines = [] } = result.data;
             lastLineQuantityData = lines;
             lastLineQuantityFilter = result.data.filter || {};
@@ -587,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleLineQuantityEmptyState(!hasLines);
 
             if (hasLines) {
-                updateLineQuantityCharts(lines, result.data.filter || {}, oeeByLine);
+                updateLineQuantityCharts(lines, result.data.filter || {}, oeeByLine, npdByLine);
             } else {
                 clearLineQuantityCharts();
             }
@@ -615,8 +629,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             chartConfigs.lineOee.charts = {};
         }
+        if (chartConfigs.lineNonProblemDowntime && chartConfigs.lineNonProblemDowntime.charts) {
+            Object.values(chartConfigs.lineNonProblemDowntime.charts).forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                }
+            });
+            chartConfigs.lineNonProblemDowntime.charts = {};
+        }
         if (quantityChartsContainer) quantityChartsContainer.innerHTML = '';
         if (oeeChartsContainer) oeeChartsContainer.innerHTML = '';
+        if (nonProblemDowntimeChartsContainer) nonProblemDowntimeChartsContainer.innerHTML = '';
     }
 
     function toggleLineQuantityEmptyState(showEmpty) {
@@ -632,10 +655,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (oeeChartsContainer) {
             oeeChartsContainer.style.display = showEmpty ? 'none' : 'block';
         }
+        if (lineNonProblemDowntimeEmptyState) {
+            lineNonProblemDowntimeEmptyState.style.display = showEmpty ? 'flex' : 'none';
+        }
+        if (nonProblemDowntimeChartsContainer) {
+            nonProblemDowntimeChartsContainer.style.display = showEmpty ? 'none' : 'block';
+        }
     }
 
-    function updateLineQuantityCharts(linesData, filterInfo, oeeByLine = {}) {
+    function updateLineQuantityCharts(linesData, filterInfo, oeeByLine = {}, npdByLine = {}) {
         if (!chartConfigs.lineQuantity || !chartConfigs.lineOee || !quantityChartsContainer || !oeeChartsContainer) return;
+        const npdEnabled = !!(chartConfigs.lineNonProblemDowntime && nonProblemDowntimeChartsContainer);
 
         if (!Array.isArray(linesData) || linesData.length === 0) {
             toggleLineQuantityEmptyState(true);
@@ -651,6 +681,11 @@ document.addEventListener('DOMContentLoaded', () => {
         oeeChartsContainer.innerHTML = '';
         oeeChartsContainer.className = 'oee-charts-by-line';
         oeeChartsContainer.style.display = 'grid';
+        if (npdEnabled) {
+            nonProblemDowntimeChartsContainer.innerHTML = '';
+            nonProblemDowntimeChartsContainer.className = 'oee-charts-by-line';
+            nonProblemDowntimeChartsContainer.style.display = 'grid';
+        }
 
         linesData.forEach((lineData) => {
             const lineName = lineData.line_name || 'Unknown';
@@ -690,6 +725,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const chartId = `lineQuantityChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
             const chartOeeId = `lineOeeChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
+            let chartNpdId = '';
+            let npdMinutes = [];
+            let npdCard = null;
+            if (npdEnabled) {
+                chartNpdId = `lineNonProblemDowntimeChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                const npdLine = npdByLine[lineName] || { machines: [] };
+                const npdMap = {};
+                (npdLine.machines || []).forEach((nm) => {
+                    if (nm && nm.address) npdMap[nm.address] = nm;
+                });
+                npdMinutes = machines.map((m) => {
+                    const row = npdMap[m.address];
+                    if (row && row.non_problem_downtime_minutes != null && !Number.isNaN(Number(row.non_problem_downtime_minutes))) {
+                        return Number(row.non_problem_downtime_minutes);
+                    }
+                    return 0;
+                });
+                npdCard = document.createElement('div');
+                npdCard.className = 'line-oee-chart-item';
+                npdCard.innerHTML = `
+                <div class="line-chart-header">
+                    <h4>Downtime Non-Problem — Line: ${lineName}</h4>
+                </div>
+                <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
+                    <canvas id="${chartNpdId}"></canvas>
+                </div>
+            `;
+            }
+
             const card = document.createElement('div');
             card.className = 'line-quantity-chart-item';
             card.innerHTML = `
@@ -720,6 +784,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             quantityChartsContainer.appendChild(card);
             oeeChartsContainer.appendChild(oeeCard);
+            if (npdEnabled && npdCard) {
+                nonProblemDowntimeChartsContainer.appendChild(npdCard);
+            }
 
             const canvas = document.getElementById(chartId);
             if (!canvas) return;
@@ -967,8 +1034,180 @@ document.addEventListener('DOMContentLoaded', () => {
                     oeeExportBtn.addEventListener('click', () => exportLineOeeExcel(lineName, machines, oeeMap, lastLineQuantityParams, lastLineQuantityFilter));
                 }
             }
+
+            const npdCanvas = npdEnabled ? document.getElementById(chartNpdId) : null;
+            if (npdCanvas) {
+                const npdChart = new Chart(npdCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Downtime non-problem (menit)',
+                            data: npdMinutes,
+                            backgroundColor: '#dc2626',
+                            borderColor: '#b91c1c',
+                            borderWidth: 1,
+                            borderRadius: 6,
+                            maxBarThickness: 36
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: (evt, activeEls) => {
+                            if (!activeEls.length) return;
+                            const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
+                            if (period !== 'daily') {
+                                alert('Pilih periode Harian untuk melihat grafik downtime per jam.');
+                                return;
+                            }
+                            const dataIndex = activeEls[0].index;
+                            if (!machines || !machines[dataIndex]) return;
+                            const machine = machines[dataIndex];
+                            const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                            const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
+                            openNonProblemDowntimeHourlyModal(machine.name, machine.address, date, shift);
+                        },
+                        plugins: {
+                            legend: { display: true, position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    label(context) {
+                                        const v = context.parsed && context.parsed.y != null ? context.parsed.y : context.parsed;
+                                        return `${context.dataset.label}: ${Number(v).toFixed(2)} menit`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: { display: false },
+                                ticks: { maxRotation: 45, minRotation: 0 }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Menit' },
+                                ticks: {
+                                    callback: (v) => `${Number(v).toFixed(0)} m`
+                                }
+                            }
+                        }
+                    }
+                });
+                if (!chartConfigs.lineNonProblemDowntime.charts) chartConfigs.lineNonProblemDowntime.charts = {};
+                chartConfigs.lineNonProblemDowntime.charts[chartNpdId] = npdChart;
+            }
         });
     }
+
+    let nonProblemDowntimeHourlyChartInstance = null;
+
+    async function openNonProblemDowntimeHourlyModal(machineName, machineAddress, date, shift) {
+        const modal = document.getElementById('nonProblemDowntimeHourlyModal');
+        const titleEl = document.getElementById('nonProblemDowntimeHourlyModalTitle');
+        const emptyEl = document.getElementById('nonProblemDowntimeHourlyChartEmpty');
+        const loadingEl = document.getElementById('nonProblemDowntimeHourlyChartLoading');
+        const wrapperEl = document.getElementById('nonProblemDowntimeHourlyChartWrapper');
+        const canvas = document.getElementById('nonProblemDowntimeHourlyChartCanvas');
+        if (!modal || !titleEl || !canvas || !emptyEl || !loadingEl || !wrapperEl) return;
+
+        if (nonProblemDowntimeHourlyChartInstance) {
+            nonProblemDowntimeHourlyChartInstance.destroy();
+            nonProblemDowntimeHourlyChartInstance = null;
+        }
+
+        titleEl.textContent = `Downtime Non-Problem per Jam — ${machineName}`;
+        emptyEl.style.display = 'none';
+        wrapperEl.style.display = 'none';
+        loadingEl.style.display = 'block';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.classList.add('show');
+
+        try {
+            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+            const res = await fetch(`/api/dashboard/analytics/non-problem-downtime-hourly?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            loadingEl.style.display = 'none';
+
+            if (!res.ok || !json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                emptyEl.style.display = 'flex';
+                return;
+            }
+
+            const labels = json.data.map((d) => d.label || d.snapshot_at);
+            const values = json.data.map((d) => (d.downtime_minutes != null ? Number(d.downtime_minutes) : 0));
+
+            wrapperEl.style.display = 'block';
+            nonProblemDowntimeHourlyChartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Downtime non-problem (menit)',
+                        data: values,
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#dc2626'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Menit' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Jam' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(ctx) {
+                                    const v = ctx.parsed && ctx.parsed.y != null ? ctx.parsed.y : ctx.parsed;
+                                    return `${ctx.dataset.label}: ${Number(v).toFixed(2)} menit`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Non-problem downtime hourly:', e);
+            loadingEl.style.display = 'none';
+            emptyEl.style.display = 'flex';
+        }
+    }
+
+    function closeNonProblemDowntimeHourlyModal() {
+        const modal = document.getElementById('nonProblemDowntimeHourlyModal');
+        if (nonProblemDowntimeHourlyChartInstance) {
+            nonProblemDowntimeHourlyChartInstance.destroy();
+            nonProblemDowntimeHourlyChartInstance = null;
+        }
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    }
+
+    (function initNonProblemDowntimeHourlyModal() {
+        const closeBtn = document.getElementById('nonProblemDowntimeHourlyModalClose');
+        const modal = document.getElementById('nonProblemDowntimeHourlyModal');
+        if (closeBtn) closeBtn.addEventListener('click', closeNonProblemDowntimeHourlyModal);
+        if (modal) {
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeNonProblemDowntimeHourlyModal(); });
+        }
+    })();
 
     let quantityHourlyChartInstance = null;
     let lastQuantityHourlyData = null;

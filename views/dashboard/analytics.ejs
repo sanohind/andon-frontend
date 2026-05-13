@@ -116,6 +116,18 @@
                 </div>
                 <div class="chart-card oee-analytics-card">
                     <div class="chart-card-header oee-analytics-card-header">
+                        <h3>Downtime Non-Problem</h3>
+                    </div>
+                    <div class="quantity-chart-body oee-analytics-card-body">
+                        <div id="nonProblemDowntimeChartsContainer" class="oee-charts-by-line" style="display: none;"></div>
+                        <div class="chart-empty-state" id="lineNonProblemDowntimeEmptyState" style="display: none;">
+                            <i class="fas fa-chart-bar"></i>
+                            <p>Belum ada data untuk opsi yang dipilih.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-card oee-analytics-card">
+                    <div class="chart-card-header oee-analytics-card-header">
                         <div style="display:flex; align-items:flex-end; justify-content:space-between; gap: 1rem; flex-wrap:wrap;">
                             <h3 style="margin:0;">Efisiensi (OEE) — Akumulasi per Line</h3>
                             <div class="chart-controls chart-controls-compact" style="margin-left:auto;">
@@ -484,6 +496,29 @@
                     <button class="btn btn-secondary btn-sm" id="quantityHourlyExportBtn" type="button" style="display: none;">
                         <i class="fas fa-file-excel"></i> Download Excel
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Downtime Non-Problem per jam (line chart) -->
+    <div class="modal" id="nonProblemDowntimeHourlyModal" style="display: none;">
+        <div class="modal-content quantity-hourly-modal-content">
+            <div class="modal-header">
+                <h3 id="nonProblemDowntimeHourlyModalTitle">Downtime Non-Problem per Jam</h3>
+                <button type="button" class="modal-close" id="nonProblemDowntimeHourlyModalClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="nonProblemDowntimeHourlyChartEmpty" class="chart-empty-state" style="display: none;">
+                    <i class="fas fa-chart-line"></i>
+                    <p>Tidak ada data downtime non-problem per jam untuk mesin ini pada tanggal dan shift yang dipilih.</p>
+                </div>
+                <div id="nonProblemDowntimeHourlyChartLoading" style="display: none; text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
+                    <p>Memuat data...</p>
+                </div>
+                <div class="chart-wrapper" id="nonProblemDowntimeHourlyChartWrapper" style="height: 320px; display: none;">
+                    <canvas id="nonProblemDowntimeHourlyChartCanvas"></canvas>
                 </div>
             </div>
         </div>
