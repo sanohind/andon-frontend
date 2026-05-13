@@ -389,15 +389,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
                     scales: {
                         x: {
+                            title: { display: true, text: p.period === 'yearly' ? 'Bulan' : 'Tanggal' },
+                            ticks: { maxRotation: 45, minRotation: 0, autoSkip: true }
+                        },
+                        y: {
                             min: 0,
                             max: 100,
+                            beginAtZero: true,
                             title: { display: true, text: 'OEE (%)' },
                             ticks: { callback: (v) => `${v}%` }
-                        },
-                        y: { title: { display: true, text: p.period === 'yearly' ? 'Bulan' : 'Tanggal' } }
+                        }
                     },
                     plugins: {
                         legend: { position: 'bottom' },
