@@ -224,9 +224,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return pattern;
     }
     
-    // Helper: get selected global division
+    // Helper: get selected global division (trim; kosong / "Semua Divisi" => null)
     function getSelectedDivision() {
-        return (globalDivisionSelect && globalDivisionSelect.value) ? globalDivisionSelect.value : null;
+        if (!globalDivisionSelect) return null;
+        const raw = globalDivisionSelect.value;
+        if (raw == null || String(raw).trim() === '') return null;
+        return String(raw).trim();
     }
 
     // Fungsi untuk mengambil data dari backend
@@ -291,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== EFFICIENCY (OEE) — daily accumulation + drilldown ==========
     let efficiencyDailyChartInstance = null;
+    let efficiencyDailyFetchAbort = null;
     let efficiencyDrilldownRegularChartInstance = null;
     let efficiencyDrilldownOtChartInstance = null;
 
@@ -321,6 +325,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchEfficiency() {
         if (!showCharts || !efficiencyDailyCanvas) return;
 
+        if (efficiencyDailyFetchAbort) {
+            efficiencyDailyFetchAbort.abort();
+        }
+        efficiencyDailyFetchAbort = new AbortController();
+        const { signal } = efficiencyDailyFetchAbort;
+
         const division = getSelectedDivision();
         const p = getEfficiencyParams();
         const params = new URLSearchParams({ period: p.period });
@@ -329,7 +339,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (division) params.set('division', division);
 
         try {
-            const res = await fetch(`/api/dashboard/analytics/efficiency-daily?${params.toString()}`, { headers: getAuthHeaders() });
+            const res = await fetch(`/api/dashboard/analytics/efficiency-daily?${params.toString()}`, {
+                headers: getAuthHeaders(),
+                signal
+            });
             const json = await res.json();
             if (!res.ok || !json.success || !json.data) throw new Error(json.message || 'Gagal memuat efisiensi');
 
@@ -423,11 +436,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!ds || ds.type === 'line') return;
                         const dateStr = efficiencyDailyChartInstance.data.labels[el.index];
                         const lineName = ds.label;
-                        await openEfficiencyDrilldown({ division, lineName, dateStr });
+                        await openEfficiencyDrilldown({ division: getSelectedDivision(), lineName, dateStr });
                     }
                 }
             });
         } catch (e) {
+            if (e.name === 'AbortError') return;
             console.error('Fetch efficiency daily:', e);
             toggleEfficiencyDailyEmpty(true);
         }
