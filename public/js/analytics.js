@@ -330,32 +330,125 @@ document.addEventListener('DOMContentLoaded', () => {
         return { period: 'monthly', month: monthVal };
     }
 
-    /** Pilih garis dataset terdekat dari posisi klik (mode nearest + axis x sering memilih line yang salah). */
-    function pickEfficiencyLineFromClick(nativeEvent, chart) {
-        if (!chart || !nativeEvent || !chart.canvas) return null;
-        const canvas = chart.canvas;
+    /**
+     * Koordinat kanvas Chart.js dari event klik (lebih stabil daripada bbox manual).
+     * @param {MouseEvent|TouchEvent|{ native?: MouseEvent, x?: number, y?: number }} chartEvent
+     */
+    function getChartCanvasXY(chartEvent, chart) {
+        if (chartEvent && Number.isFinite(chartEvent.x) && Number.isFinite(chartEvent.y)) {
+            return { x: chartEvent.x, y: chartEvent.y };
+        }
+        const canvas = chart && chart.canvas;
+        const native = (chartEvent && chartEvent.native) ? chartEvent.native : chartEvent;
+        if (!canvas || !native) return null;
+        let clientX = native.clientX;
+        let clientY = native.clientY;
+        if ((clientX == null || clientY == null) && native.touches && native.touches[0]) {
+            clientX = native.touches[0].clientX;
+            clientY = native.touches[0].clientY;
+        }
+        if (clientX == null || clientY == null) return null;
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return null;
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        const x = (nativeEvent.clientX - rect.left) * scaleX;
-        const y = (nativeEvent.clientY - rect.top) * scaleY;
-        let best = { d2: Infinity, di: -1, ii: -1 };
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    /** Indeks label (tanggal) dari posisi X: samakan dengan posisi titik yang digambar (bukan jarak 2D ke titik lain hari). */
+    function resolveEfficiencyCategoryIndexFromPixel(px, chart) {
+        const labels = chart.data.labels || [];
+        const n = labels.length;
+        if (!n || px == null) return -1;
+
+        let refDi = -1;
+        chart.data.datasets.forEach((ds, di) => {
+            if (ds.skipDrilldown) return;
+            if (refDi < 0) refDi = di;
+        });
+        if (refDi < 0) refDi = 0;
+        const metaRef = chart.getDatasetMeta(refDi);
+        if (!metaRef || !metaRef.data) return -1;
+
+        let bestI = -1;
+        let bestDx = Infinity;
+        for (let i = 0; i < n; i++) {
+            const pt = metaRef.data[i];
+            if (!pt || typeof pt.x !== 'number') continue;
+            const dx = Math.abs(pt.x - px);
+            if (dx < bestDx) {
+                bestDx = dx;
+                bestI = i;
+            }
+        }
+        let maxDx = 56;
+        if (n >= 2) {
+            const a = metaRef.data[0];
+            const b = metaRef.data[1];
+            if (a && b && typeof a.x === 'number' && typeof b.x === 'number') {
+                maxDx = Math.max(36, Math.abs(b.x - a.x) * 0.55);
+            }
+        }
+        if (bestI < 0 || bestDx > maxDx) return -1;
+        return bestI;
+    }
+
+    /**
+     * Pilih dataset line + indeks tanggal: dulu kunci ke kategori X, baru jarak Y di hari itu.
+     * Menghindari klik tanggal 14 terbaca sebagai 15 (nearest 2D ke titik garis lain).
+     */
+    function pickEfficiencyLineFromClick(chartEvent, chart) {
+        if (!chart || !chart.canvas) return null;
+        const xy = getChartCanvasXY(chartEvent, chart);
+        if (!xy) return null;
+
+        let catIndex = -1;
+        if (typeof chart.getElementsAtEventForMode === 'function') {
+            try {
+                const atIndex = chart.getElementsAtEventForMode(chartEvent, 'index', { intersect: false }, true);
+                if (atIndex && atIndex.length && typeof atIndex[0].index === 'number') {
+                    catIndex = atIndex[0].index;
+                }
+            } catch (_) { /* Chart lama */ }
+        }
+        if (catIndex < 0) {
+            catIndex = resolveEfficiencyCategoryIndexFromPixel(xy.x, chart);
+        }
+        if (catIndex < 0) return null;
+
+        const py = xy.y;
+        let bestDi = -1;
+        let bestDy2 = Infinity;
         chart.data.datasets.forEach((ds, di) => {
             if (ds.skipDrilldown) return;
             const meta = chart.getDatasetMeta(di);
             if (!meta || meta.hidden) return;
-            (meta.data || []).forEach((pt, idx) => {
-                if (!pt || typeof pt.x !== 'number' || typeof pt.y !== 'number') return;
-                const dx = pt.x - x;
-                const dy = pt.y - y;
-                const d2 = dx * dx + dy * dy;
-                if (d2 < best.d2) best = { d2, di, ii: idx };
-            });
+            const pt = meta.data[catIndex];
+            if (!pt || typeof pt.y !== 'number') return;
+            const dy = pt.y - py;
+            const dy2 = dy * dy;
+            if (dy2 < bestDy2) {
+                bestDy2 = dy2;
+                bestDi = di;
+            }
         });
-        const radiusPx = 48;
-        if (best.di < 0 || best.d2 > radiusPx * radiusPx) return null;
-        return { datasetIndex: best.di, index: best.ii };
+
+        if (bestDi < 0) {
+            chart.data.datasets.forEach((ds, di) => {
+                if (ds.skipDrilldown) return;
+                const meta = chart.getDatasetMeta(di);
+                if (!meta || meta.hidden) return;
+                const pt = meta.data[catIndex];
+                if (!pt || typeof pt.y !== 'number') return;
+                if (bestDi < 0) bestDi = di;
+            });
+        }
+        if (bestDi < 0) return null;
+
+        return { datasetIndex: bestDi, index: catIndex };
     }
 
     async function fetchEfficiency() {
@@ -447,12 +540,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 fill: false
             });
 
+            let yMax = Math.max(100, Number.isFinite(Number(target)) ? Number(target) : 96);
+            datasets.forEach((ds) => {
+                (ds.data || []).forEach((v) => {
+                    const n = v == null ? NaN : Number(v);
+                    if (Number.isFinite(n)) yMax = Math.max(yMax, n);
+                });
+            });
+            const yMaxPadded = Math.ceil(yMax / 5) * 5 + 10;
+            const yAxisMax = Math.min(Math.max(yMaxPadded, 105), 500);
+
             efficiencyDailyChartInstance = new Chart(efficiencyDailyCanvas.getContext('2d'), {
                 type: 'line',
                 data: { labels: dates, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    clip: false,
+                    layout: { padding: { top: 10, right: 4 } },
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     scales: {
                         x: {
@@ -461,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         y: {
                             min: 0,
-                            max: 100,
+                            max: yAxisMax,
                             beginAtZero: true,
                             title: { display: true, text: 'OEE (%)' },
                             ticks: { callback: (v) => `${v}%` }
@@ -486,8 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ? chart
                             : efficiencyDailyChartInstance;
                         if (!inst) return;
-                        const native = evt.native || evt;
-                        const picked = pickEfficiencyLineFromClick(native, inst);
+                        const picked = pickEfficiencyLineFromClick(evt, inst);
                         if (!picked) return;
                         const ds = inst.data.datasets[picked.datasetIndex];
                         if (!ds || ds.skipDrilldown) return;
