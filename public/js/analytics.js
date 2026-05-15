@@ -779,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 npdCard.className = 'line-oee-chart-item';
                 npdCard.innerHTML = `
                 <div class="line-chart-header">
-                    <h4>Downtime problem cycle time — Line: ${lineName}</h4>
+                    <h4>Downtime — Line: ${lineName}</h4>
                 </div>
                 <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
                     <canvas id="${chartNpdId}"></canvas>
@@ -1171,15 +1171,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!res.ok || !json.success || !Array.isArray(json.data) || json.data.length === 0) {
                 if (emptyMsgEl) emptyMsgEl.textContent = defaultHourlyEmptyText;
-                emptyEl.style.display = 'flex';
-                return;
-            }
-
-            if (json.suppressed_no_production) {
-                if (emptyMsgEl) {
-                    emptyMsgEl.textContent =
-                        'Data tidak ditampilkan: dianggap tidak ada proses produksi pada shift ini (semua mesin di divisi mengalami downtime problem cycle time sejak awal shift hingga 15 menit berikutnya).';
-                }
                 emptyEl.style.display = 'flex';
                 return;
             }
