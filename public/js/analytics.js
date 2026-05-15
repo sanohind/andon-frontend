@@ -330,6 +330,34 @@ document.addEventListener('DOMContentLoaded', () => {
         return { period: 'monthly', month: monthVal };
     }
 
+    /** Pilih garis dataset terdekat dari posisi klik (mode nearest + axis x sering memilih line yang salah). */
+    function pickEfficiencyLineFromClick(nativeEvent, chart) {
+        if (!chart || !nativeEvent || !chart.canvas) return null;
+        const canvas = chart.canvas;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (nativeEvent.clientX - rect.left) * scaleX;
+        const y = (nativeEvent.clientY - rect.top) * scaleY;
+        let best = { d2: Infinity, di: -1, ii: -1 };
+        chart.data.datasets.forEach((ds, di) => {
+            if (ds.skipDrilldown) return;
+            const meta = chart.getDatasetMeta(di);
+            if (!meta || meta.hidden) return;
+            (meta.data || []).forEach((pt, idx) => {
+                if (!pt || typeof pt.x !== 'number' || typeof pt.y !== 'number') return;
+                const dx = pt.x - x;
+                const dy = pt.y - y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < best.d2) best = { d2, di, ii: idx };
+            });
+        });
+        const radiusPx = 48;
+        if (best.di < 0 || best.d2 > radiusPx * radiusPx) return null;
+        return { datasetIndex: best.di, index: best.ii };
+    }
+
     async function fetchEfficiency() {
         if (!showCharts || !efficiencyDailyCanvas) return;
 
@@ -385,9 +413,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 daily.forEach(d => { if (d && d.date) byDate[d.date] = d.oee_percent; });
                 const data = dates.map(ds => (byDate[ds] == null ? null : Number(byDate[ds])));
                 const color = palette[idx % palette.length];
+                const lineLabel = (l.line_name != null && String(l.line_name).trim() !== '')
+                    ? String(l.line_name).trim()
+                    : `Line ${idx + 1}`;
                 return {
                     type: 'line',
-                    label: l.line_name || `Line ${idx + 1}`,
+                    label: lineLabel,
+                    lineKey: lineLabel,
                     data,
                     borderColor: color,
                     backgroundColor: color,
@@ -448,18 +480,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     },
-                    onClick: async (evt, elements) => {
-                        if (!elements || elements.length === 0) return;
+                    onClick: async (evt, _elements, chart) => {
                         if (p.period !== 'monthly' && p.period !== 'yearly') return;
-                        const el = elements[0];
-                        const ds = efficiencyDailyChartInstance.data.datasets[el.datasetIndex];
+                        const inst = (chart && typeof chart.getDatasetMeta === 'function')
+                            ? chart
+                            : efficiencyDailyChartInstance;
+                        if (!inst) return;
+                        const native = evt.native || evt;
+                        const picked = pickEfficiencyLineFromClick(native, inst);
+                        if (!picked) return;
+                        const ds = inst.data.datasets[picked.datasetIndex];
                         if (!ds || ds.skipDrilldown) return;
-                        let dateStr = String(efficiencyDailyChartInstance.data.labels[el.index] || '');
+                        let dateStr = String(inst.data.labels[picked.index] || '');
                         if (p.period === 'yearly' && /^\d{4}-\d{2}$/.test(dateStr)) {
                             dateStr = `${dateStr}-01`;
                         }
                         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
-                        const lineName = ds.label;
+                        const lineName = ds.lineKey || ds.label;
                         await openEfficiencyDrilldown({ division: getSelectedDivision(), lineName, dateStr });
                     }
                 }
@@ -503,10 +540,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const labels = machines.map(m => m.name || m.address);
-            const regPagi = machines.map(m => (m?.regular?.pagi == null ? null : Number(m.regular.pagi)));
-            const regMalam = machines.map(m => (m?.regular?.malam == null ? null : Number(m.regular.malam)));
-            const otPagi = machines.map(m => (m?.ot?.pagi == null ? null : Number(m.ot.pagi)));
-            const otMalam = machines.map(m => (m?.ot?.malam == null ? null : Number(m.ot.malam)));
+            const clampOeePct = (v) => {
+                if (v == null) return null;
+                const n = Number(v);
+                if (!Number.isFinite(n)) return null;
+                return Math.round(Math.min(100, Math.max(0, n)) * 100) / 100;
+            };
+            const regPagi = machines.map(m => clampOeePct(m?.regular?.pagi));
+            const regMalam = machines.map(m => clampOeePct(m?.regular?.malam));
+            const otPagi = machines.map(m => clampOeePct(m?.ot?.pagi));
+            const otMalam = machines.map(m => clampOeePct(m?.ot?.malam));
 
             const makeChart = (canvas, dataPagi, dataMalam) => new Chart(canvas.getContext('2d'), {
                 type: 'bar',
