@@ -943,6 +943,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 npdCard.innerHTML = `
                 <div class="line-chart-header">
                     <h4>Downtime — Line: ${lineName}</h4>
+                    <button class="btn btn-secondary btn-sm" data-npd-export="${chartNpdId}" type="button" title="Download Excel">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
                 </div>
                 <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
                     <canvas id="${chartNpdId}"></canvas>
@@ -1238,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: {
                         labels,
                         datasets: [{
-                            label: 'Downtime problem cycle time (menit)',
+                            label: 'Downtime',
                             data: npdMinutes,
                             backgroundColor: '#dc2626',
                             borderColor: '#b91c1c',
@@ -1262,7 +1265,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const machine = machines[dataIndex];
                             const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
                             const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
-                            openNonProblemDowntimeHourlyModal(machine.name, machine.address, date, shift);
+                            openNonProblemDowntimeHourlyModal(machine.name, machine.address, date, shift, {
+                                lineName,
+                                barDowntimeMinutes: npdMinutes[dataIndex] != null ? Number(npdMinutes[dataIndex]) : 0
+                            });
                         },
                         plugins: {
                             legend: { display: true, position: 'top' },
@@ -1270,7 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 callbacks: {
                                     label(context) {
                                         const v = context.parsed && context.parsed.y != null ? context.parsed.y : context.parsed;
-                                        return `${context.dataset.label}: ${Number(v).toFixed(2)} menit`;
+                                        return `Downtime : ${Number(v).toFixed(2)} menit`;
                                     }
                                 }
                             }
@@ -1293,19 +1299,107 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (!chartConfigs.lineNonProblemDowntime.charts) chartConfigs.lineNonProblemDowntime.charts = {};
                 chartConfigs.lineNonProblemDowntime.charts[chartNpdId] = npdChart;
+
+                const npdExportBtn = npdCard.querySelector(`[data-npd-export="${chartNpdId}"]`);
+                if (npdExportBtn) {
+                    npdExportBtn.addEventListener('click', () => exportLineNonProblemDowntimeExcel(
+                        lineName,
+                        machines,
+                        npdMap,
+                        lastLineQuantityParams,
+                        lastLineQuantityFilter
+                    ));
+                }
             }
         });
     }
 
     let nonProblemDowntimeHourlyChartInstance = null;
+    let lastNonProblemDowntimeHourlyData = null;
+    let lastNonProblemDowntimeHourlyMeta = null;
 
-    async function openNonProblemDowntimeHourlyModal(machineName, machineAddress, date, shift) {
+    function exportLineNonProblemDowntimeExcel(lineName, machines, npdMap, params, filterInfo) {
+        if (!machines || !Array.isArray(machines) || machines.length === 0) {
+            alert('Tidak ada data downtime untuk line ini.');
+            return;
+        }
+        const period = params?.period || 'daily';
+        const ts = (period === 'daily')
+            ? (params?.date || '-')
+            : (filterInfo?.filter_label || '-');
+        const shiftRaw = params?.shift || 'pagi';
+        const shiftLabel = shiftRaw === 'malam' ? 'Malam' : 'Pagi';
+
+        const rows = [];
+        let id = 1;
+        machines.forEach((m) => {
+            const nm = npdMap[m.address] || {};
+            const mins = nm.non_problem_downtime_minutes != null
+                ? Number(nm.non_problem_downtime_minutes).toFixed(2)
+                : '0.00';
+            rows.push([
+                id++,
+                m.name || '-',
+                shiftLabel,
+                ts,
+                mins
+            ]);
+        });
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'Downtime (menit)'];
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'DowntimeBar');
+        const fileName = `downtime_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    function exportNonProblemDowntimeHourlyExcel() {
+        if (!lastNonProblemDowntimeHourlyData || !Array.isArray(lastNonProblemDowntimeHourlyData) || !lastNonProblemDowntimeHourlyData.length) {
+            alert('Tidak ada data downtime per jam untuk diunduh.');
+            return;
+        }
+        const meta = lastNonProblemDowntimeHourlyMeta || {};
+        const shiftLabel = meta.shift === 'malam' ? 'Malam' : 'Pagi';
+        const wb = XLSX.utils.book_new();
+
+        const summaryRows = [[
+            meta.machineName || '-',
+            meta.machineAddress || '-',
+            shiftLabel,
+            meta.date || '-',
+            meta.barDowntimeMinutes != null ? Number(meta.barDowntimeMinutes).toFixed(2) : '-'
+        ]];
+        const summaryHeaders = ['Nama Mesin', 'Address', 'Shift', 'Tanggal', 'Downtime shift (menit)'];
+        const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+        XLSX.utils.book_append_sheet(wb, wsSummary, 'RingkasanBar');
+
+        const hourlyRows = [];
+        let id = 1;
+        lastNonProblemDowntimeHourlyData.forEach((d) => {
+            hourlyRows.push([
+                id++,
+                d.label || d.snapshot_at || '-',
+                d.snapshot_at || '-',
+                d.downtime_minutes != null ? Number(d.downtime_minutes).toFixed(2) : '0.00'
+            ]);
+        });
+        const hourlyHeaders = ['ID', 'Label', 'Snapshot', 'Downtime (menit)'];
+        const wsHourly = XLSX.utils.aoa_to_sheet([hourlyHeaders, ...hourlyRows]);
+        XLSX.utils.book_append_sheet(wb, wsHourly, 'PerJam');
+
+        const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
+        const fileName = `downtime_hourly_${safeName}_${meta.date || ''}_${shiftLabel}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    async function openNonProblemDowntimeHourlyModal(machineName, machineAddress, date, shift, options = {}) {
         const modal = document.getElementById('nonProblemDowntimeHourlyModal');
         const titleEl = document.getElementById('nonProblemDowntimeHourlyModalTitle');
         const emptyEl = document.getElementById('nonProblemDowntimeHourlyChartEmpty');
         const loadingEl = document.getElementById('nonProblemDowntimeHourlyChartLoading');
         const wrapperEl = document.getElementById('nonProblemDowntimeHourlyChartWrapper');
         const canvas = document.getElementById('nonProblemDowntimeHourlyChartCanvas');
+        const exportBtn = document.getElementById('nonProblemDowntimeHourlyExportBtn');
         if (!modal || !titleEl || !canvas || !emptyEl || !loadingEl || !wrapperEl) return;
 
         if (nonProblemDowntimeHourlyChartInstance) {
@@ -1313,7 +1407,14 @@ document.addEventListener('DOMContentLoaded', () => {
             nonProblemDowntimeHourlyChartInstance = null;
         }
 
-        titleEl.textContent = `Downtime problem cycle time per Jam — ${machineName}`;
+        lastNonProblemDowntimeHourlyData = null;
+        lastNonProblemDowntimeHourlyMeta = null;
+        if (exportBtn) {
+            exportBtn.style.display = 'none';
+            exportBtn.onclick = null;
+        }
+
+        titleEl.textContent = `Downtime per Jam — ${machineName}`;
         const emptyMsgEl = emptyEl.querySelector('p');
         const defaultHourlyEmptyText =
             'Tidak ada data downtime cycle time per jam untuk mesin ini pada tanggal dan shift yang dipilih.';
@@ -1340,6 +1441,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (emptyMsgEl) emptyMsgEl.textContent = defaultHourlyEmptyText;
 
+            lastNonProblemDowntimeHourlyData = json.data;
+            lastNonProblemDowntimeHourlyMeta = {
+                machineName,
+                machineAddress,
+                date,
+                shift,
+                lineName: options.lineName || '',
+                barDowntimeMinutes: options.barDowntimeMinutes
+            };
+
             const labels = json.data.map((d) => d.label || d.snapshot_at);
             const values = json.data.map((d) => (d.downtime_minutes != null ? Number(d.downtime_minutes) : 0));
 
@@ -1349,7 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Downtime problem cycle time (menit)',
+                        label: 'Downtime',
                         data: values,
                         borderColor: '#dc2626',
                         backgroundColor: 'rgba(220, 38, 38, 0.12)',
@@ -1377,13 +1488,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             callbacks: {
                                 label(ctx) {
                                     const v = ctx.parsed && ctx.parsed.y != null ? ctx.parsed.y : ctx.parsed;
-                                    return `${ctx.dataset.label}: ${Number(v).toFixed(2)} menit`;
+                                    return `Downtime : ${Number(v).toFixed(2)} menit`;
                                 }
                             }
                         }
                     }
                 }
             });
+
+            if (exportBtn) {
+                exportBtn.style.display = 'inline-flex';
+                exportBtn.onclick = () => exportNonProblemDowntimeHourlyExcel();
+            }
         } catch (e) {
             console.error('Non-problem downtime hourly:', e);
             loadingEl.style.display = 'none';
@@ -1780,6 +1896,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /** Nilai A/P/Q untuk stacked bar: prioritas shift_apq API, lalu scan deret per jam. */
+    function resolveOeeStackApq(hourlyRows, shiftApq) {
+        const pick = (key, fallback) => {
+            if (shiftApq && shiftApq[key] != null && !Number.isNaN(Number(shiftApq[key]))) {
+                return Number(shiftApq[key]);
+            }
+            if (!Array.isArray(hourlyRows)) return fallback;
+            for (let i = hourlyRows.length - 1; i >= 0; i--) {
+                const v = hourlyRows[i][key];
+                if (v != null && !Number.isNaN(Number(v))) return Number(v);
+            }
+            return fallback;
+        };
+        return {
+            availability: pick('availability_percent', 0),
+            performance: pick('performance_percent', null),
+            quality: pick('quality_percent', 100)
+        };
+    }
+
     function exportLineOeeExcel(lineName, machines, oeeMap, params, filterInfo) {
         if (!machines || !Array.isArray(machines) || machines.length === 0) {
             alert('Tidak ada data OEE untuk line ini.');
@@ -1862,10 +1998,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const labels = json.data.map((d) => d.snapshot_at);
             const oeeVals = json.data.map((d) => (d.oee_percent != null ? Number(d.oee_percent) : null));
 
-            const lastRow = json.data[json.data.length - 1];
-            const aLast = lastRow && lastRow.availability_percent != null ? Number(lastRow.availability_percent) : 0;
-            const pLast = lastRow && lastRow.performance_percent != null ? Number(lastRow.performance_percent) : 0;
-            const qLast = lastRow && lastRow.quality_percent != null ? Number(lastRow.quality_percent) : 100;
+            const stackApq = resolveOeeStackApq(json.data, json.shift_apq);
+            const aLast = stackApq.availability != null ? stackApq.availability : 0;
+            const pLast = stackApq.performance != null ? stackApq.performance : 0;
+            const qLast = stackApq.quality != null ? stackApq.quality : 100;
             const stackLabel = `${date} (${shift === 'malam' ? 'Malam' : 'Pagi'})`;
 
             if (chartsWrap) chartsWrap.style.display = 'flex';
