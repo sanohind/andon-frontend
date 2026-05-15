@@ -386,30 +386,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = dates.map(ds => (byDate[ds] == null ? null : Number(byDate[ds])));
                 const color = palette[idx % palette.length];
                 return {
+                    type: 'line',
                     label: l.line_name || `Line ${idx + 1}`,
                     data,
-                    backgroundColor: color,
                     borderColor: color,
-                    borderWidth: 1
+                    backgroundColor: color,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: color,
+                    pointBorderColor: color,
+                    tension: 0.25,
+                    spanGaps: true,
+                    fill: false
                 };
             });
 
             datasets.push({
                 type: 'line',
+                skipDrilldown: true,
                 label: `Target (${Number(target).toFixed(2)}%)`,
                 data: dates.map(() => Number(target)),
                 borderColor: 'rgba(0,0,0,0.65)',
                 borderWidth: 2,
+                borderDash: [6, 4],
                 pointRadius: 0,
                 tension: 0,
+                fill: false
             });
 
             efficiencyDailyChartInstance = new Chart(efficiencyDailyCanvas.getContext('2d'), {
-                type: 'bar',
+                type: 'line',
                 data: { labels: dates, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     scales: {
                         x: {
                             title: { display: true, text: p.period === 'yearly' ? 'Bulan' : 'Tanggal' },
@@ -428,8 +440,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         tooltip: {
                             callbacks: {
                                 label: (ctx) => {
-                                    if (ctx.dataset.type === 'line') return `${ctx.dataset.label}`;
                                     const v = ctx.raw;
+                                    if (ctx.dataset.skipDrilldown) return `${ctx.dataset.label}`;
                                     if (v == null) return `${ctx.dataset.label}: (tidak ada data)`;
                                     return `${ctx.dataset.label}: ${Number(v).toFixed(2)}%`;
                                 }
@@ -438,11 +450,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     onClick: async (evt, elements) => {
                         if (!elements || elements.length === 0) return;
-                        if (p.period !== 'monthly') return; // drilldown hanya untuk tanggal (bulanan)
+                        if (p.period !== 'monthly' && p.period !== 'yearly') return;
                         const el = elements[0];
                         const ds = efficiencyDailyChartInstance.data.datasets[el.datasetIndex];
-                        if (!ds || ds.type === 'line') return;
-                        const dateStr = efficiencyDailyChartInstance.data.labels[el.index];
+                        if (!ds || ds.skipDrilldown) return;
+                        let dateStr = String(efficiencyDailyChartInstance.data.labels[el.index] || '');
+                        if (p.period === 'yearly' && /^\d{4}-\d{2}$/.test(dateStr)) {
+                            dateStr = `${dateStr}-01`;
+                        }
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
                         const lineName = ds.label;
                         await openEfficiencyDrilldown({ division: getSelectedDivision(), lineName, dateStr });
                     }
