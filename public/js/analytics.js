@@ -779,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 npdCard.className = 'line-oee-chart-item';
                 npdCard.innerHTML = `
                 <div class="line-chart-header">
-                    <h4>Downtime Non-Problem — Line: ${lineName}</h4>
+                    <h4>Downtime problem cycle time — Line: ${lineName}</h4>
                 </div>
                 <div class="chart-wrapper" style="height: ${Math.max(200, machines.length * 32)}px;">
                     <canvas id="${chartNpdId}"></canvas>
@@ -1075,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: {
                         labels,
                         datasets: [{
-                            label: 'Downtime non-problem (menit)',
+                            label: 'Downtime problem cycle time (menit)',
                             data: npdMinutes,
                             backgroundColor: '#dc2626',
                             borderColor: '#b91c1c',
@@ -1150,7 +1150,11 @@ document.addEventListener('DOMContentLoaded', () => {
             nonProblemDowntimeHourlyChartInstance = null;
         }
 
-        titleEl.textContent = `Downtime Non-Problem per Jam — ${machineName}`;
+        titleEl.textContent = `Downtime problem cycle time per Jam — ${machineName}`;
+        const emptyMsgEl = emptyEl.querySelector('p');
+        const defaultHourlyEmptyText =
+            'Tidak ada data downtime cycle time per jam untuk mesin ini pada tanggal dan shift yang dipilih.';
+        if (emptyMsgEl) emptyMsgEl.textContent = defaultHourlyEmptyText;
         emptyEl.style.display = 'none';
         wrapperEl.style.display = 'none';
         loadingEl.style.display = 'block';
@@ -1166,9 +1170,21 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingEl.style.display = 'none';
 
             if (!res.ok || !json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                if (emptyMsgEl) emptyMsgEl.textContent = defaultHourlyEmptyText;
                 emptyEl.style.display = 'flex';
                 return;
             }
+
+            if (json.suppressed_no_production) {
+                if (emptyMsgEl) {
+                    emptyMsgEl.textContent =
+                        'Data tidak ditampilkan: dianggap tidak ada proses produksi pada shift ini (semua mesin di divisi mengalami downtime problem cycle time sejak awal shift hingga 15 menit berikutnya).';
+                }
+                emptyEl.style.display = 'flex';
+                return;
+            }
+
+            if (emptyMsgEl) emptyMsgEl.textContent = defaultHourlyEmptyText;
 
             const labels = json.data.map((d) => d.label || d.snapshot_at);
             const values = json.data.map((d) => (d.downtime_minutes != null ? Number(d.downtime_minutes) : 0));
@@ -1179,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Downtime non-problem (menit)',
+                        label: 'Downtime problem cycle time (menit)',
                         data: values,
                         borderColor: '#dc2626',
                         backgroundColor: 'rgba(220, 38, 38, 0.12)',
@@ -1217,6 +1233,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Non-problem downtime hourly:', e);
             loadingEl.style.display = 'none';
+            const emptyMsgCatch = emptyEl.querySelector('p');
+            if (emptyMsgCatch) {
+                emptyMsgCatch.textContent =
+                    'Tidak ada data downtime cycle time per jam untuk mesin ini pada tanggal dan shift yang dipilih.';
+            }
             emptyEl.style.display = 'flex';
         }
     }
