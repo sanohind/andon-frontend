@@ -45,15 +45,20 @@ function isExcelWholeNumber(num) {
 }
 
 /**
- * Set tipe sel numerik + format tampilan Indonesia (desimal koma).
- * Nilai disimpan sebagai number agar Excel bisa sort/filter/hitung.
+ * Set tipe sel numerik + format standar OOXML (#,##0.00).
+ * Excel Indonesia menampilkan koma desimal otomatis dari locale sistem.
+ * Jangan pakai "0,00" atau "#.##0,00" — koma di format Excel memicu pembagian ribuan.
  *
- * Penting: jangan pakai "0,00" — koma di tengah format Excel = pembagi 1000
- * (3,87 jadi tampil "004"). Pakai "#.##0,00" (desimal koma, ribuan titik).
+ * @param {'decimal'|'integer'|'auto'} opts.mode
  */
 function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
-    const decimalFmt = opts.decimalFormat || '#.##0,00';
-    const integerFmt = opts.integerFormat || '#,##0';
+    const mode = opts.mode || 'decimal';
+    const decimalPlaces = Number.isFinite(opts.decimalPlaces) ? opts.decimalPlaces : 2;
+    const decimalFmt = decimalPlaces > 0
+        ? `#,##0.${'0'.repeat(decimalPlaces)}`
+        : '#,##0';
+    const integerFmt = '#,##0';
+
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = range.s.r; R <= range.e.r; R++) {
@@ -65,10 +70,20 @@ function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
             const num = parseExcelNumericCellValue(cell.v);
             if (num == null) continue;
 
+            const whole = isExcelWholeNumber(num);
+            const useInteger = mode === 'integer' || (mode === 'auto' && whole);
+
             cell.t = 'n';
-            cell.v = num;
             delete cell.w;
-            cell.z = isExcelWholeNumber(num) ? integerFmt : decimalFmt;
+
+            if (useInteger) {
+                cell.v = Math.round(num);
+                cell.z = integerFmt;
+            } else {
+                const factor = Math.pow(10, decimalPlaces);
+                cell.v = Math.round(num * factor) / factor;
+                cell.z = decimalFmt;
+            }
         }
     }
 }
@@ -459,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
         }
         if (!wb.SheetNames.length) return false;
-        wb.SheetNames.forEach((name) => applyExcelNumericFormatToWorksheet(wb.Sheets[name]));
+        wb.SheetNames.forEach((name) => applyExcelNumericFormatToWorksheet(wb.Sheets[name], { mode: 'auto' }));
         XLSX.writeFile(wb, fileName);
         return true;
     }
@@ -920,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const wb = XLSX.utils.book_new();
         const wsDetail = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(wsDetail);
+        applyExcelNumericFormatToWorksheet(wsDetail, { mode: 'decimal' });
         XLSX.utils.book_append_sheet(wb, wsDetail, 'Detail Mesin');
         const safeLine = (meta.lineName || 'line').toString().replace(/\s+/g, '_');
         const safeDate = (meta.dateStr || '').toString().replace(/[^\d-]/g, '');
@@ -1691,7 +1706,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'Downtime (menit)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'DowntimeBar');
         const fileName = `downtime_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
@@ -1716,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ]];
         const summaryHeaders = ['Nama Mesin', 'Address', 'Shift', 'Tanggal', 'Downtime shift (menit)'];
         const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
-        applyExcelNumericFormatToWorksheet(wsSummary);
+        applyExcelNumericFormatToWorksheet(wsSummary, { mode: 'decimal' });
         XLSX.utils.book_append_sheet(wb, wsSummary, 'RingkasanBar');
 
         const hourlyRows = [];
@@ -1731,7 +1746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const hourlyHeaders = ['ID', 'Label', 'Snapshot', 'Downtime (menit)'];
         const wsHourly = XLSX.utils.aoa_to_sheet([hourlyHeaders, ...hourlyRows]);
-        applyExcelNumericFormatToWorksheet(wsHourly);
+        applyExcelNumericFormatToWorksheet(wsHourly, { mode: 'decimal' });
         XLSX.utils.book_append_sheet(wb, wsHourly, 'PerJam');
 
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2220,7 +2235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty (kumulatif)', 'Quantity Aktual (kumulatif)']
             : ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'integer' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityDrilldown');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2273,7 +2288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'OEE');
         const fileName = `oee_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
@@ -2522,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Waktu', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'OEEHourly');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2568,7 +2583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'integer' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Quantity');
         const fileName = `quantity_line_${(lineData.line_name || 'line').replace(/\\s+/g, '_')}_${ts.replace(/\\s+/g, '_')}.xlsx`;
@@ -3454,7 +3469,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create worksheet
         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'auto' });
 
         // Set column widths
         const colWidths = [
@@ -3543,7 +3558,7 @@ document.addEventListener('DOMContentLoaded', () => {
             colWidths.push({wch: maxWidth});
         }
         ws['!cols'] = colWidths;
-        applyExcelNumericFormatToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws, { mode: 'auto' });
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Forward Problem Data');

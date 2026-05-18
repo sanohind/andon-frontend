@@ -28,8 +28,13 @@ function isExcelWholeNumber(num) {
 }
 
 function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
-    const decimalFmt = opts.decimalFormat || '#.##0,00';
-    const integerFmt = opts.integerFormat || '#,##0';
+    const mode = opts.mode || 'decimal';
+    const decimalPlaces = Number.isFinite(opts.decimalPlaces) ? opts.decimalPlaces : 2;
+    const decimalFmt = decimalPlaces > 0
+        ? `#,##0.${'0'.repeat(decimalPlaces)}`
+        : '#,##0';
+    const integerFmt = '#,##0';
+
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = range.s.r; R <= range.e.r; R++) {
@@ -39,10 +44,21 @@ function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
             if (!cell || cell.v == null || cell.v === '') continue;
             const num = parseExcelNumericCellValue(cell.v);
             if (num == null) continue;
+
+            const whole = isExcelWholeNumber(num);
+            const useInteger = mode === 'integer' || (mode === 'auto' && whole);
+
             cell.t = 'n';
-            cell.v = num;
             delete cell.w;
-            cell.z = isExcelWholeNumber(num) ? integerFmt : decimalFmt;
+
+            if (useInteger) {
+                cell.v = Math.round(num);
+                cell.z = integerFmt;
+            } else {
+                const factor = Math.pow(10, decimalPlaces);
+                cell.v = Math.round(num * factor) / factor;
+                cell.z = decimalFmt;
+            }
         }
     }
 }
@@ -1483,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
 
             const ws = XLSX.utils.json_to_sheet(excelData);
-            applyExcelNumericFormatToWorksheet(ws);
+            applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Parts');
 
