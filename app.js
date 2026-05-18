@@ -1167,6 +1167,32 @@ app.get('/api/dashboard/analytics/efficiency-drilldown', requireAuthAPI, async (
   }
 });
 
+app.get('/api/dashboard/analytics/efficiency-export', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, month, year } = req.query;
+    let { division } = req.query;
+    if (req.user && req.user.role === 'manager') {
+      division = req.user.division || division;
+    }
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-export`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, month, year, division },
+      timeout: 120000
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching efficiency export:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch efficiency export',
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/dashboard/analytics/oee-hourly', requireAuthAPI, async (req, res) => {
   try {
     const { date, shift, machine_address } = req.query;

@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const efficiencyYearInput = document.getElementById('efficiencyYearInput');
     const efficiencyMonthGroup = document.getElementById('efficiencyMonthGroup');
     const efficiencyYearGroup = document.getElementById('efficiencyYearGroup');
+    const efficiencyDailyExportBtn = document.getElementById('efficiencyDailyExportBtn');
 
     const efficiencyDrilldownModal = document.getElementById('efficiencyDrilldownModal');
     const efficiencyDrilldownTitle = document.getElementById('efficiencyDrilldownTitle');
@@ -312,6 +313,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (efficiencyDailyCanvas) efficiencyDailyCanvas.style.display = show ? 'none' : 'block';
     }
 
+    function setEfficiencyExportEnabled(enabled) {
+        if (efficiencyDailyExportBtn) efficiencyDailyExportBtn.disabled = !enabled;
+    }
+
+    function formatEfficiencyExportPct(v) {
+        if (v == null || !Number.isFinite(Number(v))) return '-';
+        return Number(v).toFixed(2);
+    }
+
     function openModal(el) {
         if (!el) return;
         el.classList.add('show');
@@ -495,10 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     efficiencyDailyChartInstance = null;
                 }
                 toggleEfficiencyDailyEmpty(true);
+                setEfficiencyExportEnabled(false);
                 return;
             }
 
             toggleEfficiencyDailyEmpty(false);
+            setEfficiencyExportEnabled(true);
             if (efficiencyDailyChartInstance) {
                 efficiencyDailyChartInstance.destroy();
                 efficiencyDailyChartInstance = null;
@@ -613,6 +625,100 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.name === 'AbortError') return;
             console.error('Fetch efficiency daily:', e);
             toggleEfficiencyDailyEmpty(true);
+            setEfficiencyExportEnabled(false);
+        }
+    }
+
+    async function exportEfficiencyExcel() {
+        if (typeof XLSX === 'undefined') {
+            alert('Library Excel tidak tersedia. Muat ulang halaman.');
+            return;
+        }
+        const btn = efficiencyDailyExportBtn;
+        const prevDisabled = btn ? btn.disabled : false;
+        if (btn) {
+            btn.disabled = true;
+            btn.dataset.exporting = '1';
+        }
+        try {
+            const division = getSelectedDivision();
+            const p = getEfficiencyParams();
+            const params = new URLSearchParams({ period: p.period });
+            if (p.period === 'yearly') params.set('year', p.year);
+            if (p.period === 'monthly') params.set('month', p.month);
+            if (division) params.set('division', division);
+
+            const res = await fetch(`/api/dashboard/analytics/efficiency-export?${params.toString()}`, {
+                headers: getAuthHeaders()
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success || !json.data) {
+                throw new Error(json.message || 'Gagal memuat data export efisiensi');
+            }
+
+            const data = json.data;
+            const target = data.target_efficiency_percent != null ? Number(data.target_efficiency_percent) : 96;
+            const periodKey = p.period === 'yearly' ? (p.year || '-') : (p.month || '-');
+            const dateCol = p.period === 'yearly' ? 'Bulan' : 'Tanggal';
+
+            const accumHeaders = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${target.toFixed(2)}%)`];
+            const accumRows = [];
+            let accId = 1;
+            (data.accumulation || []).forEach((row) => {
+                accumRows.push([
+                    accId++,
+                    row.line_name || '-',
+                    row.period_label || '-',
+                    formatEfficiencyExportPct(row.oee_percent),
+                    target.toFixed(2)
+                ]);
+            });
+
+            const machineHeaders = [
+                'No', 'Line', dateCol, 'Nama Mesin', 'Address',
+                'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
+                'Jam OT Pagi (%)', 'Jam OT Malam (%)'
+            ];
+            const machineRows = [];
+            let machId = 1;
+            (data.machine_details || []).forEach((block) => {
+                const lineName = block.line_name || '-';
+                const periodLbl = block.period_label || block.date || '-';
+                (block.machines || []).forEach((m) => {
+                    machineRows.push([
+                        machId++,
+                        lineName,
+                        periodLbl,
+                        m.name || '-',
+                        m.address || '-',
+                        formatEfficiencyExportPct(m.regular?.pagi),
+                        formatEfficiencyExportPct(m.regular?.malam),
+                        formatEfficiencyExportPct(m.ot?.pagi),
+                        formatEfficiencyExportPct(m.ot?.malam)
+                    ]);
+                });
+            });
+
+            if (accumRows.length === 0 && machineRows.length === 0) {
+                alert('Tidak ada data efisiensi untuk diunduh.');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([accumHeaders, ...accumRows]), 'Akumulasi');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
+
+            const divPart = (data.division || division || 'all').toString().replace(/\s+/g, '_');
+            const fileName = `efisiensi_${divPart}_${periodKey}.xlsx`.replace(/[^\w.-]+/g, '_');
+            XLSX.writeFile(wb, fileName);
+        } catch (e) {
+            console.error('Export efficiency excel:', e);
+            alert(e.message || 'Gagal mengunduh Excel efisiensi.');
+        } finally {
+            if (btn) {
+                delete btn.dataset.exporting;
+                btn.disabled = prevDisabled;
+            }
         }
     }
 
@@ -938,10 +1044,11 @@ document.addEventListener('DOMContentLoaded', () => {
             let chartNpdId = '';
             let npdMinutes = [];
             let npdCard = null;
+            let npdMap = {};
             if (npdEnabled) {
                 chartNpdId = `lineNonProblemDowntimeChart_${lineName.replace(/[^a-zA-Z0-9]/g, '_')}`;
                 const npdLine = npdByLine[lineName] || { machines: [] };
-                const npdMap = {};
+                npdMap = {};
                 (npdLine.machines || []).forEach((nm) => {
                     if (nm && nm.address) npdMap[nm.address] = nm;
                 });
@@ -2375,6 +2482,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (efficiencyYearInput) {
         efficiencyYearInput.addEventListener('change', fetchEfficiency);
+    }
+    if (efficiencyDailyExportBtn) {
+        efficiencyDailyExportBtn.addEventListener('click', exportEfficiencyExcel);
     }
 
     if (quantityPeriodSelect) {
