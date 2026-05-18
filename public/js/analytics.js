@@ -6,16 +6,47 @@ let currentTeknisiPicDisplayedData = [];
 let currentTeknisiPicSortColumn = null;
 let currentTeknisiPicSortDirection = 'asc';
 
-/** Format angka desimal untuk Excel locale Indonesia (pemisah desimal koma). */
-function formatExcelDecimal(v, decimals = 2, fallback = '-') {
+/** Format tampilan label/header (bukan nilai sel numerik). */
+function formatExcelDecimalLabel(v, decimals = 2, fallback = '-') {
     if (v == null || v === '' || v === '-') return fallback;
     const n = Number(v);
     if (!Number.isFinite(n)) return fallback;
     return n.toFixed(decimals).replace('.', ',');
 }
 
-/** Konversi sel numerik/desimal bertitik menjadi string dengan koma di worksheet. */
-function applyExcelDecimalCommaToWorksheet(ws) {
+/** Nilai numerik asli untuk sel Excel (bukan string). */
+function excelNumericValue(v, fallback = '-') {
+    if (v == null || v === '' || v === '-') return fallback;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return n;
+}
+
+function parseExcelNumericCellValue(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v !== 'string') return null;
+    const t = v.trim();
+    if (t === '' || t === '-') return null;
+    if (/^-?\d{1,3}(\.\d{3})*,\d+$/.test(t)) {
+        return Number(t.replace(/\./g, '').replace(',', '.'));
+    }
+    if (/^-?\d+,\d+$/.test(t)) {
+        return Number(t.replace(',', '.'));
+    }
+    if (/^-?\d+\.\d+$/.test(t)) {
+        return Number(t);
+    }
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Set tipe sel numerik + format tampilan Indonesia (desimal koma).
+ * Nilai disimpan sebagai number agar Excel bisa sort/filter/hitung.
+ */
+function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
+    const decimalFmt = opts.decimalFormat || '0,00';
+    const integerFmt = opts.integerFormat || '0';
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = range.s.r; R <= range.e.r; R++) {
@@ -24,25 +55,13 @@ function applyExcelDecimalCommaToWorksheet(ws) {
             const cell = ws[addr];
             if (!cell || cell.v == null || cell.v === '') continue;
 
-            if (typeof cell.v === 'number') {
-                if (!Number.isFinite(cell.v)) continue;
-                if (!Number.isInteger(cell.v)) {
-                    cell.t = 's';
-                    cell.v = String(cell.v).replace('.', ',');
-                    delete cell.w;
-                }
-                continue;
-            }
+            const num = parseExcelNumericCellValue(cell.v);
+            if (num == null) continue;
 
-            if (typeof cell.v === 'string') {
-                const trimmed = cell.v.trim();
-                const m = trimmed.match(/^(-?\d+)\.(\d+)$/);
-                if (m) {
-                    cell.t = 's';
-                    cell.v = `${m[1]},${m[2]}`;
-                    delete cell.w;
-                }
-            }
+            cell.t = 'n';
+            cell.v = num;
+            delete cell.w;
+            cell.z = Number.isInteger(num) ? integerFmt : decimalFmt;
         }
     }
 }
@@ -362,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatEfficiencyExportPct(v) {
-        return formatExcelDecimal(v, 2, '-');
+        return excelNumericValue(v, '-');
     }
 
     function resolveEfficiencyDrilldownDate(periodLabel, period) {
@@ -378,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = payload?.target != null ? Number(payload.target) : 96;
         const period = payload?.period || 'monthly';
         const dateCol = period === 'yearly' ? 'Bulan' : 'Tanggal';
-        const headers = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${formatExcelDecimal(target)}%)`];
+        const headers = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${formatExcelDecimalLabel(target)}%)`];
         const rows = [];
         let id = 1;
         (payload?.lines || []).forEach((line) => {
@@ -389,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     lineName,
                     dayRow.date || '-',
                     formatEfficiencyExportPct(dayRow.oee_percent),
-                    formatExcelDecimal(target)
+                    excelNumericValue(target)
                 ]);
             });
         });
@@ -433,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
         }
         if (!wb.SheetNames.length) return false;
-        wb.SheetNames.forEach((name) => applyExcelDecimalCommaToWorksheet(wb.Sheets[name]));
+        wb.SheetNames.forEach((name) => applyExcelNumericFormatToWorksheet(wb.Sheets[name]));
         XLSX.writeFile(wb, fileName);
         return true;
     }
@@ -873,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'No', 'Nama Mesin', 'Address', 'Tanggal', 'Line',
             'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
             'Jam OT Pagi (%)', 'Jam OT Malam (%)',
-            `Target (${formatExcelDecimal(target)}%)`
+            `Target (${formatExcelDecimalLabel(target)}%)`
         ];
         const rows = [];
         let id = 1;
@@ -888,13 +907,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 formatEfficiencyExportPct(m.regular?.malam),
                 formatEfficiencyExportPct(m.ot?.pagi),
                 formatEfficiencyExportPct(m.ot?.malam),
-                formatExcelDecimal(target)
+                excelNumericValue(target)
             ]);
         });
 
         const wb = XLSX.utils.book_new();
         const wsDetail = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(wsDetail);
+        applyExcelNumericFormatToWorksheet(wsDetail);
         XLSX.utils.book_append_sheet(wb, wsDetail, 'Detail Mesin');
         const safeLine = (meta.lineName || 'line').toString().replace(/\s+/g, '_');
         const safeDate = (meta.dateStr || '').toString().replace(/[^\d-]/g, '');
@@ -1653,8 +1672,8 @@ document.addEventListener('DOMContentLoaded', () => {
         machines.forEach((m) => {
             const nm = npdMap[m.address] || {};
             const mins = nm.non_problem_downtime_minutes != null
-                ? formatExcelDecimal(nm.non_problem_downtime_minutes)
-                : formatExcelDecimal(0);
+                ? excelNumericValue(nm.non_problem_downtime_minutes)
+                : excelNumericValue(0);
             rows.push([
                 id++,
                 m.name || '-',
@@ -1665,7 +1684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'Downtime (menit)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'DowntimeBar');
         const fileName = `downtime_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
@@ -1686,11 +1705,11 @@ document.addEventListener('DOMContentLoaded', () => {
             meta.machineAddress || '-',
             shiftLabel,
             meta.date || '-',
-            meta.barDowntimeMinutes != null ? formatExcelDecimal(meta.barDowntimeMinutes) : '-'
+            meta.barDowntimeMinutes != null ? excelNumericValue(meta.barDowntimeMinutes) : '-'
         ]];
         const summaryHeaders = ['Nama Mesin', 'Address', 'Shift', 'Tanggal', 'Downtime shift (menit)'];
         const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
-        applyExcelDecimalCommaToWorksheet(wsSummary);
+        applyExcelNumericFormatToWorksheet(wsSummary);
         XLSX.utils.book_append_sheet(wb, wsSummary, 'RingkasanBar');
 
         const hourlyRows = [];
@@ -1700,12 +1719,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 id++,
                 d.label || d.snapshot_at || '-',
                 d.snapshot_at || '-',
-                d.downtime_minutes != null ? formatExcelDecimal(d.downtime_minutes) : formatExcelDecimal(0)
+                d.downtime_minutes != null ? excelNumericValue(d.downtime_minutes) : excelNumericValue(0)
             ]);
         });
         const hourlyHeaders = ['ID', 'Label', 'Snapshot', 'Downtime (menit)'];
         const wsHourly = XLSX.utils.aoa_to_sheet([hourlyHeaders, ...hourlyRows]);
-        applyExcelDecimalCommaToWorksheet(wsHourly);
+        applyExcelNumericFormatToWorksheet(wsHourly);
         XLSX.utils.book_append_sheet(wb, wsHourly, 'PerJam');
 
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2194,7 +2213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty (kumulatif)', 'Quantity Aktual (kumulatif)']
             : ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityDrilldown');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2239,15 +2258,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 m.name || '-',
                 shiftLabel,
                 ts,
-                om.oee_percent != null ? formatExcelDecimal(om.oee_percent) : '-',
-                om.availability_percent != null ? formatExcelDecimal(om.availability_percent) : '-',
-                om.performance_percent != null ? formatExcelDecimal(om.performance_percent) : '-',
-                om.quality_percent != null ? formatExcelDecimal(om.quality_percent) : formatExcelDecimal(100)
+                om.oee_percent != null ? excelNumericValue(om.oee_percent) : '-',
+                om.availability_percent != null ? excelNumericValue(om.availability_percent) : '-',
+                om.performance_percent != null ? excelNumericValue(om.performance_percent) : '-',
+                om.quality_percent != null ? excelNumericValue(om.quality_percent) : excelNumericValue(100)
             ]);
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'OEE');
         const fileName = `oee_line_${(lineName || 'line').replace(/\s+/g, '_')}_${String(ts).replace(/\s+/g, '_')}.xlsx`;
@@ -2488,15 +2507,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 meta.machineName || '-',
                 shiftLabel,
                 d.snapshot_at || '-',
-                d.oee_percent != null ? formatExcelDecimal(d.oee_percent) : '-',
-                d.availability_percent != null ? formatExcelDecimal(d.availability_percent) : '-',
-                d.performance_percent != null ? formatExcelDecimal(d.performance_percent) : '-',
-                d.quality_percent != null ? formatExcelDecimal(d.quality_percent) : formatExcelDecimal(100)
+                d.oee_percent != null ? excelNumericValue(d.oee_percent) : '-',
+                d.availability_percent != null ? excelNumericValue(d.availability_percent) : '-',
+                d.performance_percent != null ? excelNumericValue(d.performance_percent) : '-',
+                d.quality_percent != null ? excelNumericValue(d.quality_percent) : excelNumericValue(100)
             ]);
         });
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Waktu', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'OEEHourly');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
@@ -2542,7 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const headers = ['ID', 'Nama Mesin', 'Shift', 'Timestamp', 'Quantity Target', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Quantity');
         const fileName = `quantity_line_${(lineData.line_name || 'line').replace(/\\s+/g, '_')}_${ts.replace(/\\s+/g, '_')}.xlsx`;
@@ -3428,7 +3447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create worksheet
         const ws = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
 
         // Set column widths
         const colWidths = [
@@ -3517,7 +3536,7 @@ document.addEventListener('DOMContentLoaded', () => {
             colWidths.push({wch: maxWidth});
         }
         ws['!cols'] = colWidths;
-        applyExcelDecimalCommaToWorksheet(ws);
+        applyExcelNumericFormatToWorksheet(ws);
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Forward Problem Data');

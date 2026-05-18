@@ -1,12 +1,31 @@
-/** Format angka desimal untuk Excel locale Indonesia (pemisah desimal koma). */
-function formatExcelDecimal(v, decimals = 2, fallback = '-') {
+function excelNumericValue(v, fallback = '-') {
     if (v == null || v === '' || v === '-') return fallback;
     const n = Number(v);
     if (!Number.isFinite(n)) return fallback;
-    return n.toFixed(decimals).replace('.', ',');
+    return n;
 }
 
-function applyExcelDecimalCommaToWorksheet(ws) {
+function parseExcelNumericCellValue(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v !== 'string') return null;
+    const t = v.trim();
+    if (t === '' || t === '-') return null;
+    if (/^-?\d{1,3}(\.\d{3})*,\d+$/.test(t)) {
+        return Number(t.replace(/\./g, '').replace(',', '.'));
+    }
+    if (/^-?\d+,\d+$/.test(t)) {
+        return Number(t.replace(',', '.'));
+    }
+    if (/^-?\d+\.\d+$/.test(t)) {
+        return Number(t);
+    }
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+}
+
+function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
+    const decimalFmt = opts.decimalFormat || '0,00';
+    const integerFmt = opts.integerFormat || '0';
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = range.s.r; R <= range.e.r; R++) {
@@ -14,23 +33,12 @@ function applyExcelDecimalCommaToWorksheet(ws) {
             const addr = XLSX.utils.encode_cell({ r: R, c: C });
             const cell = ws[addr];
             if (!cell || cell.v == null || cell.v === '') continue;
-            if (typeof cell.v === 'number') {
-                if (!Number.isFinite(cell.v)) continue;
-                if (!Number.isInteger(cell.v)) {
-                    cell.t = 's';
-                    cell.v = String(cell.v).replace('.', ',');
-                    delete cell.w;
-                }
-                continue;
-            }
-            if (typeof cell.v === 'string') {
-                const m = cell.v.trim().match(/^(-?\d+)\.(\d+)$/);
-                if (m) {
-                    cell.t = 's';
-                    cell.v = `${m[1]},${m[2]}`;
-                    delete cell.w;
-                }
-            }
+            const num = parseExcelNumericCellValue(cell.v);
+            if (num == null) continue;
+            cell.t = 'n';
+            cell.v = num;
+            delete cell.w;
+            cell.z = Number.isInteger(num) ? integerFmt : decimalFmt;
         }
     }
 }
@@ -1466,12 +1474,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Part Number': config.part_number || '',
                 'Part Name': config.part_name || '',
                 'Cycle Time': config.cycle_time !== null && config.cycle_time !== undefined
-                    ? formatExcelDecimal(config.cycle_time)
+                    ? excelNumericValue(config.cycle_time, '')
                     : ''
             }));
 
             const ws = XLSX.utils.json_to_sheet(excelData);
-            applyExcelDecimalCommaToWorksheet(ws);
+            applyExcelNumericFormatToWorksheet(ws);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Parts');
 
