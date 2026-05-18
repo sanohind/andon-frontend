@@ -1,3 +1,40 @@
+/** Format angka desimal untuk Excel locale Indonesia (pemisah desimal koma). */
+function formatExcelDecimal(v, decimals = 2, fallback = '-') {
+    if (v == null || v === '' || v === '-') return fallback;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return n.toFixed(decimals).replace('.', ',');
+}
+
+function applyExcelDecimalCommaToWorksheet(ws) {
+    if (!ws || !ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; R++) {
+        for (let C = range.s.c; C <= range.e.c; C++) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[addr];
+            if (!cell || cell.v == null || cell.v === '') continue;
+            if (typeof cell.v === 'number') {
+                if (!Number.isFinite(cell.v)) continue;
+                if (!Number.isInteger(cell.v)) {
+                    cell.t = 's';
+                    cell.v = String(cell.v).replace('.', ',');
+                    delete cell.w;
+                }
+                continue;
+            }
+            if (typeof cell.v === 'string') {
+                const m = cell.v.trim().match(/^(-?\d+)\.(\d+)$/);
+                if (m) {
+                    cell.t = 's';
+                    cell.v = `${m[1]},${m[2]}`;
+                    delete cell.w;
+                }
+            }
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const addForm = document.getElementById('addTableForm');
     const tableBody = document.querySelector('#tablesTable tbody');
@@ -1428,10 +1465,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const excelData = result.data.map(config => ({
                 'Part Number': config.part_number || '',
                 'Part Name': config.part_name || '',
-                'Cycle Time': config.cycle_time !== null && config.cycle_time !== undefined ? config.cycle_time : ''
+                'Cycle Time': config.cycle_time !== null && config.cycle_time !== undefined
+                    ? formatExcelDecimal(config.cycle_time)
+                    : ''
             }));
 
             const ws = XLSX.utils.json_to_sheet(excelData);
+            applyExcelDecimalCommaToWorksheet(ws);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Parts');
 
