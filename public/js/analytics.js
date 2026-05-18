@@ -44,6 +44,27 @@ function isExcelWholeNumber(num) {
     return Math.abs(num - Math.round(num)) < 1e-9;
 }
 
+/** Kolom header ID/No — selalu format bilangan bulat, bukan desimal. */
+function getExcelIdColumnIndexes(ws, range, opts = {}) {
+    if (Array.isArray(opts.skipColumns)) {
+        return new Set(opts.skipColumns);
+    }
+    if (opts.skipIdColumn === false) {
+        return new Set();
+    }
+    const cols = new Set();
+    const headerR = range.s.r;
+    for (let C = range.s.c; C <= range.e.c; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: headerR, c: C })];
+        if (!cell || cell.v == null) continue;
+        const h = String(cell.v).trim();
+        if (/^(no|id)$/i.test(h)) {
+            cols.add(C);
+        }
+    }
+    return cols;
+}
+
 /**
  * Set tipe sel numerik + format standar OOXML (#,##0.00).
  * Excel Indonesia menampilkan koma desimal otomatis dari locale sistem.
@@ -61,6 +82,8 @@ function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
 
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
+    const idColumns = getExcelIdColumnIndexes(ws, range, opts);
+
     for (let R = range.s.r; R <= range.e.r; R++) {
         for (let C = range.s.c; C <= range.e.c; C++) {
             const addr = XLSX.utils.encode_cell({ r: R, c: C });
@@ -70,11 +93,17 @@ function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
             const num = parseExcelNumericCellValue(cell.v);
             if (num == null) continue;
 
-            const whole = isExcelWholeNumber(num);
-            const useInteger = mode === 'integer' || (mode === 'auto' && whole);
-
             cell.t = 'n';
             delete cell.w;
+
+            if (idColumns.has(C)) {
+                cell.v = Math.round(num);
+                cell.z = integerFmt;
+                continue;
+            }
+
+            const whole = isExcelWholeNumber(num);
+            const useInteger = mode === 'integer' || (mode === 'auto' && whole);
 
             if (useInteger) {
                 cell.v = Math.round(num);
