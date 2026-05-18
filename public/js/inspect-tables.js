@@ -23,9 +23,13 @@ function parseExcelNumericCellValue(v) {
     return Number.isFinite(n) ? n : null;
 }
 
+function isExcelWholeNumber(num) {
+    return Math.abs(num - Math.round(num)) < 1e-9;
+}
+
 function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
-    const decimalFmt = opts.decimalFormat || '0,00';
-    const integerFmt = opts.integerFormat || '0';
+    const decimalFmt = opts.decimalFormat || '#.##0,00';
+    const integerFmt = opts.integerFormat || '#,##0';
     if (!ws || !ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = range.s.r; R <= range.e.r; R++) {
@@ -38,7 +42,7 @@ function applyExcelNumericFormatToWorksheet(ws, opts = {}) {
             cell.t = 'n';
             cell.v = num;
             delete cell.w;
-            cell.z = Number.isInteger(num) ? integerFmt : decimalFmt;
+            cell.z = isExcelWholeNumber(num) ? integerFmt : decimalFmt;
         }
     }
 }
