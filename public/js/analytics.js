@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const efficiencyDrilldownCharts = document.getElementById('efficiencyDrilldownCharts');
     const efficiencyDrilldownRegularCanvas = document.getElementById('efficiencyDrilldownRegularCanvas');
     const efficiencyDrilldownOtCanvas = document.getElementById('efficiencyDrilldownOtCanvas');
+    const efficiencyDrilldownExportBtn = document.getElementById('efficiencyDrilldownExportBtn');
 
     // Determine what to show based on role
     const showCharts = ['admin', 'management', 'manager'].includes(userRole);
@@ -307,6 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let efficiencyDailyFetchAbort = null;
     let efficiencyDrilldownRegularChartInstance = null;
     let efficiencyDrilldownOtChartInstance = null;
+    let lastEfficiencyDailyPayload = null;
+    let lastEfficiencyDrilldownData = null;
+    let lastEfficiencyDrilldownMeta = null;
 
     function toggleEfficiencyDailyEmpty(show) {
         if (efficiencyDailyEmptyState) efficiencyDailyEmptyState.style.display = show ? 'flex' : 'none';
@@ -320,6 +324,120 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatEfficiencyExportPct(v) {
         if (v == null || !Number.isFinite(Number(v))) return '-';
         return Number(v).toFixed(2);
+    }
+
+    function buildEfficiencyExportLineDates(payload, period) {
+        const pairs = [];
+        (payload?.lines || []).forEach((line) => {
+            const lineName = (line.line_name != null) ? String(line.line_name).trim() : '';
+            if (!lineName) return;
+            (line.daily || []).forEach((d) => {
+                const periodLabel = (d && d.date) ? String(d.date) : '';
+                if (!periodLabel) return;
+                let dateStr = periodLabel;
+                if (period === 'yearly' && /^\d{4}-\d{2}$/.test(dateStr)) {
+                    dateStr = `${dateStr}-01`;
+                }
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+                pairs.push({ lineName, dateStr, periodLabel });
+            });
+        });
+        return pairs;
+    }
+
+    async function fetchEfficiencyDrilldownBlocks(lineDatePairs, division, onProgress) {
+        const BATCH = 5;
+        const machineDetails = [];
+        for (let i = 0; i < lineDatePairs.length; i += BATCH) {
+            const batch = lineDatePairs.slice(i, i + BATCH);
+            const results = await Promise.all(batch.map(async (item) => {
+                const params = new URLSearchParams({ line_name: item.lineName, date: item.dateStr });
+                if (division) params.set('division', division);
+                const res = await fetch(`/api/dashboard/analytics/efficiency-drilldown?${params.toString()}`, {
+                    headers: getAuthHeaders()
+                });
+                let json = {};
+                try {
+                    json = await res.json();
+                } catch (_) {
+                    json = {};
+                }
+                if (!res.ok || !json.success || !json.data) {
+                    return {
+                        line_name: item.lineName,
+                        period_label: item.periodLabel,
+                        date: item.dateStr,
+                        machines: []
+                    };
+                }
+                return {
+                    line_name: item.lineName,
+                    period_label: item.periodLabel,
+                    date: item.dateStr,
+                    machines: Array.isArray(json.data.machines) ? json.data.machines : []
+                };
+            }));
+            machineDetails.push(...results);
+            if (typeof onProgress === 'function') {
+                onProgress(Math.min(i + BATCH, lineDatePairs.length), lineDatePairs.length);
+            }
+        }
+        return machineDetails;
+    }
+
+    function writeEfficiencyExcelWorkbook({ accumulation, machineDetails, target, periodKey, division }) {
+        const p = getEfficiencyParams();
+        const dateCol = p.period === 'yearly' ? 'Bulan' : 'Tanggal';
+
+        const accumHeaders = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${Number(target).toFixed(2)}%)`];
+        const accumRows = [];
+        let accId = 1;
+        (accumulation || []).forEach((row) => {
+            accumRows.push([
+                accId++,
+                row.line_name || '-',
+                row.period_label || '-',
+                formatEfficiencyExportPct(row.oee_percent),
+                Number(target).toFixed(2)
+            ]);
+        });
+
+        const machineHeaders = [
+            'No', 'Line', dateCol, 'Nama Mesin', 'Address',
+            'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
+            'Jam OT Pagi (%)', 'Jam OT Malam (%)'
+        ];
+        const machineRows = [];
+        let machId = 1;
+        (machineDetails || []).forEach((block) => {
+            const lineName = block.line_name || '-';
+            const periodLbl = block.period_label || block.date || '-';
+            (block.machines || []).forEach((m) => {
+                machineRows.push([
+                    machId++,
+                    lineName,
+                    periodLbl,
+                    m.name || '-',
+                    m.address || '-',
+                    formatEfficiencyExportPct(m.regular?.pagi),
+                    formatEfficiencyExportPct(m.regular?.malam),
+                    formatEfficiencyExportPct(m.ot?.pagi),
+                    formatEfficiencyExportPct(m.ot?.malam)
+                ]);
+            });
+        });
+
+        if (accumRows.length === 0 && machineRows.length === 0) {
+            throw new Error('Tidak ada data efisiensi untuk diunduh.');
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([accumHeaders, ...accumRows]), 'Akumulasi');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
+
+        const divPart = (division || 'all').toString().replace(/\s+/g, '_');
+        const fileName = `efisiensi_${divPart}_${periodKey}.xlsx`.replace(/[^\w.-]+/g, '_');
+        XLSX.writeFile(wb, fileName);
     }
 
     function openModal(el) {
@@ -504,10 +622,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     efficiencyDailyChartInstance.destroy();
                     efficiencyDailyChartInstance = null;
                 }
+                lastEfficiencyDailyPayload = null;
                 toggleEfficiencyDailyEmpty(true);
                 setEfficiencyExportEnabled(false);
                 return;
             }
+
+            lastEfficiencyDailyPayload = {
+                dates,
+                lines,
+                target_efficiency_percent: target,
+                division: json.data.division || division || null
+            };
 
             toggleEfficiencyDailyEmpty(false);
             setEfficiencyExportEnabled(true);
