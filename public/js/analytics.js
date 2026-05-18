@@ -293,6 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ========== EFFICIENCY (OEE) — daily accumulation + drilldown ==========
+    const EFFICIENCY_LINE_PALETTE = [
+        '#2563eb', '#16a34a', '#f97316', '#db2777', '#7c3aed',
+        '#0ea5e9', '#22c55e', '#eab308', '#ef4444', '#64748b'
+    ];
+    const EFFICIENCY_DRILLDOWN_BAR_COLORS = {
+        regular: { pagi: '#0d9488', malam: '#c026d3' },
+        ot: { pagi: '#4f46e5', malam: '#be123c' }
+    };
+
     let efficiencyDailyChartInstance = null;
     let efficiencyDailyFetchAbort = null;
     let efficiencyDrilldownRegularChartInstance = null;
@@ -495,17 +504,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 efficiencyDailyChartInstance = null;
             }
 
-            const palette = [
-                '#2563eb', '#16a34a', '#f97316', '#db2777', '#7c3aed',
-                '#0ea5e9', '#22c55e', '#eab308', '#ef4444', '#64748b'
-            ];
-
             const datasets = lines.map((l, idx) => {
                 const daily = Array.isArray(l.daily) ? l.daily : [];
                 const byDate = {};
                 daily.forEach(d => { if (d && d.date) byDate[d.date] = d.oee_percent; });
                 const data = dates.map(ds => (byDate[ds] == null ? null : Number(byDate[ds])));
-                const color = palette[idx % palette.length];
+                const color = EFFICIENCY_LINE_PALETTE[idx % EFFICIENCY_LINE_PALETTE.length];
                 const lineLabel = (l.line_name != null && String(l.line_name).trim() !== '')
                     ? String(l.line_name).trim()
                     : `Line ${idx + 1}`;
@@ -655,13 +659,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const otPagi = machines.map(m => clampOeePct(m?.ot?.pagi));
             const otMalam = machines.map(m => clampOeePct(m?.ot?.malam));
 
-            const makeChart = (canvas, dataPagi, dataMalam) => new Chart(canvas.getContext('2d'), {
+            const makeChart = (canvas, dataPagi, dataMalam, barColors) => new Chart(canvas.getContext('2d'), {
                 type: 'bar',
                 data: {
                     labels,
                     datasets: [
-                        { label: 'Shift Pagi', data: dataPagi, backgroundColor: '#2563eb' },
-                        { label: 'Shift Malam', data: dataMalam, backgroundColor: '#16a34a' },
+                        { label: 'Shift Pagi', data: dataPagi, backgroundColor: barColors.pagi },
+                        { label: 'Shift Malam', data: dataMalam, backgroundColor: barColors.malam },
                         {
                             type: 'line',
                             label: `Target (${tgt.toFixed(2)}%)`,
@@ -706,10 +710,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (efficiencyDrilldownRegularCanvas) {
-                efficiencyDrilldownRegularChartInstance = makeChart(efficiencyDrilldownRegularCanvas, regPagi, regMalam);
+                efficiencyDrilldownRegularChartInstance = makeChart(
+                    efficiencyDrilldownRegularCanvas,
+                    regPagi,
+                    regMalam,
+                    EFFICIENCY_DRILLDOWN_BAR_COLORS.regular
+                );
             }
             if (efficiencyDrilldownOtCanvas) {
-                efficiencyDrilldownOtChartInstance = makeChart(efficiencyDrilldownOtCanvas, otPagi, otMalam);
+                efficiencyDrilldownOtChartInstance = makeChart(
+                    efficiencyDrilldownOtCanvas,
+                    otPagi,
+                    otMalam,
+                    EFFICIENCY_DRILLDOWN_BAR_COLORS.ot
+                );
             }
 
             if (efficiencyDrilldownCharts) efficiencyDrilldownCharts.style.display = 'block';
