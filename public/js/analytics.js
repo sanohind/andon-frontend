@@ -309,8 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let efficiencyDrilldownRegularChartInstance = null;
     let efficiencyDrilldownOtChartInstance = null;
     let lastEfficiencyDailyPayload = null;
-    let lastEfficiencyDrilldownData = null;
-    let lastEfficiencyDrilldownMeta = null;
+    let lastEfficiencyDrilldownPayload = null;
 
     function toggleEfficiencyDailyEmpty(show) {
         if (efficiencyDailyEmptyState) efficiencyDailyEmptyState.style.display = show ? 'flex' : 'none';
@@ -326,95 +325,51 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number(v).toFixed(2);
     }
 
-    function buildEfficiencyExportLineDates(payload, period) {
-        const pairs = [];
+    function resolveEfficiencyDrilldownDate(periodLabel, period) {
+        const label = String(periodLabel || '').trim();
+        if (!label) return null;
+        if (period === 'yearly') {
+            return /^\d{4}-\d{2}$/.test(label) ? `${label}-01` : label;
+        }
+        return /^\d{4}-\d{2}-\d{2}$/.test(label) ? label : null;
+    }
+
+    function buildEfficiencyAccumulationRows(payload) {
+        const target = payload?.target != null ? Number(payload.target) : 96;
+        const period = payload?.period || 'monthly';
+        const dateCol = period === 'yearly' ? 'Bulan' : 'Tanggal';
+        const headers = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${target.toFixed(2)}%)`];
+        const rows = [];
+        let id = 1;
         (payload?.lines || []).forEach((line) => {
-            const lineName = (line.line_name != null) ? String(line.line_name).trim() : '';
-            if (!lineName) return;
-            (line.daily || []).forEach((d) => {
-                const periodLabel = (d && d.date) ? String(d.date) : '';
-                if (!periodLabel) return;
-                let dateStr = periodLabel;
-                if (period === 'yearly' && /^\d{4}-\d{2}$/.test(dateStr)) {
-                    dateStr = `${dateStr}-01`;
-                }
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
-                pairs.push({ lineName, dateStr, periodLabel });
+            const lineName = line.line_name || '-';
+            (line.daily || []).forEach((dayRow) => {
+                rows.push([
+                    id++,
+                    lineName,
+                    dayRow.date || '-',
+                    formatEfficiencyExportPct(dayRow.oee_percent),
+                    target.toFixed(2)
+                ]);
             });
         });
-        return pairs;
+        return { headers, rows, target, dateCol };
     }
 
-    async function fetchEfficiencyDrilldownBlocks(lineDatePairs, division, onProgress) {
-        const BATCH = 5;
-        const machineDetails = [];
-        for (let i = 0; i < lineDatePairs.length; i += BATCH) {
-            const batch = lineDatePairs.slice(i, i + BATCH);
-            const results = await Promise.all(batch.map(async (item) => {
-                const params = new URLSearchParams({ line_name: item.lineName, date: item.dateStr });
-                if (division) params.set('division', division);
-                const res = await fetch(`/api/dashboard/analytics/efficiency-drilldown?${params.toString()}`, {
-                    headers: getAuthHeaders()
-                });
-                let json = {};
-                try {
-                    json = await res.json();
-                } catch (_) {
-                    json = {};
-                }
-                if (!res.ok || !json.success || !json.data) {
-                    return {
-                        line_name: item.lineName,
-                        period_label: item.periodLabel,
-                        date: item.dateStr,
-                        machines: []
-                    };
-                }
-                return {
-                    line_name: item.lineName,
-                    period_label: item.periodLabel,
-                    date: item.dateStr,
-                    machines: Array.isArray(json.data.machines) ? json.data.machines : []
-                };
-            }));
-            machineDetails.push(...results);
-            if (typeof onProgress === 'function') {
-                onProgress(Math.min(i + BATCH, lineDatePairs.length), lineDatePairs.length);
-            }
-        }
-        return machineDetails;
-    }
-
-    function writeEfficiencyExcelWorkbook({ accumulation, machineDetails, target, periodKey, division }) {
-        const p = getEfficiencyParams();
-        const dateCol = p.period === 'yearly' ? 'Bulan' : 'Tanggal';
-
-        const accumHeaders = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${Number(target).toFixed(2)}%)`];
-        const accumRows = [];
-        let accId = 1;
-        (accumulation || []).forEach((row) => {
-            accumRows.push([
-                accId++,
-                row.line_name || '-',
-                row.period_label || '-',
-                formatEfficiencyExportPct(row.oee_percent),
-                Number(target).toFixed(2)
-            ]);
-        });
-
-        const machineHeaders = [
+    function buildEfficiencyMachineRows(detailBlocks, dateCol) {
+        const headers = [
             'No', 'Line', dateCol, 'Nama Mesin', 'Address',
             'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
             'Jam OT Pagi (%)', 'Jam OT Malam (%)'
         ];
-        const machineRows = [];
-        let machId = 1;
-        (machineDetails || []).forEach((block) => {
+        const rows = [];
+        let id = 1;
+        (detailBlocks || []).forEach((block) => {
             const lineName = block.line_name || '-';
             const periodLbl = block.period_label || block.date || '-';
             (block.machines || []).forEach((m) => {
-                machineRows.push([
-                    machId++,
+                rows.push([
+                    id++,
                     lineName,
                     periodLbl,
                     m.name || '-',
@@ -426,18 +381,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 ]);
             });
         });
+        return { headers, rows };
+    }
 
-        if (accumRows.length === 0 && machineRows.length === 0) {
-            throw new Error('Tidak ada data efisiensi untuk diunduh.');
-        }
-
+    function downloadEfficiencyWorkbook({ accumHeaders, accumRows, machineHeaders, machineRows, fileName }) {
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([accumHeaders, ...accumRows]), 'Akumulasi');
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
-
-        const divPart = (division || 'all').toString().replace(/\s+/g, '_');
-        const fileName = `efisiensi_${divPart}_${periodKey}.xlsx`.replace(/[^\w.-]+/g, '_');
+        if (accumRows.length > 0) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([accumHeaders, ...accumRows]), 'Akumulasi');
+        }
+        if (machineRows.length > 0) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
+        }
+        if (!wb.SheetNames.length) return false;
         XLSX.writeFile(wb, fileName);
+        return true;
+    }
+
+    async function fetchEfficiencyMachineDetailsBatched(payload) {
+        const period = payload.period || 'monthly';
+        const division = payload.division || getSelectedDivision();
+        const tasks = [];
+        (payload.lines || []).forEach((line) => {
+            const lineName = String(line.line_name || '').trim();
+            if (!lineName) return;
+            (line.daily || []).forEach((dayRow) => {
+                const periodLabel = dayRow?.date;
+                const drilldownDate = resolveEfficiencyDrilldownDate(periodLabel, period);
+                if (!drilldownDate) return;
+                tasks.push({ lineName, periodLabel, drilldownDate });
+            });
+        });
+
+        const detailBlocks = [];
+        const concurrency = 4;
+        for (let i = 0; i < tasks.length; i += concurrency) {
+            const chunk = tasks.slice(i, i + concurrency);
+            const chunkResults = await Promise.all(chunk.map(async (task) => {
+                try {
+                    const params = new URLSearchParams({
+                        line_name: task.lineName,
+                        date: task.drilldownDate
+                    });
+                    if (division) params.set('division', division);
+                    const res = await fetch(
+                        `/api/dashboard/analytics/efficiency-drilldown?${params.toString()}`,
+                        { headers: getAuthHeaders() }
+                    );
+                    const json = await res.json();
+                    if (!res.ok || !json.success || !json.data) return null;
+                    return {
+                        line_name: task.lineName,
+                        period_label: task.periodLabel,
+                        date: task.drilldownDate,
+                        machines: Array.isArray(json.data.machines) ? json.data.machines : []
+                    };
+                } catch (_) {
+                    return null;
+                }
+            }));
+            chunkResults.filter(Boolean).forEach((block) => detailBlocks.push(block));
+        }
+        return detailBlocks;
     }
 
     function openModal(el) {
@@ -618,11 +622,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const hasAnyLine = dates.length > 0 && lines.length > 0;
             if (!hasAnyLine) {
+                lastEfficiencyDailyPayload = null;
                 if (efficiencyDailyChartInstance) {
                     efficiencyDailyChartInstance.destroy();
                     efficiencyDailyChartInstance = null;
                 }
-                lastEfficiencyDailyPayload = null;
                 toggleEfficiencyDailyEmpty(true);
                 setEfficiencyExportEnabled(false);
                 return;
@@ -631,7 +635,10 @@ document.addEventListener('DOMContentLoaded', () => {
             lastEfficiencyDailyPayload = {
                 dates,
                 lines,
-                target_efficiency_percent: target,
+                target,
+                period: p.period,
+                month: p.month,
+                year: p.year,
                 division: json.data.division || division || null
             };
 
@@ -750,6 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             if (e.name === 'AbortError') return;
             console.error('Fetch efficiency daily:', e);
+            lastEfficiencyDailyPayload = null;
             toggleEfficiencyDailyEmpty(true);
             setEfficiencyExportEnabled(false);
         }
@@ -760,96 +768,104 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Library Excel tidak tersedia. Muat ulang halaman.');
             return;
         }
+        if (!lastEfficiencyDailyPayload) {
+            alert('Muat data efisiensi terlebih dahulu.');
+            return;
+        }
+
         const btn = efficiencyDailyExportBtn;
-        const prevDisabled = btn ? btn.disabled : false;
+        const prevLabel = btn ? btn.innerHTML : '';
         if (btn) {
             btn.disabled = true;
-            btn.dataset.exporting = '1';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyiapkan...';
         }
+
         try {
-            const division = getSelectedDivision();
-            const p = getEfficiencyParams();
-            const params = new URLSearchParams({ period: p.period });
-            if (p.period === 'yearly') params.set('year', p.year);
-            if (p.period === 'monthly') params.set('month', p.month);
-            if (division) params.set('division', division);
+            const payload = lastEfficiencyDailyPayload;
+            const { headers: accumHeaders, rows: accumRows, dateCol } = buildEfficiencyAccumulationRows(payload);
+            const periodKey = payload.period === 'yearly' ? (payload.year || '-') : (payload.month || '-');
+            const divPart = (payload.division || getSelectedDivision() || 'all').toString().replace(/\s+/g, '_');
+            const fileName = `efisiensi_${divPart}_${periodKey}.xlsx`.replace(/[^\w.-]+/g, '_');
 
-            const res = await fetch(`/api/dashboard/analytics/efficiency-export?${params.toString()}`, {
-                headers: getAuthHeaders()
-            });
-            const json = await res.json();
-            if (!res.ok || !json.success || !json.data) {
-                throw new Error(json.message || 'Gagal memuat data export efisiensi');
-            }
-
-            const data = json.data;
-            const target = data.target_efficiency_percent != null ? Number(data.target_efficiency_percent) : 96;
-            const periodKey = p.period === 'yearly' ? (p.year || '-') : (p.month || '-');
-            const dateCol = p.period === 'yearly' ? 'Bulan' : 'Tanggal';
-
-            const accumHeaders = ['No', 'Line', dateCol, 'OEE Akumulasi (%)', `Target (${target.toFixed(2)}%)`];
-            const accumRows = [];
-            let accId = 1;
-            (data.accumulation || []).forEach((row) => {
-                accumRows.push([
-                    accId++,
-                    row.line_name || '-',
-                    row.period_label || '-',
-                    formatEfficiencyExportPct(row.oee_percent),
-                    target.toFixed(2)
-                ]);
-            });
-
-            const machineHeaders = [
-                'No', 'Line', dateCol, 'Nama Mesin', 'Address',
-                'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
-                'Jam OT Pagi (%)', 'Jam OT Malam (%)'
-            ];
-            const machineRows = [];
-            let machId = 1;
-            (data.machine_details || []).forEach((block) => {
-                const lineName = block.line_name || '-';
-                const periodLbl = block.period_label || block.date || '-';
-                (block.machines || []).forEach((m) => {
-                    machineRows.push([
-                        machId++,
-                        lineName,
-                        periodLbl,
-                        m.name || '-',
-                        m.address || '-',
-                        formatEfficiencyExportPct(m.regular?.pagi),
-                        formatEfficiencyExportPct(m.regular?.malam),
-                        formatEfficiencyExportPct(m.ot?.pagi),
-                        formatEfficiencyExportPct(m.ot?.malam)
-                    ]);
-                });
-            });
+            const detailBlocks = await fetchEfficiencyMachineDetailsBatched(payload);
+            const { headers: machineHeaders, rows: machineRows } = buildEfficiencyMachineRows(detailBlocks, dateCol);
 
             if (accumRows.length === 0 && machineRows.length === 0) {
                 alert('Tidak ada data efisiensi untuk diunduh.');
                 return;
             }
 
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([accumHeaders, ...accumRows]), 'Akumulasi');
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([machineHeaders, ...machineRows]), 'Per Mesin');
-
-            const divPart = (data.division || division || 'all').toString().replace(/\s+/g, '_');
-            const fileName = `efisiensi_${divPart}_${periodKey}.xlsx`.replace(/[^\w.-]+/g, '_');
-            XLSX.writeFile(wb, fileName);
+            const ok = downloadEfficiencyWorkbook({
+                accumHeaders,
+                accumRows,
+                machineHeaders,
+                machineRows,
+                fileName
+            });
+            if (!ok) {
+                alert('Tidak ada data efisiensi untuk diunduh.');
+            }
         } catch (e) {
             console.error('Export efficiency excel:', e);
             alert(e.message || 'Gagal mengunduh Excel efisiensi.');
         } finally {
             if (btn) {
-                delete btn.dataset.exporting;
-                btn.disabled = prevDisabled;
+                btn.innerHTML = prevLabel;
+                setEfficiencyExportEnabled(!!lastEfficiencyDailyPayload);
             }
         }
     }
 
+    function exportEfficiencyDrilldownExcel() {
+        if (typeof XLSX === 'undefined') {
+            alert('Library Excel tidak tersedia. Muat ulang halaman.');
+            return;
+        }
+        const meta = lastEfficiencyDrilldownPayload;
+        if (!meta || !Array.isArray(meta.machines) || meta.machines.length === 0) {
+            alert('Tidak ada data efisiensi detail untuk diunduh.');
+            return;
+        }
+
+        const target = meta.target != null ? Number(meta.target) : 96;
+        const headers = [
+            'No', 'Nama Mesin', 'Address', 'Tanggal', 'Line',
+            'Jam Reguler Pagi (%)', 'Jam Reguler Malam (%)',
+            'Jam OT Pagi (%)', 'Jam OT Malam (%)',
+            `Target (${target.toFixed(2)}%)`
+        ];
+        const rows = [];
+        let id = 1;
+        meta.machines.forEach((m) => {
+            rows.push([
+                id++,
+                m.name || '-',
+                m.address || '-',
+                meta.dateStr || '-',
+                meta.lineName || '-',
+                formatEfficiencyExportPct(m.regular?.pagi),
+                formatEfficiencyExportPct(m.regular?.malam),
+                formatEfficiencyExportPct(m.ot?.pagi),
+                formatEfficiencyExportPct(m.ot?.malam),
+                target.toFixed(2)
+            ]);
+        });
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), 'Detail Mesin');
+        const safeLine = (meta.lineName || 'line').toString().replace(/\s+/g, '_');
+        const safeDate = (meta.dateStr || '').toString().replace(/[^\d-]/g, '');
+        XLSX.writeFile(wb, `efisiensi_detail_${safeLine}_${safeDate}.xlsx`);
+    }
+
     async function openEfficiencyDrilldown({ division, lineName, dateStr }) {
         if (!efficiencyDrilldownModal) return;
+
+        lastEfficiencyDrilldownPayload = null;
+        if (efficiencyDrilldownExportBtn) {
+            efficiencyDrilldownExportBtn.style.display = 'none';
+            efficiencyDrilldownExportBtn.disabled = true;
+        }
 
         if (efficiencyDrilldownTitle) {
             efficiencyDrilldownTitle.textContent = `Efisiensi Detail — ${lineName} (${dateStr})`;
@@ -877,6 +893,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (machines.length === 0) {
                 if (efficiencyDrilldownEmpty) efficiencyDrilldownEmpty.style.display = 'flex';
                 return;
+            }
+
+            lastEfficiencyDrilldownPayload = {
+                lineName,
+                dateStr,
+                division: division || null,
+                machines,
+                target: tgt
+            };
+            if (efficiencyDrilldownExportBtn) {
+                efficiencyDrilldownExportBtn.style.display = 'inline-flex';
+                efficiencyDrilldownExportBtn.disabled = false;
             }
 
             const labels = machines.map(m => m.name || m.address);
@@ -2611,6 +2639,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (efficiencyDailyExportBtn) {
         efficiencyDailyExportBtn.addEventListener('click', exportEfficiencyExcel);
+    }
+    if (efficiencyDrilldownExportBtn) {
+        efficiencyDrilldownExportBtn.addEventListener('click', exportEfficiencyDrilldownExcel);
     }
 
     if (quantityPeriodSelect) {
