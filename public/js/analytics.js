@@ -417,6 +417,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let efficiencyDailyChartInstance = null;
     let efficiencyDailyFetchAbort = null;
+    /** Mencegah respons fetch lama menimpa chart saat ada beberapa permintaan berturut-tut (race). */
+    let efficiencyFetchGeneration = 0;
     let efficiencyDrilldownRegularChartInstance = null;
     let efficiencyDrilldownOtChartInstance = null;
     let lastEfficiencyDailyPayload = null;
@@ -711,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         efficiencyDailyFetchAbort = new AbortController();
         const { signal } = efficiencyDailyFetchAbort;
+        const myGen = ++efficiencyFetchGeneration;
 
         const division = getSelectedDivision();
         const p = getEfficiencyParams();
@@ -725,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 signal
             });
             const json = await res.json();
+            if (myGen !== efficiencyFetchGeneration) return;
             if (!res.ok || !json.success || !json.data) throw new Error(json.message || 'Gagal memuat efisiensi');
 
             const dates = Array.isArray(json.data.dates) ? json.data.dates : [];
@@ -867,6 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (e) {
             if (e.name === 'AbortError') return;
+            if (myGen !== efficiencyFetchGeneration) return;
             console.error('Fetch efficiency daily:', e);
             lastEfficiencyDailyPayload = null;
             toggleEfficiencyDailyEmpty(true);
