@@ -1214,6 +1214,48 @@ app.get('/api/dashboard/analytics/oee-hourly', requireAuthAPI, async (req, res) 
   }
 });
 
+app.get('/api/dashboard/analytics/quantity-five-minute', requireAuthAPI, async (req, res) => {
+  try {
+    const { date, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/quantity-five-minute`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { date, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching quantity five-minute:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch quantity five-minute',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/dashboard/analytics/oee-five-minute', requireAuthAPI, async (req, res) => {
+  try {
+    const { date, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/oee-five-minute`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { date, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching OEE five-minute:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch OEE five-minute',
+      error: error.message
+    });
+  }
+});
+
 // Endpoint untuk analytics umum (harus didefinisikan setelah route yang lebih spesifik)
 app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
   try {

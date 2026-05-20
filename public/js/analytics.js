@@ -1927,6 +1927,182 @@ document.addEventListener('DOMContentLoaded', () => {
     let quantityHourlyChartInstance = null;
     let lastQuantityHourlyData = null;
     let lastQuantityHourlyMeta = null;
+    let lastQuantityModalContext = null;
+
+    function setQuantityGranularityButtons(mode) {
+        const wrap = document.getElementById('quantityHourlyGranularityWrap');
+        if (!wrap) return;
+        wrap.querySelectorAll('.quantity-gran-btn').forEach((b) => {
+            const isJam = b.getAttribute('data-qty-gran') === 'hour';
+            const active = (mode === 'hour' && isJam) || (mode === 'five' && !isJam);
+            b.classList.toggle('btn-primary', active);
+            b.classList.toggle('btn-outline-secondary', !active);
+        });
+    }
+
+    function setOeeGranularityButtons(mode) {
+        const wrap = document.getElementById('oeeHourlyGranularityWrap');
+        if (!wrap) return;
+        wrap.querySelectorAll('.oee-gran-btn').forEach((b) => {
+            const isJam = b.getAttribute('data-oee-gran') === 'hour';
+            const active = (mode === 'hour' && isJam) || (mode === 'five' && !isJam);
+            b.classList.toggle('btn-primary', active);
+            b.classList.toggle('btn-outline-secondary', !active);
+        });
+    }
+
+    async function loadQuantityFiveMinuteView() {
+        const ctx = lastQuantityModalContext;
+        if (!ctx || ctx.options.period !== 'daily') return;
+
+        const { machineName, machineAddress, options } = ctx;
+        const date = options.date;
+        const shift = options.shift;
+
+        const titleEl = document.getElementById('quantityHourlyModalTitle');
+        const emptyEl = document.getElementById('quantityHourlyChartEmpty');
+        const loadingEl = document.getElementById('quantityHourlyChartLoading');
+        const wrapperEl = document.getElementById('quantityHourlyChartWrapper');
+        const canvas = document.getElementById('quantityHourlyChartCanvas');
+        const exportBtn = document.getElementById('quantityHourlyExportBtn');
+        const noteEl = document.getElementById('quantityHourlyNote');
+        if (!canvas || !emptyEl || !loadingEl || !wrapperEl) return;
+
+        setQuantityGranularityButtons('five');
+        if (titleEl) titleEl.textContent = `Quantity per 5 Menit — ${machineName}`;
+
+        if (quantityHourlyChartInstance) {
+            quantityHourlyChartInstance.destroy();
+            quantityHourlyChartInstance = null;
+        }
+
+        emptyEl.style.display = 'none';
+        wrapperEl.style.display = 'none';
+        loadingEl.style.display = 'block';
+
+        try {
+            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+            const res = await fetch(`/api/dashboard/analytics/quantity-five-minute?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            loadingEl.style.display = 'none';
+
+            if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                const p = emptyEl.querySelector('p');
+                if (p) {
+                    p.textContent = 'Tidak ada snapshot per 5 menit untuk mesin ini pada tanggal dan shift yang dipilih. Pastikan scheduler artisan production-oee:five-minute-snapshot berjalan.';
+                }
+                emptyEl.style.display = 'flex';
+                wrapperEl.style.display = 'none';
+                if (exportBtn) exportBtn.style.display = 'none';
+                return;
+            }
+
+            lastQuantityHourlyData = json.data;
+            lastQuantityHourlyMeta = {
+                machineName,
+                machineAddress,
+                period: 'daily',
+                date,
+                month: options.month,
+                year: options.year,
+                shift,
+                target: Number(options.targetPerShift) || 0,
+                timeResolution: 'five'
+            };
+
+            const labels = json.data.map(d => d.label || d.snapshot_at);
+            const quantities = json.data.map(d => Number(d.quantity ?? 0));
+            const idealQuantities = json.data.map(d => Number(d.ideal_quantity ?? 0));
+
+            wrapperEl.style.display = 'block';
+            const ctx2d = canvas.getContext('2d');
+            quantityHourlyChartInstance = new Chart(ctx2d, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Ideal Qty',
+                            data: idealQuantities,
+                            borderColor: '#22c55e',
+                            backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            fill: false,
+                            tension: 0.2,
+                            pointRadius: 2,
+                            pointBackgroundColor: '#22c55e',
+                            segment: { borderColor: '#22c55e' }
+                        },
+                        {
+                            label: 'Aktual (pcs)',
+                            data: quantities,
+                            borderColor: '#4c6ef5',
+                            backgroundColor: 'rgba(76, 110, 245, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.2,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#4c6ef5',
+                            segment: { borderColor: '#4c6ef5' }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label(c) {
+                                    const label = c.dataset.label || '';
+                                    const value = formatQuantityValue(c.parsed.y);
+                                    return `${label}: ${value}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Waktu' },
+                            ticks: { maxRotation: 45, minRotation: 0 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'pcs (kumulatif)' },
+                            ticks: { callback: v => formatQuantityValue(v) }
+                        }
+                    }
+                }
+            });
+
+            if (exportBtn) {
+                exportBtn.style.display = 'inline-flex';
+                exportBtn.onclick = () => exportQuantityHourlyExcel();
+            }
+
+            if (noteEl && options.lineName) {
+                const noteText = getCachedMachineNote({ dateStr: date, shift, machineName, lineName: options.lineName });
+                const trimmed = (noteText == null) ? '' : String(noteText).replace(/\s+/g, ' ').trim();
+                if (trimmed !== '') {
+                    noteEl.innerHTML = `<strong>Catatan:</strong> ${escapeHtml(trimmed)}`;
+                    noteEl.style.display = 'block';
+                } else {
+                    noteEl.style.display = 'none';
+                    noteEl.textContent = '';
+                }
+            }
+        } catch (err) {
+            console.error('Fetch quantity five-minute:', err);
+            loadingEl.style.display = 'none';
+            emptyEl.style.display = 'flex';
+            const p = emptyEl.querySelector('p');
+            if (p) p.textContent = 'Gagal memuat data per 5 menit. Coba lagi.';
+            if (exportBtn) exportBtn.style.display = 'none';
+        }
+    }
 
     async function openQuantityHourlyModal(machineName, machineAddress, options = {}) {
         const modal = document.getElementById('quantityHourlyModal');
@@ -1937,6 +2113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = document.getElementById('quantityHourlyChartCanvas');
         const exportBtn = document.getElementById('quantityHourlyExportBtn');
         const noteEl = document.getElementById('quantityHourlyNote');
+        const granWrap = document.getElementById('quantityHourlyGranularityWrap');
         if (!modal || !titleEl || !canvas) return;
 
         const period = options.period || 'daily';
@@ -1946,6 +2123,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const year = String(options.year || moment().format('YYYY'));
         const targetPerShift = Number(options.targetPerShift) || 0;
         const lineName = options.lineName || '';
+        if (granWrap) granWrap.style.display = 'none';
+        lastQuantityModalContext = {
+            machineName,
+            machineAddress,
+            options: {
+                period,
+                shift,
+                date,
+                month,
+                year,
+                targetPerShift,
+                lineName
+            }
+        };
         const periodTitleMap = {
             daily: 'Quantity per Jam',
             monthly: 'Quantity per Hari',
@@ -2020,7 +2211,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 month,
                 year,
                 shift,
-                target: Number(targetPerShift) || 0
+                target: Number(targetPerShift) || 0,
+                timeResolution: period === 'daily' ? 'hour' : null
             };
 
             const granularity = json.granularity || (period === 'daily' ? 'hourly' : (period === 'monthly' ? 'daily' : 'monthly'));
@@ -2030,6 +2222,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const otEnabled = !!json.ot_enabled;
 
             wrapperEl.style.display = 'block';
+            if (period === 'daily' && granWrap && granularity === 'hourly') {
+                granWrap.style.display = 'flex';
+                setQuantityGranularityButtons('hour');
+            }
             const ctx = canvas.getContext('2d');
             let hourlyDatasets = [];
             /** Aktual OT ditumpuk di atas Aktual Reguler (Chart.js stack), Ideal stack terpisah. */
@@ -2202,6 +2398,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeQuantityHourlyModal() {
         const modal = document.getElementById('quantityHourlyModal');
         const noteEl = document.getElementById('quantityHourlyNote');
+        const granWrap = document.getElementById('quantityHourlyGranularityWrap');
+        if (granWrap) granWrap.style.display = 'none';
         if (quantityHourlyChartInstance) {
             quantityHourlyChartInstance.destroy();
             quantityHourlyChartInstance = null;
@@ -2225,9 +2423,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     })();
 
+    (function initQuantityHourlyGranularity() {
+        const wrap = document.getElementById('quantityHourlyGranularityWrap');
+        if (!wrap) return;
+        wrap.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-qty-gran]');
+            if (!btn) return;
+            const g = btn.getAttribute('data-qty-gran');
+            if (!lastQuantityModalContext) return;
+            if (g === 'hour') {
+                const { machineName, machineAddress, options } = lastQuantityModalContext;
+                openQuantityHourlyModal(machineName, machineAddress, options);
+            } else {
+                loadQuantityFiveMinuteView();
+            }
+        });
+    })();
+
     function exportQuantityHourlyExcel() {
         if (!lastQuantityHourlyData || !Array.isArray(lastQuantityHourlyData) || !lastQuantityHourlyData.length) {
-            alert('Tidak ada data hourly untuk diunduh.');
+            alert('Tidak ada data untuk diunduh.');
             return;
         }
         const meta = lastQuantityHourlyMeta || {};
@@ -2239,7 +2454,10 @@ document.addEventListener('DOMContentLoaded', () => {
             : (period === 'monthly' ? (meta.month || '-') : (meta.year || '-'));
         const target = Number(meta.target) || 0;
         const periodLabel = period === 'daily' ? 'Harian' : (period === 'monthly' ? 'Bulanan' : 'Tahunan');
-        const pointHeader = period === 'daily' ? 'Timestamp' : (period === 'monthly' ? 'Hari' : 'Bulan');
+        const fiveMin = meta.timeResolution === 'five';
+        const pointHeader = period === 'daily'
+            ? (fiveMin ? 'Waktu (≈5 mnt)' : 'Timestamp')
+            : (period === 'monthly' ? 'Hari' : 'Bulan');
 
         const rows = [];
         let id = 1;
@@ -2257,18 +2475,19 @@ document.addEventListener('DOMContentLoaded', () => {
             ]);
         });
         if (!rows.length) {
-            alert('Tidak ada data hourly untuk diunduh.');
+            alert('Tidak ada data untuk diunduh.');
             return;
         }
         const headers = period === 'daily'
-            ? ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty (kumulatif)', 'Quantity Aktual (kumulatif)']
+            ? ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', fiveMin ? 'Ideal Qty (pcs kumulatif)' : 'Ideal Qty (kumulatif)', fiveMin ? 'Aktual (pcs kumulatif)' : 'Quantity Aktual (kumulatif)']
             : ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Quantity Target', 'Ideal Qty', 'Quantity Aktual'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         applyExcelNumericFormatToWorksheet(ws, { mode: 'integer' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'QuantityDrilldown');
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
-        const fileName = `quantity_${period}_${safeName}_${ts}_${shiftLabel}.xlsx`;
+        const resSuffix = meta.timeResolution === 'five' ? '5m' : 'hourly';
+        const fileName = `quantity_${period}_${resSuffix}_${safeName}_${ts}_${shiftLabel}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 
@@ -2276,6 +2495,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let oeeHourlyStackChartInstance = null;
     let lastOeeHourlyData = null;
     let lastOeeHourlyMeta = null;
+    let lastOeeModalContext = null;
 
     function destroyOeeHourlyCharts() {
         if (oeeHourlyLineChartInstance) {
@@ -2286,6 +2506,144 @@ document.addEventListener('DOMContentLoaded', () => {
             oeeHourlyStackChartInstance.destroy();
             oeeHourlyStackChartInstance = null;
         }
+    }
+
+    /**
+     * @param {HTMLCanvasElement} lineCanvas
+     * @param {HTMLCanvasElement} stackCanvas
+     * @param {string[]} labels
+     * @param {Array<{oee_percent?: number|null, availability_percent?: number|null, performance_percent?: number|null, quality_percent?: number|null}>} rows
+     * @param {string|null} xAxisTitle
+     */
+    function mountOeeHourlyCharts(lineCanvas, stackCanvas, labels, rows, xAxisTitle) {
+        destroyOeeHourlyCharts();
+        const oeeVals = rows.map((d) => (d.oee_percent != null ? Number(d.oee_percent) : null));
+        const aVals = rows.map((d) => (d.availability_percent != null ? Number(d.availability_percent) : null));
+        const pVals = rows.map((d) => (d.performance_percent != null ? Number(d.performance_percent) : null));
+        const qVals = rows.map((d) => (d.quality_percent != null ? Number(d.quality_percent) : null));
+
+        oeeHourlyLineChartInstance = new Chart(lineCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'OEE (%)',
+                    data: oeeVals,
+                    borderColor: '#ca8a04',
+                    backgroundColor: 'rgba(202, 138, 4, 0.12)',
+                    borderWidth: 2,
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#ca8a04',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label(c) {
+                                const v = c.parsed.y;
+                                if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
+                                return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: { display: Boolean(xAxisTitle), text: xAxisTitle || '' },
+                        ticks: { maxRotation: 45, minRotation: 0 }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: 110,
+                        ticks: { callback: (v) => `${v}%` }
+                    }
+                }
+            }
+        });
+
+        oeeHourlyStackChartInstance = new Chart(stackCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Availability (%)',
+                        data: aVals,
+                        borderColor: 'rgba(34, 197, 94, 1)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        spanGaps: true,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(34, 197, 94, 1)',
+                        fill: false
+                    },
+                    {
+                        label: 'Performance (%)',
+                        data: pVals,
+                        borderColor: 'rgba(76, 110, 245, 1)',
+                        backgroundColor: 'rgba(76, 110, 245, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        spanGaps: true,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(76, 110, 245, 1)',
+                        fill: false
+                    },
+                    {
+                        label: 'Quality (%)',
+                        data: qVals,
+                        borderColor: 'rgba(148, 163, 184, 1)',
+                        backgroundColor: 'rgba(148, 163, 184, 0.08)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        spanGaps: true,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(148, 163, 184, 1)',
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label(c) {
+                                const v = c.parsed.y;
+                                if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
+                                return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: { display: Boolean(xAxisTitle), text: xAxisTitle || '' },
+                        ticks: { maxRotation: 45, minRotation: 0 }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: 110,
+                        title: { display: true, text: '(%)' },
+                        ticks: { callback: (v) => `${v}%` }
+                    }
+                }
+            }
+        });
     }
 
     function exportLineOeeExcel(lineName, machines, oeeMap, params, filterInfo) {
@@ -2324,6 +2682,71 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.writeFile(wb, fileName);
     }
 
+    async function loadOeeFiveMinuteView() {
+        const ctx = lastOeeModalContext;
+        if (!ctx) return;
+        const { machineName, machineAddress, date, shift } = ctx;
+
+        const titleEl = document.getElementById('oeeHourlyModalTitle');
+        const emptyEl = document.getElementById('oeeHourlyChartEmpty');
+        const loadingEl = document.getElementById('oeeHourlyChartLoading');
+        const chartsWrap = document.getElementById('oeeHourlyChartsWrap');
+        const lineCanvas = document.getElementById('oeeHourlyLineCanvas');
+        const stackCanvas = document.getElementById('oeeHourlyStackCanvas');
+        const exportBtn = document.getElementById('oeeHourlyExportBtn');
+        if (!lineCanvas || !stackCanvas) return;
+
+        setOeeGranularityButtons('five');
+        if (titleEl) titleEl.textContent = `OEE per 5 Menit — ${machineName}`;
+        destroyOeeHourlyCharts();
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (chartsWrap) chartsWrap.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (exportBtn) {
+            exportBtn.style.display = 'none';
+            exportBtn.onclick = null;
+        }
+
+        try {
+            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+            const res = await fetch(`/api/dashboard/analytics/oee-five-minute?${params.toString()}`, { headers: getAuthHeaders() });
+            const json = await res.json();
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                if (emptyEl) {
+                    emptyEl.style.display = 'flex';
+                    const p = emptyEl.querySelector('p');
+                    if (p) {
+                        p.textContent = 'Tidak ada snapshot OEE per 5 menit untuk mesin ini pada tanggal dan shift yang dipilih. Pastikan scheduler production-oee:five-minute-snapshot berjalan.';
+                    }
+                }
+                if (chartsWrap) chartsWrap.style.display = 'none';
+                return;
+            }
+
+            lastOeeHourlyData = json.data;
+            lastOeeHourlyMeta = { machineName, machineAddress, date, shift, timeResolution: 'five' };
+
+            const labels = json.data.map((d) => d.snapshot_at);
+            if (chartsWrap) chartsWrap.style.display = 'flex';
+            mountOeeHourlyCharts(lineCanvas, stackCanvas, labels, json.data, 'Waktu');
+
+            if (exportBtn) {
+                exportBtn.style.display = 'inline-flex';
+                exportBtn.onclick = () => exportOeeHourlyExcel();
+            }
+        } catch (err) {
+            console.error('Fetch OEE five-minute:', err);
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (emptyEl) {
+                emptyEl.style.display = 'flex';
+                const p = emptyEl.querySelector('p');
+                if (p) p.textContent = 'Gagal memuat data OEE per 5 menit.';
+            }
+        }
+    }
+
     async function openOeeHourlyModal(machineName, machineAddress, date, shift) {
         const modal = document.getElementById('oeeHourlyModal');
         const titleEl = document.getElementById('oeeHourlyModalTitle');
@@ -2336,6 +2759,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!modal || !titleEl || !lineCanvas || !stackCanvas) return;
 
         destroyOeeHourlyCharts();
+
+        const oeeGranWrap = document.getElementById('oeeHourlyGranularityWrap');
+        if (oeeGranWrap) {
+            oeeGranWrap.style.display = 'flex';
+            setOeeGranularityButtons('hour');
+        }
+        lastOeeModalContext = { machineName, machineAddress, date, shift };
 
         titleEl.textContent = `OEE per Jam — ${machineName}`;
         if (emptyEl) emptyEl.style.display = 'none';
@@ -2366,138 +2796,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             lastOeeHourlyData = json.data;
-            lastOeeHourlyMeta = { machineName, machineAddress, date, shift };
+            lastOeeHourlyMeta = { machineName, machineAddress, date, shift, timeResolution: 'hour' };
 
             const labels = json.data.map((d) => d.snapshot_at);
-            const oeeVals = json.data.map((d) => (d.oee_percent != null ? Number(d.oee_percent) : null));
-            const aVals = json.data.map((d) => (d.availability_percent != null ? Number(d.availability_percent) : null));
-            const pVals = json.data.map((d) => (d.performance_percent != null ? Number(d.performance_percent) : null));
-            const qVals = json.data.map((d) => (d.quality_percent != null ? Number(d.quality_percent) : null));
-
             if (chartsWrap) chartsWrap.style.display = 'flex';
-
-            oeeHourlyLineChartInstance = new Chart(lineCanvas.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'OEE (%)',
-                        data: oeeVals,
-                        borderColor: '#ca8a04',
-                        backgroundColor: 'rgba(202, 138, 4, 0.12)',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        spanGaps: true,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#ca8a04',
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: true, position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                label(c) {
-                                    const v = c.parsed.y;
-                                    if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
-                                    return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            display: true,
-                            title: { display: false },
-                            ticks: { maxRotation: 45, minRotation: 0 }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            suggestedMax: 110,
-                            ticks: { callback: (v) => `${v}%` }
-                        }
-                    }
-                }
-            });
-
-            oeeHourlyStackChartInstance = new Chart(stackCanvas.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Availability (%)',
-                            data: aVals,
-                            borderColor: 'rgba(34, 197, 94, 1)',
-                            backgroundColor: 'rgba(34, 197, 94, 0.08)',
-                            borderWidth: 2,
-                            tension: 0.2,
-                            spanGaps: true,
-                            pointRadius: 3,
-                            pointBackgroundColor: 'rgba(34, 197, 94, 1)',
-                            fill: false
-                        },
-                        {
-                            label: 'Performance (%)',
-                            data: pVals,
-                            borderColor: 'rgba(76, 110, 245, 1)',
-                            backgroundColor: 'rgba(76, 110, 245, 0.08)',
-                            borderWidth: 2,
-                            tension: 0.2,
-                            spanGaps: true,
-                            pointRadius: 3,
-                            pointBackgroundColor: 'rgba(76, 110, 245, 1)',
-                            fill: false
-                        },
-                        {
-                            label: 'Quality (%)',
-                            data: qVals,
-                            borderColor: 'rgba(148, 163, 184, 1)',
-                            backgroundColor: 'rgba(148, 163, 184, 0.08)',
-                            borderWidth: 2,
-                            tension: 0.2,
-                            spanGaps: true,
-                            pointRadius: 3,
-                            pointBackgroundColor: 'rgba(148, 163, 184, 1)',
-                            fill: false
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: true, position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                label(c) {
-                                    const v = c.parsed.y;
-                                    if (v == null || Number.isNaN(v)) return `${c.dataset.label}: —`;
-                                    return `${c.dataset.label}: ${Number(v).toFixed(2)}%`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            display: true,
-                            title: { display: false },
-                            ticks: { maxRotation: 45, minRotation: 0 }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            suggestedMax: 110,
-                            title: { display: true, text: '(%)' },
-                            ticks: { callback: (v) => `${v}%` }
-                        }
-                    }
-                }
-            });
+            mountOeeHourlyCharts(lineCanvas, stackCanvas, labels, json.data, null);
 
             if (exportBtn) {
                 exportBtn.style.display = 'inline-flex';
@@ -2516,6 +2819,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeOeeHourlyModal() {
         const modal = document.getElementById('oeeHourlyModal');
+        const oeeGranWrap = document.getElementById('oeeHourlyGranularityWrap');
+        if (oeeGranWrap) oeeGranWrap.style.display = 'none';
         destroyOeeHourlyCharts();
         if (modal) {
             modal.classList.remove('show');
@@ -2532,6 +2837,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     })();
 
+    (function initOeeHourlyGranularity() {
+        const wrap = document.getElementById('oeeHourlyGranularityWrap');
+        if (!wrap) return;
+        wrap.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-oee-gran]');
+            if (!btn) return;
+            const g = btn.getAttribute('data-oee-gran');
+            if (!lastOeeModalContext) return;
+            if (g === 'hour') {
+                const { machineName, machineAddress, date, shift } = lastOeeModalContext;
+                openOeeHourlyModal(machineName, machineAddress, date, shift);
+            } else {
+                loadOeeFiveMinuteView();
+            }
+        });
+    })();
+
     (function initEfficiencyDrilldownModal() {
         if (efficiencyDrilldownClose) {
             efficiencyDrilldownClose.addEventListener('click', () => closeModal(efficiencyDrilldownModal));
@@ -2545,7 +2867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function exportOeeHourlyExcel() {
         if (!lastOeeHourlyData || !Array.isArray(lastOeeHourlyData) || !lastOeeHourlyData.length) {
-            alert('Tidak ada data OEE per jam untuk diunduh.');
+            alert('Tidak ada data OEE untuk diunduh.');
             return;
         }
         const meta = lastOeeHourlyMeta || {};
@@ -2568,9 +2890,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'OEEHourly');
+        const sheetName = meta.timeResolution === 'five' ? 'OEE5Min' : 'OEEHourly';
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
-        const fileName = `oee_hourly_${safeName}_${meta.date || ''}_${shiftLabel}.xlsx`;
+        const resSuffix = meta.timeResolution === 'five' ? '5m' : 'hourly';
+        const fileName = `oee_${resSuffix}_${safeName}_${meta.date || ''}_${shiftLabel}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 

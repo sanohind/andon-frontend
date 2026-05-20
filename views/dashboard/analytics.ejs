@@ -407,14 +407,18 @@
     <!-- Modal: OEE — line per jam & line A/P/Q per jam (terpisah) -->
     <div class="modal" id="oeeHourlyModal" style="display: none;">
         <div class="modal-content quantity-hourly-modal-content oee-hourly-modal-content">
-            <div class="modal-header">
-                <h3 id="oeeHourlyModalTitle">OEE per Jam</h3>
+            <div class="modal-header" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+                <h3 id="oeeHourlyModalTitle" style="flex: 1; min-width: 140px;">OEE per Jam</h3>
+                <div id="oeeHourlyGranularityWrap" class="analytics-granularity-btns" style="display: none;">
+                    <button type="button" class="btn btn-sm btn-primary oee-gran-btn" data-oee-gran="hour">Jam</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary oee-gran-btn" data-oee-gran="five">menit</button>
+                </div>
                 <button type="button" class="modal-close" id="oeeHourlyModalClose" aria-label="Tutup">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="oeeHourlyChartEmpty" class="chart-empty-state" style="display: none;">
                     <i class="fas fa-chart-line"></i>
-                    <p>Belum ada data OEE per jam untuk mesin ini (jalankan scheduler <code>oee:hourly-snapshot</code> atau gunakan fallback harian pada chart utama).</p>
+                    <p>Belum ada data OEE per jam untuk mesin ini (jalankan scheduler <code>hourly:production-oee-snapshot</code> / <code>oee:hourly-snapshot</code>, atau data per 5 menit: <code>production-oee:five-minute-snapshot</code>). Untuk chart utama tersedia fallback harian.</p>
                 </div>
                 <div id="oeeHourlyChartLoading" style="display: none; text-align: center; padding: 2rem;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
@@ -485,14 +489,18 @@
     <!-- Modal: Quantity per Jam (Line Chart per Mesin) -->
     <div class="modal" id="quantityHourlyModal" style="display: none;">
         <div class="modal-content quantity-hourly-modal-content">
-            <div class="modal-header">
-                <h3 id="quantityHourlyModalTitle">Quantity per Jam</h3>
+            <div class="modal-header" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+                <h3 id="quantityHourlyModalTitle" style="flex: 1; min-width: 140px;">Quantity per Jam</h3>
+                <div id="quantityHourlyGranularityWrap" class="analytics-granularity-btns" style="display: none;">
+                    <button type="button" class="btn btn-sm btn-primary quantity-gran-btn" data-qty-gran="hour">Jam</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary quantity-gran-btn" data-qty-gran="five">menit</button>
+                </div>
                 <button type="button" class="modal-close" id="quantityHourlyModalClose" aria-label="Tutup">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="quantityHourlyChartEmpty" class="chart-empty-state" style="display: none;">
                     <i class="fas fa-chart-line"></i>
-                    <p>Tidak ada data hourly untuk mesin ini pada tanggal dan shift yang dipilih.</p>
+                    <p>Tidak ada data untuk mesin ini pada tanggal dan shift yang dipilih. Untuk deret per jam pastikan <code>hourly:production-oee-snapshot</code> berjalan; untuk per 5 menit gunakan <code>production-oee:five-minute-snapshot</code>.</p>
                 </div>
                 <div id="quantityHourlyChartLoading" style="display: none; text-align: center; padding: 2rem;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
