@@ -1571,16 +1571,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         onClick: (evt, activeEls) => {
                             if (!activeEls.length) return;
                             const period = (quantityPeriodSelect && quantityPeriodSelect.value) || 'daily';
-                            if (period !== 'daily') {
-                                alert('Pilih periode Harian untuk melihat grafik OEE per jam.');
-                                return;
-                            }
                             const dataIndex = activeEls[0].index;
                             if (!machines || !machines[dataIndex]) return;
                             const machine = machines[dataIndex];
-                            const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
                             const shift = (quantityShiftSelect && quantityShiftSelect.value) || 'pagi';
-                            openOeeHourlyModal(machine.name, machine.address, date, shift);
+                            const date = (quantityDateInput && quantityDateInput.value) || moment().format('YYYY-MM-DD');
+                            const month = (quantityMonthInput && quantityMonthInput.value) || moment().format('YYYY-MM');
+                            const year = String((quantityYearInput && quantityYearInput.value) || moment().format('YYYY'));
+                            if (period === 'daily' || period === 'monthly') {
+                                openOeeHourlyModal(machine.name, machine.address, {
+                                    period,
+                                    date,
+                                    month,
+                                    year,
+                                    shift
+                                });
+                                return;
+                            }
+                            alert('Drill-down OEE per hari tersedia untuk periode Bulanan. Untuk periode Tahunan, gunakan periode Bulanan atau Harian.');
                         },
                         plugins: {
                             legend: { display: true, position: 'top' },
@@ -2747,7 +2755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function openOeeHourlyModal(machineName, machineAddress, date, shift) {
+    async function openOeeHourlyModal(machineName, machineAddress, options = {}) {
         const modal = document.getElementById('oeeHourlyModal');
         const titleEl = document.getElementById('oeeHourlyModalTitle');
         const emptyEl = document.getElementById('oeeHourlyChartEmpty');
@@ -2758,17 +2766,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const exportBtn = document.getElementById('oeeHourlyExportBtn');
         if (!modal || !titleEl || !lineCanvas || !stackCanvas) return;
 
+        const period = options.period || 'daily';
+        const shift = options.shift || 'pagi';
+        const date = options.date || moment().format('YYYY-MM-DD');
+        const month = options.month || moment().format('YYYY-MM');
+        const year = String(options.year || moment().format('YYYY'));
+
         destroyOeeHourlyCharts();
 
         const oeeGranWrap = document.getElementById('oeeHourlyGranularityWrap');
         if (oeeGranWrap) {
-            oeeGranWrap.style.display = 'flex';
-            setOeeGranularityButtons('hour');
+            oeeGranWrap.style.display = period === 'daily' ? 'flex' : 'none';
+            if (period === 'daily') setOeeGranularityButtons('hour');
         }
-        lastOeeModalContext = { machineName, machineAddress, date, shift };
+        lastOeeModalContext = { machineName, machineAddress, period, date, month, year, shift };
 
-        titleEl.textContent = `OEE per Jam — ${machineName}`;
-        if (emptyEl) emptyEl.style.display = 'none';
+        const periodTitleMap = {
+            daily: 'OEE per Jam',
+            monthly: 'OEE per Hari'
+        };
+        const periodEmptyMap = {
+            daily: 'Tidak ada data OEE per jam untuk mesin ini pada tanggal dan shift yang dipilih.',
+            monthly: 'Tidak ada data OEE harian untuk mesin ini pada bulan dan shift yang dipilih.'
+        };
+
+        titleEl.textContent = `${periodTitleMap[period] || periodTitleMap.daily} — ${machineName}`;
+        if (emptyEl) {
+            emptyEl.style.display = 'none';
+            const emptyMsg = emptyEl.querySelector('p');
+            if (emptyMsg) emptyMsg.textContent = periodEmptyMap[period] || periodEmptyMap.daily;
+        }
         if (chartsWrap) chartsWrap.style.display = 'none';
         if (loadingEl) loadingEl.style.display = 'block';
         modal.style.display = 'flex';
@@ -2784,35 +2811,75 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
-            const res = await fetch(`/api/dashboard/analytics/oee-hourly?${params.toString()}`, { headers: getAuthHeaders() });
-            const json = await res.json();
-            if (loadingEl) loadingEl.style.display = 'none';
+            let rows = [];
+            let labels = [];
+            let xAxisTitle = null;
+            let meta = { machineName, machineAddress, period, date, month, year, shift };
 
-            if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
-                if (emptyEl) emptyEl.style.display = 'flex';
-                if (chartsWrap) chartsWrap.style.display = 'none';
-                return;
+            if (period === 'monthly') {
+                const params = new URLSearchParams({
+                    period: 'monthly',
+                    shift,
+                    machine_address: machineAddress,
+                    month
+                });
+                const res = await fetch(`/api/dashboard/analytics/oee-drilldown?${params.toString()}`, { headers: getAuthHeaders() });
+                const json = await res.json();
+                if (loadingEl) loadingEl.style.display = 'none';
+
+                if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                    if (emptyEl) emptyEl.style.display = 'flex';
+                    if (chartsWrap) chartsWrap.style.display = 'none';
+                    return;
+                }
+
+                const hasAny = json.data.some((d) => d.oee_percent != null);
+                if (!hasAny) {
+                    if (emptyEl) emptyEl.style.display = 'flex';
+                    if (chartsWrap) chartsWrap.style.display = 'none';
+                    return;
+                }
+
+                rows = json.data;
+                labels = json.data.map((d) => d.label || d.snapshot_at);
+                xAxisTitle = 'Hari';
+                meta.timeResolution = 'daily';
+            } else {
+                const params = new URLSearchParams({ date, shift, machine_address: machineAddress });
+                const res = await fetch(`/api/dashboard/analytics/oee-hourly?${params.toString()}`, { headers: getAuthHeaders() });
+                const json = await res.json();
+                if (loadingEl) loadingEl.style.display = 'none';
+
+                if (!json.success || !Array.isArray(json.data) || json.data.length === 0) {
+                    if (emptyEl) emptyEl.style.display = 'flex';
+                    if (chartsWrap) chartsWrap.style.display = 'none';
+                    return;
+                }
+
+                rows = json.data;
+                labels = json.data.map((d) => d.snapshot_at);
+                meta.timeResolution = 'hour';
             }
 
-            lastOeeHourlyData = json.data;
-            lastOeeHourlyMeta = { machineName, machineAddress, date, shift, timeResolution: 'hour' };
+            lastOeeHourlyData = rows;
+            lastOeeHourlyMeta = meta;
 
-            const labels = json.data.map((d) => d.snapshot_at);
             if (chartsWrap) chartsWrap.style.display = 'flex';
-            mountOeeHourlyCharts(lineCanvas, stackCanvas, labels, json.data, null);
+            mountOeeHourlyCharts(lineCanvas, stackCanvas, labels, rows, xAxisTitle);
 
             if (exportBtn) {
                 exportBtn.style.display = 'inline-flex';
                 exportBtn.onclick = () => exportOeeHourlyExcel();
             }
         } catch (err) {
-            console.error('Fetch OEE hourly:', err);
+            console.error('Fetch OEE drilldown:', err);
             if (loadingEl) loadingEl.style.display = 'none';
             if (emptyEl) {
                 emptyEl.style.display = 'flex';
                 const p = emptyEl.querySelector('p');
-                if (p) p.textContent = 'Gagal memuat data OEE per jam.';
+                if (p) p.textContent = period === 'monthly'
+                    ? 'Gagal memuat data OEE harian.'
+                    : 'Gagal memuat data OEE per jam.';
             }
         }
     }
@@ -2846,8 +2913,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const g = btn.getAttribute('data-oee-gran');
             if (!lastOeeModalContext) return;
             if (g === 'hour') {
-                const { machineName, machineAddress, date, shift } = lastOeeModalContext;
-                openOeeHourlyModal(machineName, machineAddress, date, shift);
+                const { machineName, machineAddress, period, date, month, year, shift } = lastOeeModalContext;
+                openOeeHourlyModal(machineName, machineAddress, { period, date, month, year, shift });
             } else {
                 loadOeeFiveMinuteView();
             }
@@ -2871,7 +2938,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const meta = lastOeeHourlyMeta || {};
+        const period = meta.period || 'daily';
         const shiftLabel = meta.shift === 'malam' ? 'Malam' : 'Pagi';
+        const periodLabel = period === 'monthly' ? 'Bulanan' : 'Harian';
+        const pointHeader = period === 'monthly' ? 'Hari' : 'Waktu';
+        const ts = period === 'monthly' ? (meta.month || '-') : (meta.date || '-');
         const rows = [];
         let id = 1;
         lastOeeHourlyData.forEach((d) => {
@@ -2879,6 +2950,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 id++,
                 meta.machineName || '-',
                 shiftLabel,
+                periodLabel,
+                d.label || d.snapshot_at || '-',
                 d.snapshot_at || '-',
                 d.oee_percent != null ? excelNumericValue(d.oee_percent) : '-',
                 d.availability_percent != null ? excelNumericValue(d.availability_percent) : '-',
@@ -2886,15 +2959,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 d.quality_percent != null ? excelNumericValue(d.quality_percent) : excelNumericValue(100)
             ]);
         });
-        const headers = ['ID', 'Nama Mesin', 'Shift', 'Waktu', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
+        const headers = ['ID', 'Nama Mesin', 'Shift', 'Periode', pointHeader, 'Tanggal', 'OEE (%)', 'Availability (%)', 'Performance (%)', 'Quality (%)'];
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         applyExcelNumericFormatToWorksheet(ws, { mode: 'decimal' });
         const wb = XLSX.utils.book_new();
-        const sheetName = meta.timeResolution === 'five' ? 'OEE5Min' : 'OEEHourly';
+        const sheetName = meta.timeResolution === 'five'
+            ? 'OEE5Min'
+            : (meta.timeResolution === 'daily' ? 'OEEDaily' : 'OEEHourly');
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
         const safeName = (meta.machineName || 'mesin').toString().replace(/\s+/g, '_');
-        const resSuffix = meta.timeResolution === 'five' ? '5m' : 'hourly';
-        const fileName = `oee_${resSuffix}_${safeName}_${meta.date || ''}_${shiftLabel}.xlsx`;
+        const resSuffix = meta.timeResolution === 'five' ? '5m' : (meta.timeResolution === 'daily' ? 'daily' : 'hourly');
+        const fileName = `oee_${resSuffix}_${safeName}_${ts}_${shiftLabel}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 

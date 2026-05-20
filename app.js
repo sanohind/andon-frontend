@@ -1214,6 +1214,27 @@ app.get('/api/dashboard/analytics/oee-hourly', requireAuthAPI, async (req, res) 
   }
 });
 
+app.get('/api/dashboard/analytics/oee-drilldown', requireAuthAPI, async (req, res) => {
+  try {
+    const { period, month, shift, machine_address } = req.query;
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/oee-drilldown`, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json'
+      },
+      params: { period, month, shift, machine_address }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching OEE drilldown:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || {
+      success: false,
+      message: 'Failed to fetch OEE drilldown',
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/dashboard/analytics/quantity-five-minute', requireAuthAPI, async (req, res) => {
   try {
     const { date, shift, machine_address } = req.query;
