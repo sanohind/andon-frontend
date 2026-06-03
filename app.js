@@ -2143,17 +2143,32 @@ app.get('/api/machine-status/:name', requireAuthAPI, async (req, res) => {
 
 // Part Configurations proxy routes
 app.get('/api/part-configurations', requireAuthAPI, async (req, res) => {
-  if (!['admin', 'management', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
+  if (!['admin', 'management', 'manager', 'leader'].includes(req.user.role)) return res.status(403).json({ message: 'Akses Ditolak' });
   try {
     const headers = {};
     if (process.env.LARAVEL_API_TOKEN) {
       headers['Authorization'] = `Bearer ${process.env.LARAVEL_API_TOKEN}`;
     }
+    const params = { ...req.query };
+    if (req.user.role === 'leader') {
+      if (!req.user.line_name) {
+        return res.json({ success: true, data: [] });
+      }
+      params.line_name = req.user.line_name;
+    }
     const response = await axios.get(`${LARAVEL_API_BASE}/part-configurations`, {
-      params: req.query,
+      params,
       headers
     });
-    res.json(response.data);
+    let payload = response.data;
+    if (req.user.role === 'leader' && req.user.line_name && payload && Array.isArray(payload.data)) {
+      const leaderLine = String(req.user.line_name || '').trim();
+      payload = {
+        ...payload,
+        data: payload.data.filter((p) => String(p.line_name || '').trim() === leaderLine),
+      };
+    }
+    res.json(payload);
   } catch (error) {
     res.status(error.response?.status || 500).json(error.response?.data || { message: 'Failed to fetch part configurations' });
   }

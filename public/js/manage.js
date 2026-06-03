@@ -44,8 +44,13 @@
     const isManagementViewOnly = userRole === 'management';
     const leaderLineName = (() => {
         const el = document.getElementById('userData');
-        return el ? (el.getAttribute('data-line') || '') : '';
+        return el ? String(el.getAttribute('data-line') || '').trim() : '';
     })();
+
+    function lineMatchesLeader(lineName) {
+        if (!leaderLineName) return true;
+        return String(lineName || '').trim() === leaderLineName;
+    }
 
     // ========== MACHINE ==========
     let allMachines = [];
@@ -447,11 +452,15 @@
 
     async function loadSchedulePartOptions() {
         try {
-            const res = await fetch(`${API}/part-configurations`, { credentials: 'include', headers: getAuthHeaders() });
+            const partUrl = (userRole === 'leader' && leaderLineName)
+                ? `${API}/part-configurations?line_name=${encodeURIComponent(leaderLineName)}`
+                : `${API}/part-configurations`;
+            const res = await fetch(partUrl, { credentials: 'include', headers: getAuthHeaders() });
+            if (!res.ok) return;
             const json = await res.json();
             let list = Array.isArray(json) ? json : (json.data || []);
             if (userRole === 'leader' && leaderLineName) {
-                list = list.filter(p => String(p.line_name || '') === String(leaderLineName));
+                list = list.filter(p => lineMatchesLeader(p.line_name));
             }
             schedulePartSource = list;
             const nums = [...new Set(list.map(p => String(p.part_number || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -529,7 +538,7 @@
             scheduleMachineSource = Array.isArray(data) ? data : (data.data || data) || [];
             let list = scheduleMachineSource.slice();
             if (userRole === 'leader' && leaderLineName) {
-                list = list.filter(m => String(m.line_name || m.line || '') === String(leaderLineName));
+                list = list.filter(m => lineMatchesLeader(m.line_name || m.line));
             }
             const selectedAdd = scheduleSelectedMachineAddresses.slice();
             const selectedWeek = selectedChecklistValues('weekScheduleMachineChecklist');
@@ -576,7 +585,7 @@
         }
         let list = scheduleMachineSource.slice();
         if (userRole === 'leader' && leaderLineName) {
-            list = list.filter(m => String(m.line_name || m.line || '') === String(leaderLineName));
+            list = list.filter(m => lineMatchesLeader(m.line_name || m.line));
         }
         scheduleMachinePickerDraft = scheduleSelectedMachineAddresses.slice();
         renderMachineChecklist('scheduleMachineModalChecklist', list, scheduleMachinePickerDraft);
