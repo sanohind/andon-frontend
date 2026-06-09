@@ -202,10 +202,6 @@
                                 <input type="date" id="scheduleDate" required>
                             </div>
                             <div class="form-group">
-                                <label>Part Number</label>
-                                <select id="schedulePartNumber" required><option value="">Pilih Part Number</option></select>
-                            </div>
-                            <div class="form-group">
                                 <label>Mesin</label>
                                 <button type="button" id="openScheduleMachinePicker" class="machine-picker-input">
                                     <span id="scheduleMachineSummary">Pilih Mesin</span>
@@ -256,12 +252,6 @@
                                 <input type="date" id="filterScheduleDate" class="filter-input">
                             </div>
                             <div class="filter-group">
-                                <label><i class="fas fa-barcode"></i> Part Number</label>
-                                <select id="filterSchedulePartNumber" class="filter-select">
-                                    <option value="">Semua Part Number</option>
-                                </select>
-                            </div>
-                            <div class="filter-group">
                                 <label><i class="fas fa-sitemap"></i> Line</label>
                                 <select id="filterScheduleLine" class="filter-select">
                                     <option value="">Semua Line</option>
@@ -303,7 +293,6 @@
                         <thead>
                             <tr>
                                 <th>Tanggal</th>
-                                <th>Part Number</th>
                                 <th>Line</th>
                                 <th>Mesin</th>
                                 <th>Shift</th>
@@ -622,10 +611,6 @@
                 <div class="form-group">
                     <label>Tanggal Mulai</label>
                     <input type="date" id="weekScheduleStartDate" required>
-                </div>
-                <div class="form-group">
-                    <label>Part Number</label>
-                    <select id="weekSchedulePartNumber" required><option value="">Pilih Part Number</option></select>
                 </div>
                 <div class="form-group">
                     <label>Mesin</label>

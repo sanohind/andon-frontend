@@ -406,10 +406,9 @@
     // --- SCHEDULE ---
     let schedulePage = 1;
     let schedulePageSize = 10;
-    let scheduleAppliedFilter = { schedule_date: '', part_number: '', line_name: '', machine_address: '', shift: '' };
-    let scheduleDraftFilter = { schedule_date: '', part_number: '', line_name: '', machine_address: '', shift: '' };
+    let scheduleAppliedFilter = { schedule_date: '', line_name: '', machine_address: '', shift: '' };
+    let scheduleDraftFilter = { schedule_date: '', line_name: '', machine_address: '', shift: '' };
     let scheduleMachineSource = [];
-    let schedulePartSource = [];
     let scheduleSelectedMachineAddresses = [];
     let scheduleMachinePickerDraft = [];
 
@@ -450,48 +449,13 @@
         return String(otDurationType);
     }
 
-    async function loadSchedulePartOptions() {
-        try {
-            const partUrl = (userRole === 'leader' && leaderLineName)
-                ? `${API}/part-configurations?line_name=${encodeURIComponent(leaderLineName)}`
-                : `${API}/part-configurations`;
-            const res = await fetch(partUrl, { credentials: 'include', headers: getAuthHeaders() });
-            if (!res.ok) return;
-            const json = await res.json();
-            let list = Array.isArray(json) ? json : (json.data || []);
-            if (userRole === 'leader' && leaderLineName) {
-                list = list.filter(p => lineMatchesLeader(p.line_name));
-            }
-            schedulePartSource = list;
-            const nums = [...new Set(list.map(p => String(p.part_number || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-            const lines = [...new Set(list.map(p => String(p.line_name || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-            const addSel = document.getElementById('schedulePartNumber');
-            const weekSel = document.getElementById('weekSchedulePartNumber');
-            const filterNum = document.getElementById('filterSchedulePartNumber');
-            const filterLine = document.getElementById('filterScheduleLine');
-            [addSel, weekSel].forEach(sel => {
-                if (!sel) return;
-                const cur = sel.value;
-                sel.innerHTML = '<option value="">Pilih Part Number</option>' + nums.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-                sel.value = nums.includes(cur) ? cur : '';
-            });
-            if (filterNum) {
-                const cur = scheduleDraftFilter.part_number || '';
-                filterNum.innerHTML = '<option value="">Semua Part Number</option>' + nums.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-                filterNum.value = nums.includes(cur) ? cur : '';
-            }
-            if (filterLine) {
-                const cur = scheduleDraftFilter.line_name || '';
-                filterLine.innerHTML = '<option value="">Semua Line</option>' + lines.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-                filterLine.value = lines.includes(cur) ? cur : '';
-            }
-        } catch (e) {}
-    }
-
-    function getLineByPartNumber(partNumber) {
-        if (!partNumber) return '';
-        const item = schedulePartSource.find(p => String(p.part_number || '') === String(partNumber));
-        return item ? String(item.line_name || '') : '';
+    function populateScheduleLineFilter(machines) {
+        const filterLine = document.getElementById('filterScheduleLine');
+        if (!filterLine) return;
+        const lines = [...new Set((machines || []).map(m => String(m.line_name || m.line || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const cur = scheduleDraftFilter.line_name || '';
+        filterLine.innerHTML = '<option value="">Semua Line</option>' + lines.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+        filterLine.value = lines.includes(cur) ? cur : '';
     }
 
     function selectedChecklistValues(containerId) {
@@ -507,7 +471,7 @@
         if (!box) return;
         const selectedSet = new Set((selected || []).map(String));
         if (!machines.length) {
-            box.innerHTML = '<div class="machine-checklist-empty">Tidak ada mesin untuk part/line ini.</div>';
+            box.innerHTML = '<div class="machine-checklist-empty">Tidak ada mesin tersedia.</div>';
             return;
         }
         box.innerHTML = machines.map((m, idx) => {
@@ -574,15 +538,11 @@
                     filterSel.appendChild(opt);
                 });
             }
+            populateScheduleLineFilter(list);
         } catch (e) {}
     }
 
     function openScheduleMachinePicker() {
-        const partNumber = document.getElementById('schedulePartNumber')?.value || '';
-        if (!partNumber) {
-            alert('Pilih Part Number terlebih dahulu.');
-            return;
-        }
         let list = scheduleMachineSource.slice();
         if (userRole === 'leader' && leaderLineName) {
             list = list.filter(m => lineMatchesLeader(m.line_name || m.line));
@@ -600,7 +560,6 @@
         try {
             const params = new URLSearchParams({ page: schedulePage, per_page: schedulePageSize });
             if (scheduleAppliedFilter.schedule_date) params.set('schedule_date', scheduleAppliedFilter.schedule_date);
-            if (scheduleAppliedFilter.part_number) params.set('part_number', scheduleAppliedFilter.part_number);
             if (scheduleAppliedFilter.line_name) params.set('line_name', scheduleAppliedFilter.line_name);
             if (scheduleAppliedFilter.machine_address) params.set('machine_address', scheduleAppliedFilter.machine_address);
             if (scheduleAppliedFilter.shift) params.set('shift', scheduleAppliedFilter.shift);
@@ -627,7 +586,6 @@
                 return `
                 <tr data-id="${s.id}">
                     <td>${s.schedule_date}</td>
-                    <td>${escapeHtml(s.part_number || '-')}</td>
                     <td>${escapeHtml(s.line_name || '-')}</td>
                     <td>${escapeHtml(s.machine_name || s.machine_address)}</td>
                     <td>${shiftLabel}</td>
@@ -639,7 +597,7 @@
                     ${scheduleActionCell}
                 </tr>
                 `;
-            }).join('') || '<tr><td colspan="11">Tidak ada data</td></tr>';
+            }).join('') || '<tr><td colspan="10">Tidak ada data</td></tr>';
 
             if (infoEl) infoEl.textContent = `Menampilkan ${list.length} dari ${total} schedule`;
             if (ctrlEl) {
@@ -661,7 +619,7 @@
                 });
             }
         } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="11">Error: ' + escapeHtml(e.message) + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10">Error: ' + escapeHtml(e.message) + '</td></tr>';
         }
     }
 
@@ -1116,11 +1074,6 @@
                 const cur = document.getElementById('scheduleOtDuration')?.value || '';
                 fillScheduleOtDurationSelect('scheduleOtDuration', this.value || 'pagi', cur);
             });
-            document.getElementById('schedulePartNumber')?.addEventListener('change', function () {
-                scheduleSelectedMachineAddresses = [];
-                updateScheduleMachineSummary();
-                loadScheduleMachines();
-            });
             document.getElementById('openScheduleMachinePicker')?.addEventListener('click', openScheduleMachinePicker);
             document.getElementById('closeScheduleMachinePicker')?.addEventListener('click', () => closeModal('scheduleMachinePickerModal'));
             document.getElementById('cancelScheduleMachinePicker')?.addEventListener('click', () => closeModal('scheduleMachinePickerModal'));
@@ -1144,7 +1097,6 @@
                 const otEl = document.getElementById('scheduleOtEnabled');
                 const payload = {
                     schedule_date: document.getElementById('scheduleDate').value,
-                    part_number: document.getElementById('schedulePartNumber').value,
                     machine_addresses: scheduleSelectedMachineAddresses.slice(),
                     shift: document.getElementById('scheduleShift').value || 'pagi',
                     target_quantity: parseInt(document.getElementById('scheduleTarget').value, 10),
@@ -1152,7 +1104,7 @@
                     ot_duration_type: otEl && otEl.checked ? (document.getElementById('scheduleOtDuration').value || null) : null,
                     target_ot: otEl && otEl.checked && document.getElementById('scheduleTargetOt').value ? parseInt(document.getElementById('scheduleTargetOt').value, 10) : null
                 };
-                if (!payload.schedule_date || !payload.part_number || !payload.machine_addresses.length) return alert('Isi Tanggal, Part Number, dan pilih minimal satu Mesin.');
+                if (!payload.schedule_date || !payload.machine_addresses.length) return alert('Isi Tanggal dan pilih minimal satu Mesin.');
                 try {
                     const res = await fetch(`${API}/machine-schedules`, { method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(payload) });
                     if (!res.ok) throw new Error((await res.json()).message || 'Gagal');
@@ -1213,9 +1165,6 @@
         document.getElementById('filterScheduleDate')?.addEventListener('change', function () {
             scheduleDraftFilter.schedule_date = this.value || '';
         });
-        document.getElementById('filterSchedulePartNumber')?.addEventListener('change', function () {
-            scheduleDraftFilter.part_number = this.value || '';
-        });
         document.getElementById('filterScheduleLine')?.addEventListener('change', function () {
             scheduleDraftFilter.line_name = this.value || '';
         });
@@ -1233,15 +1182,14 @@
         document.getElementById('clearScheduleFilters')?.addEventListener('click', () => {
             // Always clear inputs, but only reload table if filters were already applied
             const hadApplied =
-                !!(scheduleAppliedFilter.schedule_date || scheduleAppliedFilter.part_number || scheduleAppliedFilter.line_name || scheduleAppliedFilter.machine_address || scheduleAppliedFilter.shift);
-            scheduleDraftFilter = { schedule_date: '', part_number: '', line_name: '', machine_address: '', shift: '' };
+                !!(scheduleAppliedFilter.schedule_date || scheduleAppliedFilter.line_name || scheduleAppliedFilter.machine_address || scheduleAppliedFilter.shift);
+            scheduleDraftFilter = { schedule_date: '', line_name: '', machine_address: '', shift: '' };
             document.getElementById('filterScheduleDate').value = '';
-            document.getElementById('filterSchedulePartNumber').value = '';
             document.getElementById('filterScheduleLine').value = '';
             document.getElementById('filterScheduleMachine').value = '';
             document.getElementById('filterScheduleShift').value = '';
             if (hadApplied) {
-                scheduleAppliedFilter = { schedule_date: '', part_number: '', line_name: '', machine_address: '', shift: '' };
+                scheduleAppliedFilter = { schedule_date: '', line_name: '', machine_address: '', shift: '' };
                 schedulePage = 1;
                 loadSchedules();
             }
@@ -1353,25 +1301,20 @@
         // Add week schedule modal
         const openWeekBtn = document.getElementById('openAddWeekSchedule');
         openWeekBtn?.addEventListener('click', async () => {
-            await loadSchedulePartOptions();
             await loadScheduleMachines();
             document.getElementById('addWeekScheduleModal')?.classList.add('show');
         });
         document.getElementById('closeAddWeekSchedule')?.addEventListener('click', () => closeModal('addWeekScheduleModal'));
         document.getElementById('cancelAddWeekSchedule')?.addEventListener('click', () => closeModal('addWeekScheduleModal'));
-        document.getElementById('weekSchedulePartNumber')?.addEventListener('change', function () {
-            loadScheduleMachines();
-        });
         document.getElementById('addWeekScheduleForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const payload = {
                 start_date: document.getElementById('weekScheduleStartDate').value,
-                part_number: document.getElementById('weekSchedulePartNumber').value,
                 machine_addresses: selectedChecklistValues('weekScheduleMachineChecklist'),
                 shift: document.getElementById('weekScheduleShift')?.value || 'pagi',
                 target_quantity: parseInt(document.getElementById('weekScheduleTarget').value, 10)
             };
-            if (!payload.start_date || !payload.part_number || !payload.machine_addresses.length) return alert('Isi Tanggal Mulai, Part Number, dan pilih minimal satu Mesin.');
+            if (!payload.start_date || !payload.machine_addresses.length) return alert('Isi Tanggal Mulai dan pilih minimal satu Mesin.');
             if (Number.isNaN(payload.target_quantity)) return alert('Target tidak valid.');
             try {
                 const res = await fetch(`${API}/machine-schedules/week`, {
@@ -1467,14 +1410,13 @@
         } else if (currentSection === 'schedule') {
             scheduleDraftFilter = {
                 schedule_date: document.getElementById('filterScheduleDate')?.value || '',
-                part_number: document.getElementById('filterSchedulePartNumber')?.value || '',
                 line_name: document.getElementById('filterScheduleLine')?.value || '',
                 machine_address: document.getElementById('filterScheduleMachine')?.value || '',
                 shift: document.getElementById('filterScheduleShift')?.value || ''
             };
             scheduleAppliedFilter = { ...scheduleDraftFilter };
             updateScheduleMachineSummary();
-            loadSchedulePartOptions().then(() => loadScheduleMachines());
+            loadScheduleMachines();
             loadSchedules();
         } else if (currentSection === 'part') {
             const fn = document.getElementById('filterPartPartNumber');
