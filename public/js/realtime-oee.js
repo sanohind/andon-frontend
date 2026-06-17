@@ -355,25 +355,31 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const COLS_PER_BLOCK = 8;
+
     const metricsRows = [
-      { key: 'partnumber', label: 'Part Number' },
-      { key: 'ideal', label: 'Ideal-Qty' },
-      { key: 'total', label: 'Total Product' },
-      { key: 'ng', label: 'No-Good' },
-      { key: 'runtime', label: 'Run-Time' },
+      { key: 'partnumber',  label: 'Part Number' },
+      { key: 'ideal',       label: 'Ideal-Qty' },
+      { key: 'total',       label: 'Total Product' },
+      { key: 'ng',          label: 'No-Good' },
+      { key: 'runtime',     label: 'Run-Time' },
       { key: 'runninghour', label: 'Running Hour' },
-      { key: 'oee', label: 'OEE' },
-      { key: 'target', label: 'Target' },
-      { key: 'targetot', label: 'Target OT' }
+      { key: 'oee',         label: 'OEE' },
+      { key: 'target',      label: 'Target' },
+      { key: 'targetot',    label: 'Target OT' }
     ];
 
     const blocksHtml = blocks.map((block, blockIdx) => {
-      const cols = block.length;
-      const templateCols = `160px repeat(${cols}, 1fr)`;
+      const realCount   = block.length;
+      const emptyCount  = COLS_PER_BLOCK - realCount;
+      const totalCols   = COLS_PER_BLOCK;
+
+      const templateCols = `160px repeat(${totalCols}, 1fr)`;
       const cells = [];
 
       // Header row
       cells.push(`<div class="rt-cell rt-header rt-label"></div>`);
+
       block.forEach((m) => {
         cells.push(`
           <div class="rt-cell rt-header rt-header-centered" data-addr="${m.address}">
@@ -383,19 +389,40 @@ document.addEventListener('DOMContentLoaded', () => {
         `);
       });
 
+      for (let p = 0; p < emptyCount; p++) {
+        cells.push(`<div class="rt-cell rt-header - rt-placeholder"></div>`);
+      }  
+
       // Metric rows
       metricsRows.forEach((r) => {
         cells.push(`<div class="rt-cell rt-label">${r.label}</div>`);
         block.forEach((m) => {
           const id = `b${blockIdx}_${r.key}_${encodeURIComponent(m.address)}`;
-          const cls = `rt-value ${r.key === 'ideal' ? 'ideal' : r.key === 'total' ? 'total' : r.key === 'ng' ? 'ng' : r.key === 'oee' ? 'oee' : r.key === 'target' ? 'target' : r.key === 'targetot' ? 'target-ot' : r.key === 'partnumber' ? 'part-number' : 'time'}`;
+          const cls = `rt-value ${
+            r.key === 'ideal'       ? 'ideal'       : 
+            r.key === 'total'       ? 'total'       : 
+            r.key === 'ng'          ? 'ng'          : 
+            r.key === 'oee'         ? 'oee'         : 
+            r.key === 'target'      ? 'target'      : 
+            r.key === 'targetot'    ? 'target-ot'   : 
+            r.key === 'partnumber'  ? 'part-number' : 'time'
+          }`;
+
           if (r.key === 'oee') {
             const tipId = `${id}_tip`;
-            cells.push(`<div class="rt-cell rt-oee-cell" tabindex="0"><span class="${cls}" id="${id}">-</span><div class="rt-oee-tooltip" id="${tipId}" role="tooltip"></div></div>`);
+            cells.push(`
+              <div class="rt-cell rt-oee-cell" tabindex="0">
+              <span class="${cls}" id="${id}">-</span>
+              <div class="rt-oee-tooltip" id="${tipId}" role="tooltip"></div></div>
+              `);
           } else {
             cells.push(`<div class="rt-cell"><span class="${cls}" id="${id}">-</span></div>`);
           }
         });
+
+        for (let p = 0; p < emptyCount; p++){
+          cells.push(`<div class="rt-cell rt-placeholder"></div>`);
+        }
       });
 
       return `

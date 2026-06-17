@@ -296,4 +296,13 @@
     color: #f9fafb;
     border-color: rgba(250, 204, 21, 0.5);
 }
-
+.rt-cell.rt-placeholder {
+    background: var(--rt-cell-bg);
+    opacity: 0.35;
+    cursor:default;
+    pointer-events: none;
+}
+.rt-oee-public-body .rt-cell.rt-placeholder {
+    background: var(--carbon-black-2);
+    opacity: 0.25;
+}
