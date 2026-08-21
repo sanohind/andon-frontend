@@ -460,18 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Ambil runtime dan running hour langsung dari backend (sudah dihitung di server)
       // Backend menghitung runtime dan running hour dengan state management di database,
       // sehingga tidak terpengaruh localStorage atau browser refresh.
-      let runtimeSeconds = safeNumber(st.runtime_seconds || 0);
+      const runtimeSeconds = safeNumber(st.runtime_seconds || 0)
       const runningHourSec = safeNumber(st.running_hour_seconds || 0);
-
-      // Khusus mesin NIP2 (262 => 'NIP2 01', 263 => 'NIP2 02', 264 => 'NIP2 03'), jadikan runtime sama seperti running hour
-      const isNip2 = ['NIP2 01', 'NIP2 02', 'NIP2 03'].includes(m.name) ||
-                     ['104-01', '104-02', '104-03'].includes(addr) ||
-                     (typeof m.name === 'string' && m.name.toUpperCase().startsWith('NIP2')) ||
-                     (typeof addr === 'string' && addr.toUpperCase().startsWith('NIP2'));
-
-      if (isNip2) {
-        runtimeSeconds = runningHourSec;
-      }
 
       // Determine status untuk UI (dot indicator, Total Product styling — Ideal-Qty tetap hijau)
       const problemType = st.problem_type || st.tipe_problem || '';
