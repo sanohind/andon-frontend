@@ -68,8 +68,8 @@ let activeConnections = new Set();
 let lastKnownProblems = new Set(); // Track problems by machine to detect new ones
 
 // Division-line mapping cache (dinamis dari database, bukan hardcode)
-// Digunakan untuk filter manager agar divisi/line baru yang ditambahkan via Manage Lines ikut terbaca
-let divisionLineMappingCache = { mapping: null, fetchedAt: 0 };
+// Digunakan untuk filter manager dan leader agar divisi/line baru yang ditambahkan via Manage Lines ikut terbaca
+let divisionLineMappingCache = { mapping: null, originalNames: {}, fetchedAt: 0 };
 const MAPPING_CACHE_TTL_MS = 60000; // 60 detik
 
 async function getDivisionLineMapping() {
@@ -84,19 +84,47 @@ async function getDivisionLineMapping() {
     const data = response.data?.data || response.data;
     const divisions = Array.isArray(data) ? data : [];
     const mapping = {};
+    const originalNames = {};
     const normalizeKey = (v) => String(v || '').trim().toLowerCase();
     divisions.forEach((d) => {
       const divName = d.name;
       if (!divName) return;
       const lines = (d.lines || []).map(l => (typeof l === 'object' ? l.name : l)).filter(Boolean);
       mapping[normalizeKey(divName)] = lines;
+      originalNames[normalizeKey(divName)] = divName;
     });
-    divisionLineMappingCache = { mapping, fetchedAt: now };
+    divisionLineMappingCache = { mapping, originalNames, fetchedAt: now };
     return mapping;
   } catch (err) {
     console.error('Error fetching division-line mapping:', err.message);
     return divisionLineMappingCache.mapping || {};
   }
+}
+
+// Helper untuk mendapatkan divisi user (manager / leader) dengan mempertahankan casing nama asli database
+// Jika user.division belum diisi namun user.line_name ada, divisi diresolusi otomatis dari mapping
+async function getUserDivision(user) {
+  if (!user) return null;
+  const normalizeKey = (v) => String(v || '').trim().toLowerCase();
+  await getDivisionLineMapping();
+  const originalNameMap = divisionLineMappingCache.originalNames || {};
+  const mapping = divisionLineMappingCache.mapping || {};
+
+  if (user.division) {
+    const key = normalizeKey(user.division);
+    return originalNameMap[key] || user.division;
+  }
+
+  if (user.line_name) {
+    const lineNorm = normalizeKey(user.line_name);
+    for (const [key, lines] of Object.entries(mapping)) {
+      if (lines.some(l => normalizeKey(l) === lineNorm)) {
+        return originalNameMap[key] || key;
+      }
+    }
+  }
+
+  return null;
 }
 
 // Refresh mapping on startup dan setiap 60 detik
@@ -367,10 +395,18 @@ app.get('/manage/:section', requireAuth, async (req, res) => {
   });
 });
 
-app.get('/analytics', requireAuth, (req, res) => {
-  // Allow analytics untuk admin, management, maintenance, quality, engineering, dan manager
-  if (!['admin', 'management', 'maintenance', 'quality', 'engineering', 'manager'].includes(req.user.role)) {
+app.get('/analytics', requireAuth, async (req, res) => {
+  // Allow analytics untuk admin, management, maintenance, quality, engineering, manager, dan leader
+  if (!['admin', 'management', 'maintenance', 'quality', 'engineering', 'manager', 'leader'].includes(req.user.role)) {
     return res.status(403).send('Akses Ditolak');
+  }
+
+  // Pastikan division terisi jika role manager atau leader
+  if (['manager', 'leader'].includes(req.user.role)) {
+    const resolvedDivision = await getUserDivision(req.user);
+    if (resolvedDivision) {
+      req.user.division = resolvedDivision;
+    }
   }
 
   res.render('dashboard/analytics', {
@@ -951,7 +987,12 @@ app.get('/api/dashboard/analytics/duration', requireAuthAPI, async (req, res) =>
 // Endpoint untuk detailed forward analytics
 app.get('/api/dashboard/analytics/detailed-forward', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date, division } = req.query;
+    const { start_date, end_date } = req.query;
+    let { division } = req.query;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
+    }
     const params = { start_date, end_date };
     if (division !== undefined && division !== null && String(division).trim() !== '') {
       params.division = String(division).trim();
@@ -980,9 +1021,10 @@ app.get('/api/dashboard/analytics/line-quantity', requireAuthAPI, async (req, re
     const { period, date, month, year, shift } = req.query;
     let { division } = req.query;
 
-    // Manager hanya boleh melihat analytics untuk divisinya sendiri
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    // Manager dan Leader hanya boleh melihat analytics untuk divisinya sendiri
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-quantity`, {
       headers: {
@@ -1050,8 +1092,9 @@ app.get('/api/dashboard/analytics/line-oee', requireAuthAPI, async (req, res) =>
   try {
     const { period, date, month, year, shift } = req.query;
     let { division } = req.query;
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-oee`, {
       headers: {
@@ -1075,8 +1118,9 @@ app.get('/api/dashboard/analytics/line-non-problem-downtime', requireAuthAPI, as
   try {
     const { period, date, month, year, shift } = req.query;
     let { division } = req.query;
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/line-non-problem-downtime`, {
       headers: {
@@ -1121,8 +1165,9 @@ app.get('/api/dashboard/analytics/efficiency-daily', requireAuthAPI, async (req,
   try {
     const { period, month, year } = req.query;
     let { division } = req.query;
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-daily`, {
       headers: {
@@ -1146,8 +1191,9 @@ app.get('/api/dashboard/analytics/efficiency-drilldown', requireAuthAPI, async (
   try {
     const { division, line_name, date } = req.query;
     let div = division;
-    if (req.user && req.user.role === 'manager') {
-      div = req.user.division || div;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) div = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-drilldown`, {
       headers: {
@@ -1171,8 +1217,9 @@ app.get('/api/dashboard/analytics/efficiency-export', requireAuthAPI, async (req
   try {
     const { period, month, year } = req.query;
     let { division } = req.query;
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/efficiency-export`, {
       headers: {
@@ -1284,9 +1331,10 @@ app.get('/api/dashboard/analytics', requireAuthAPI, async (req, res) => {
     let { division } = req.query;
     const params = { start_date, end_date };
 
-    // Manager hanya boleh melihat analytics untuk divisinya sendiri
-    if (req.user && req.user.role === 'manager') {
-      division = req.user.division || division;
+    // Manager dan Leader hanya boleh melihat analytics untuk divisinya sendiri
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
     }
     if (division !== undefined && division !== null && String(division).trim() !== '') {
       params.division = String(division).trim();
@@ -3119,7 +3167,12 @@ app.get('/api/dashboard/ticketing/technicians', requireAuthAPI, async (req, res)
 
 app.get('/api/dashboard/analytics/ticketing', requireAuthAPI, async (req, res) => {
   try {
-    const { start_date, end_date, division } = req.query;
+    const { start_date, end_date } = req.query;
+    let { division } = req.query;
+    if (req.user && (req.user.role === 'manager' || req.user.role === 'leader')) {
+      const userDiv = await getUserDivision(req.user);
+      if (userDiv) division = userDiv;
+    }
     const params = { start_date, end_date };
     if (division !== undefined && division !== null && String(division).trim() !== '') {
       params.division = String(division).trim();

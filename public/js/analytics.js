@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const efficiencyDrilldownExportBtn = document.getElementById('efficiencyDrilldownExportBtn');
 
     // Determine what to show based on role
-    const showCharts = ['admin', 'management', 'manager'].includes(userRole);
+    const showCharts = ['admin', 'management', 'manager', 'leader'].includes(userRole);
     const showTables = ['admin', 'management', 'maintenance', 'quality', 'engineering'].includes(userRole);
 
     const quantityFormatter = new Intl.NumberFormat('id-ID');
@@ -3104,14 +3104,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadGlobalDivisions() {
         if (!globalDivisionSelect) return;
 
-        // Manager: hanya boleh melihat divisinya sendiri
-        if (userRole === 'manager' && userDivision) {
+        // Manager & Leader: hanya boleh melihat divisinya sendiri
+        if (userRole === 'manager' || userRole === 'leader') {
             globalDivisionSelect.innerHTML = '';
             const opt = document.createElement('option');
-            opt.value = userDivision;
-            opt.textContent = userDivision;
+            opt.value = userDivision || '';
+            opt.textContent = userDivision || 'Divisi Belum Diatur';
             globalDivisionSelect.appendChild(opt);
-            globalDivisionSelect.value = userDivision;
+            globalDivisionSelect.value = userDivision || '';
             globalDivisionSelect.disabled = true;
             return;
         }
