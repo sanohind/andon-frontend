@@ -20,12 +20,13 @@
     "moment": "^2.30.1",
     "moment-timezone": "^0.6.0",
     "multer": "^2.0.2",
+    "redis": "^6.3.0",
     "socket.io": "^4.8.1",
     "sweetalert2": "^11.22.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^1.14.10"
   },
   "keywords": [
     "iot",
