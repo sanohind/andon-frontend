@@ -204,7 +204,7 @@
 .rt-value.total { color: var(--rt-total-default, #0f172a); }
 .rt-value.ng { color: var(--rt-cyan); }
 .rt-value.time { color: #0f172a; font-size: 1.5rem; }
-.rt-value.oee { color: var(--rt-yellow); }
+.rt-value.oee { color: var(--rt-green); }
 .rt-value.target { color: var(--rt-green); font-size: 1.3rem; font-weight: 800; }
 .rt-value.target-ot { color: #d4a017; font-size: 1.3rem; font-weight: 900; }
 .rt-value.part-number { color: #0f172a; font-size: 1.1rem; font-weight: 800; }
@@ -251,7 +251,7 @@
 
 /* OEE di bawah ambang: merah + kedip (animasi sama seperti Total Product idle/problem) */
 .rt-value.oee.rt-oee-low {
-  color: var(--rt-red);
+  color: var(--rt-yellow);
   animation: rt-ideal-blink 1.2s ease-in-out infinite;
 }
 
