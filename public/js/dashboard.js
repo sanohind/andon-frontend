@@ -1455,24 +1455,42 @@ class DashboardManager {
                     <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px;">
                         <button class="btn btn-secondary" type="button" id="machineNoteToggle_${noteDomId}" style="display:inline-flex; align-items:center; gap:8px; font-weight:700;">
                             <i class="fas fa-sticky-note"></i>
-                            Catatan
+                            Catatan Shift
                         </button>
                         <div id="machineNoteMeta_${noteDomId}" style="font-size: 12px; color:#6b7280; text-align:right;"></div>
                     </div>
 
                     <div id="machineNotePanel_${noteDomId}" style="display:none; margin-top: 10px; border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; padding: 12px; background: #fafafa;">
-                        <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
-                            <div style="font-weight:800; color:#111827;">Catatan Shift Ini</div>
-                            <button class="btn btn-primary btn-sm" type="button" id="machineNoteSave_${noteDomId}" style="font-weight:800;">
-                                <i class="fas fa-save"></i> Simpan
+                        <!-- Pemilih Tanggal & Shift untuk Catatan (Bisa Hari Berjalan atau Hari Sebelumnya) -->
+                        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 12px; padding: 8px 10px; background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <label style="font-weight:700; font-size:12px; color:#374151; margin:0;"><i class="fas fa-calendar-alt text-primary"></i> Tanggal:</label>
+                                <input type="date" id="machineNoteDate_${noteDomId}" style="padding:3px 6px; border:1px solid #d1d5db; border-radius:6px; font-size:12px;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <label style="font-weight:700; font-size:12px; color:#374151; margin:0;"><i class="fas fa-clock text-primary"></i> Shift:</label>
+                                <select id="machineNoteShift_${noteDomId}" style="padding:3px 6px; border:1px solid #d1d5db; border-radius:6px; font-size:12px;">
+                                    <option value="pagi">Pagi</option>
+                                    <option value="malam">Malam</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" id="machineNoteCurrentBtn_${noteDomId}" style="font-size:11px; padding:2px 8px;">
+                                <i class="fas fa-redo"></i> Shift Sekarang
                             </button>
                         </div>
-                        <textarea id="machineNoteTextarea_${noteDomId}" rows="4" placeholder="Tulis catatan untuk mesin ini pada shift ini..." style="width:100%; resize: vertical; padding: 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);"></textarea>
+
+                        <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                            <div style="font-weight:800; color:#111827;" id="machineNoteTitle_${noteDomId}">Catatan Shift</div>
+                            <button class="btn btn-primary btn-sm" type="button" id="machineNoteSave_${noteDomId}" style="font-weight:800;">
+                                <i class="fas fa-save"></i> Simpan Catatan
+                            </button>
+                        </div>
+                        <textarea id="machineNoteTextarea_${noteDomId}" rows="4" placeholder="Tulis catatan untuk mesin ini pada tanggal & shift yang dipilih..." style="width:100%; resize: vertical; padding: 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12); box-sizing: border-box;"></textarea>
                         <div id="machineNoteStatus_${noteDomId}" style="margin-top:6px; font-size:12px; color:#6b7280;"></div>
 
-                        <div style="margin-top: 12px;">
-                            <div style="font-weight:800; color:#111827; margin-bottom: 8px;">Riwayat Catatan</div>
-                            <div id="machineNoteHistory_${noteDomId}" style="display:flex; flex-direction: column; gap: 8px;"></div>
+                        <div style="margin-top: 14px;">
+                            <div style="font-weight:800; color:#111827; margin-bottom: 8px;"><i class="fas fa-history"></i> Riwayat Catatan Terakhir</div>
+                            <div id="machineNoteHistory_${noteDomId}" style="display:flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
                         </div>
                     </div>
                 </div>
@@ -1482,12 +1500,16 @@ class DashboardManager {
     }
 
     bindMachineNotesUI(machine, machineStatus) {
-        if (this.userRole !== 'leader') return;
+        if (!['leader', 'admin', 'manager', 'management'].includes(this.userRole)) return;
         const lineName = machineStatus?.line_name || 'N/A';
         const noteDomId = this.makeMachineNoteDomId(machine, lineName);
 
         const toggleBtn = document.getElementById(`machineNoteToggle_${noteDomId}`);
         const panel = document.getElementById(`machineNotePanel_${noteDomId}`);
+        const dateInput = document.getElementById(`machineNoteDate_${noteDomId}`);
+        const shiftSelect = document.getElementById(`machineNoteShift_${noteDomId}`);
+        const currentBtn = document.getElementById(`machineNoteCurrentBtn_${noteDomId}`);
+        const titleEl = document.getElementById(`machineNoteTitle_${noteDomId}`);
         const textarea = document.getElementById(`machineNoteTextarea_${noteDomId}`);
         const saveBtn = document.getElementById(`machineNoteSave_${noteDomId}`);
         const statusEl = document.getElementById(`machineNoteStatus_${noteDomId}`);
@@ -1495,47 +1517,46 @@ class DashboardManager {
         const historyEl = document.getElementById(`machineNoteHistory_${noteDomId}`);
         if (!toggleBtn || !panel || !textarea || !saveBtn) return;
 
-        const load = async () => {
+        const getLiveShiftInfo = () => {
+            const now = moment().tz('Asia/Jakarta');
+            const h = now.hour();
+            const shift = (h >= 7 && h < 20) ? 'pagi' : 'malam';
+            const dateStr = (shift === 'malam' && h < 7)
+                ? now.clone().subtract(1, 'day').format('YYYY-MM-DD')
+                : now.format('YYYY-MM-DD');
+            return { date: dateStr, shift };
+        };
+
+        const loadNoteForSelected = async (targetDate, targetShift) => {
             if (statusEl) statusEl.textContent = 'Memuat catatan...';
+            const liveShift = getLiveShiftInfo();
+            const isLive = (targetDate === liveShift.date && targetShift === liveShift.shift);
+            if (titleEl) {
+                const shiftUpper = String(targetShift || '').toUpperCase();
+                const dFormatted = moment(targetDate).format('DD/MM/YYYY');
+                titleEl.textContent = `Catatan Shift: ${shiftUpper} (${dFormatted})${isLive ? ' • Shift Berjalan' : ''}`;
+            }
+
             try {
                 const qs = new URLSearchParams({
+                    date: targetDate,
+                    shift: targetShift,
                     machine_name: machine,
                     line_name: lineName
                 });
-                const res = await fetch(`/api/machine-notes/current?${qs.toString()}`, { headers: this.getAuthHeaders() });
+                const res = await fetch(`/api/machine-notes/by-shift?${qs.toString()}`, { headers: this.getAuthHeaders() });
                 const json = await res.json();
                 if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat catatan');
 
-                const data = json.data || {};
-                if (metaEl) {
-                    const shiftLabel = data.shift ? String(data.shift).toUpperCase() : '-';
-                    metaEl.textContent = `Shift: ${shiftLabel}`;
-                }
-                textarea.value = data.note || '';
-                if (statusEl) statusEl.textContent = data.updated_at ? `Terakhir update: ${moment(data.updated_at).format('DD/MM/YYYY HH:mm:ss')}` : '';
+                const notes = (json.data && Array.isArray(json.data.notes)) ? json.data.notes : [];
+                const found = notes.find(n => n && n.machine_name === machine);
+                textarea.value = (found && found.note) ? found.note : '';
 
-                if (historyEl) {
-                    const history = Array.isArray(data.history) ? data.history : [];
-                    if (!history.length) {
-                        historyEl.innerHTML = `<div style="font-size:12px; color:#6b7280;">Belum ada catatan.</div>`;
+                if (statusEl) {
+                    if (found && found.note && found.note.trim() !== '') {
+                        statusEl.textContent = `Catatan shift ditemukan.`;
                     } else {
-                        historyEl.innerHTML = history
-                            .filter(h => h && (h.note != null) && String(h.note).trim() !== '')
-                            .map(h => {
-                                const shift = (h.shift || '').toString().toUpperCase();
-                                const ts = h.shift_start_at ? moment(h.shift_start_at).format('DD/MM/YYYY HH:mm') : '-';
-                                const note = this.escapeHtml(h.note);
-                                return `
-                                    <div style="border: 1px solid rgba(0,0,0,0.08); border-radius: 10px; padding: 10px; background: white;">
-                                        <div style="display:flex; justify-content: space-between; gap: 10px; align-items:center;">
-                                            <div style="font-weight:800; color:#111827;">${shift} • ${ts}</div>
-                                            <div style="font-size:12px; color:#6b7280;">${this.escapeHtml(h.shift_key || '')}</div>
-                                        </div>
-                                        <div style="margin-top:6px; white-space: pre-wrap; color:#111827;">${note}</div>
-                                    </div>
-                                `;
-                            })
-                            .join('');
+                        statusEl.textContent = `Belum ada catatan untuk shift ini. Anda dapat menulis dan menyimpannya di sini.`;
                     }
                 }
             } catch (e) {
@@ -1543,35 +1564,136 @@ class DashboardManager {
             }
         };
 
+        const loadHistory = async () => {
+            try {
+                const qs = new URLSearchParams({
+                    machine_name: machine,
+                    line_name: lineName
+                });
+                const res = await fetch(`/api/machine-notes/current?${qs.toString()}`, { headers: this.getAuthHeaders() });
+                const json = await res.json();
+                if (!res.ok || !json.success) return;
+
+                const data = json.data || {};
+                if (metaEl) {
+                    const shiftLabel = data.shift ? String(data.shift).toUpperCase() : '-';
+                    metaEl.textContent = `Shift Saat Ini: ${shiftLabel}`;
+                }
+
+                if (historyEl) {
+                    const history = Array.isArray(data.history) ? data.history : [];
+                    if (!history.length) {
+                        historyEl.innerHTML = `<div style="font-size:12px; color:#6b7280; font-style:italic;">Belum ada riwayat catatan untuk mesin ini.</div>`;
+                    } else {
+                        historyEl.innerHTML = history
+                            .filter(h => h && (h.note != null) && String(h.note).trim() !== '')
+                            .map(h => {
+                                const shift = (h.shift || '').toString().toUpperCase();
+                                const ts = h.shift_start_at ? moment(h.shift_start_at).format('DD/MM/YYYY') : '-';
+                                const note = this.escapeHtml(h.note);
+                                const parts = String(h.shift_key || '').split('_');
+                                const itemDate = parts[0] || (h.shift_start_at ? moment(h.shift_start_at).format('YYYY-MM-DD') : '');
+                                const itemShift = parts[1] || (h.shift || 'pagi');
+                                return `
+                                    <div class="machine-note-history-card" data-date="${itemDate}" data-shift="${itemShift}" style="border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 8px 10px; background: white; cursor: pointer; transition: background 0.2s;" title="Klik untuk membuka dan mengedit catatan shift ini">
+                                        <div style="display:flex; justify-content: space-between; gap: 8px; align-items:center;">
+                                            <div style="font-weight:700; font-size:12px; color:#1e40af;"><i class="fas fa-calendar-check"></i> Shift ${shift} • ${ts}</div>
+                                            <button type="button" class="btn btn-xs btn-outline-primary" style="font-size:10px; padding:1px 6px;">Pilih</button>
+                                        </div>
+                                        <div style="margin-top:4px; font-size:12px; white-space: pre-wrap; color:#374151;">${note}</div>
+                                    </div>
+                                `;
+                            })
+                            .join('');
+
+                        historyEl.querySelectorAll('.machine-note-history-card').forEach(card => {
+                            card.addEventListener('click', () => {
+                                const d = card.getAttribute('data-date');
+                                const s = card.getAttribute('data-shift');
+                                if (d && s && dateInput && shiftSelect) {
+                                    dateInput.value = d;
+                                    shiftSelect.value = s;
+                                    loadNoteForSelected(d, s);
+                                }
+                            });
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading note history:', e);
+            }
+        };
+
+        const resetToCurrent = () => {
+            const live = getLiveShiftInfo();
+            if (dateInput) dateInput.value = live.date;
+            if (shiftSelect) shiftSelect.value = live.shift;
+            loadNoteForSelected(live.date, live.shift);
+        };
+
+        if (dateInput) {
+            dateInput.addEventListener('change', () => {
+                if (dateInput.value && shiftSelect) {
+                    loadNoteForSelected(dateInput.value, shiftSelect.value);
+                }
+            });
+        }
+
+        if (shiftSelect) {
+            shiftSelect.addEventListener('change', () => {
+                if (dateInput && dateInput.value) {
+                    loadNoteForSelected(dateInput.value, shiftSelect.value);
+                }
+            });
+        }
+
+        if (currentBtn) {
+            currentBtn.addEventListener('click', () => {
+                resetToCurrent();
+            });
+        }
+
         toggleBtn.addEventListener('click', async () => {
             const isOpen = panel.style.display !== 'none';
             panel.style.display = isOpen ? 'none' : 'block';
             if (!isOpen) {
-                await load();
+                resetToCurrent();
+                await loadHistory();
             }
         });
 
         saveBtn.addEventListener('click', async () => {
             const note = textarea.value ?? '';
+            const targetDate = dateInput ? dateInput.value : '';
+            const targetShift = shiftSelect ? shiftSelect.value : '';
+            if (!targetDate || !targetShift) {
+                alert('Pilih tanggal dan shift terlebih dahulu.');
+                return;
+            }
+
             saveBtn.disabled = true;
             if (statusEl) statusEl.textContent = 'Menyimpan...';
             try {
-                const res = await fetch('/api/machine-notes/current', {
+                const res = await fetch('/api/machine-notes/by-shift', {
                     method: 'PUT',
-                    headers: this.getAuthHeaders(),
+                    headers: Object.assign({}, this.getAuthHeaders(), {
+                        'Content-Type': 'application/json'
+                    }),
                     body: JSON.stringify({
                         machine_name: machine,
                         line_name: lineName,
+                        date: targetDate,
+                        shift: targetShift,
                         note
                     })
                 });
                 const json = await res.json();
                 if (!res.ok || !json.success) throw new Error(json.message || 'Gagal menyimpan catatan');
 
-                if (statusEl) statusEl.textContent = 'Tersimpan.';
-                await load();
+                if (statusEl) statusEl.textContent = 'Catatan berhasil disimpan.';
+                await loadHistory();
                 if (this.showSweetAlert) {
-                    this.showSweetAlert('success', 'Tersimpan', 'Catatan berhasil disimpan.');
+                    this.showSweetAlert('success', 'Tersimpan', `Catatan untuk shift ${targetShift.toUpperCase()} (${moment(targetDate).format('DD/MM/YYYY')}) berhasil disimpan.`);
                 }
             } catch (e) {
                 if (statusEl) statusEl.textContent = `Gagal menyimpan: ${e.message || e}`;
