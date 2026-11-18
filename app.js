@@ -28,7 +28,7 @@ const io = socketIo(server, {
 // Configuration
 const PORT = process.env.PORT || 3001;
 // Force IPv4 address to avoid IPv6 connection issues
-const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://127.0.0.1:8000/api';
+const LARAVEL_API_BASE = (process.env.LARAVEL_API_BASE || 'http://127.0.0.1:8000/api').replace('://localhost', '://127.0.0.1');
 //const LARAVEL_API_BASE = process.env.LARAVEL_API_BASE || 'http://be-andon.ns1.sanoh.co.id/api';
 
 // Debug environment variables (can be removed in production)
@@ -470,7 +470,7 @@ app.post('/auth/login', async (req, res) => {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 15000 // 15 second timeout
         });
         
         console.log('Login response:', response.data);
@@ -719,6 +719,25 @@ app.get('/api/machine-notes/by-shift', requireAuthAPI, async (req, res) => {
     res.status(error.response?.status || 500).json({
       success: false,
       message: error.response?.data?.message || 'Failed to fetch machine notes'
+    });
+  }
+});
+
+app.put('/api/machine-notes/by-shift', requireAuthAPI, async (req, res) => {
+  try {
+    const response = await axios.put(`${LARAVEL_API_BASE}/machine-notes/by-shift`, req.body, {
+      headers: {
+        'Authorization': `Bearer ${req.user.token || req.session.token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Machine notes upsert by-shift proxy error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || 'Failed to save machine note'
     });
   }
 });

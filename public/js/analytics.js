@@ -175,9 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- Machine Notes (for tooltip "Production Quantity") ---
+    // --- Machine Notes (for modal & tooltip "Production Quantity") ---
     const machineNotesCache = new Map(); // cacheKey -> Map(machineKey -> noteText)
-    const machineNotesInFlight = new Set(); // cacheKey
+    const machineNotesInFlight = new Map(); // cacheKey -> Promise
 
     function buildShiftKey(dateStr, shift) {
         const s = String(shift || '').toLowerCase();
@@ -189,44 +189,136 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${start.format('YYYY-MM-DD')}_${s}_${start.format('HHmm')}`;
     }
 
-    async function ensureMachineNotesLoaded({ dateStr, shift, lineName }) {
+    async function ensureMachineNotesLoaded({ dateStr, shift, lineName }, forceReload = false) {
         const shiftKey = buildShiftKey(dateStr, shift);
         if (!shiftKey) return;
         const cacheKey = `${shiftKey}__${lineName || ''}`;
-        if (machineNotesCache.has(cacheKey) || machineNotesInFlight.has(cacheKey)) return;
-
-        machineNotesInFlight.add(cacheKey);
-        try {
-            const qs = new URLSearchParams({ date: dateStr, shift: String(shift || '') });
-            if (lineName) qs.set('line_name', String(lineName));
-            const res = await fetch(`/api/machine-notes/by-shift?${qs.toString()}`, { headers: getAuthHeaders() });
-            const json = await res.json();
-            if (!res.ok || !json.success) throw new Error(json.message || 'Failed to load notes');
-            const notes = (json.data && Array.isArray(json.data.notes)) ? json.data.notes : [];
-            const map = new Map();
-            notes.forEach(n => {
-                if (!n || !n.machine_name) return;
-                const key = `${String(n.machine_name)}__${String(n.line_name || '')}`;
-                const text = (n.note == null) ? '' : String(n.note);
-                if (text.trim() === '') return;
-                map.set(key, text);
-            });
-            machineNotesCache.set(cacheKey, map);
-        } catch (e) {
-            // silent: tooltip will just not show notes
-            machineNotesCache.set(cacheKey, new Map());
-        } finally {
-            machineNotesInFlight.delete(cacheKey);
+        if (!forceReload && machineNotesCache.has(cacheKey)) return;
+        if (machineNotesInFlight.has(cacheKey)) {
+            return await machineNotesInFlight.get(cacheKey);
         }
+
+        const fetchPromise = (async () => {
+            try {
+                const qs = new URLSearchParams({ date: dateStr, shift: String(shift || '') });
+                if (lineName) qs.set('line_name', String(lineName));
+                const res = await fetch(`/api/machine-notes/by-shift?${qs.toString()}`, { headers: getAuthHeaders() });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.message || 'Failed to load notes');
+                const notes = (json.data && Array.isArray(json.data.notes)) ? json.data.notes : [];
+                const map = new Map();
+                notes.forEach(n => {
+                    if (!n || !n.machine_name) return;
+                    const key = `${String(n.machine_name)}__${String(n.line_name || '')}`;
+                    const text = (n.note == null) ? '' : String(n.note);
+                    if (text.trim() === '') return;
+                    map.set(key, text);
+                });
+                machineNotesCache.set(cacheKey, map);
+            } catch (e) {
+                if (!machineNotesCache.has(cacheKey)) {
+                    machineNotesCache.set(cacheKey, new Map());
+                }
+            } finally {
+                machineNotesInFlight.delete(cacheKey);
+            }
+        })();
+
+        machineNotesInFlight.set(cacheKey, fetchPromise);
+        return await fetchPromise;
     }
 
     function getCachedMachineNote({ dateStr, shift, machineName, lineName }) {
         const shiftKey = buildShiftKey(dateStr, shift);
         if (!shiftKey) return null;
         const cacheKey = `${shiftKey}__${lineName || ''}`;
-        const map = machineNotesCache.get(cacheKey);
+        let map = machineNotesCache.get(cacheKey);
+        if (!map) {
+            map = machineNotesCache.get(`${shiftKey}__`);
+        }
         if (!map) return null;
-        return map.get(`${String(machineName)}__${String(lineName || '')}`) || null;
+        return map.get(`${String(machineName)}__${String(lineName || '')}`)
+            || map.get(`${String(machineName)}__`)
+            || null;
+    }
+
+    function setCachedMachineNote({ dateStr, shift, machineName, lineName, noteText }) {
+        const shiftKey = buildShiftKey(dateStr, shift);
+        if (!shiftKey) return;
+        const trimmed = (noteText == null) ? '' : String(noteText).trim();
+        const primaryKey = `${shiftKey}__${lineName || ''}`;
+        const fallbackKey = `${shiftKey}__`;
+
+        [primaryKey, fallbackKey].forEach(cKey => {
+            let map = machineNotesCache.get(cKey);
+            if (!map) {
+                map = new Map();
+                machineNotesCache.set(cKey, map);
+            }
+            const keyWithLine = `${String(machineName)}__${String(lineName || '')}`;
+            const keySimple = `${String(machineName)}__`;
+            if (trimmed !== '') {
+                map.set(keyWithLine, trimmed);
+                map.set(keySimple, trimmed);
+            } else {
+                map.delete(keyWithLine);
+                map.delete(keySimple);
+            }
+        });
+    }
+
+    function renderQuantityHourlyNoteSection(ctx) {
+        const container = document.getElementById('quantityHourlyNoteContainer');
+        const badgeEl = document.getElementById('quantityHourlyNoteShiftBadge');
+        const noteEl = document.getElementById('quantityHourlyNote');
+        const editBtn = document.getElementById('quantityHourlyNoteEditBtn');
+        const editBtnText = document.getElementById('quantityHourlyNoteEditBtnText');
+        const formEl = document.getElementById('quantityHourlyNoteForm');
+        if (!container || !noteEl) return;
+
+        if (!ctx || ctx.period !== 'daily') {
+            container.style.display = 'none';
+            if (formEl) formEl.style.display = 'none';
+            return;
+        }
+
+        const { date, shift, machineName, lineName } = ctx;
+        const noteText = getCachedMachineNote({ dateStr: date, shift, machineName, lineName }) || '';
+        const trimmed = String(noteText).trim();
+
+        if (formEl) formEl.style.display = 'none';
+        noteEl.style.display = 'block';
+
+        if (badgeEl) {
+            badgeEl.textContent = `${date} • Shift ${String(shift || '').toUpperCase()}`;
+        }
+
+        const canEdit = ['leader', 'admin', 'manager', 'management'].includes(userRole);
+
+        if (trimmed !== '') {
+            noteEl.innerHTML = `<strong>Catatan:</strong> ${escapeHtml(trimmed).replace(/\n/g, '<br>')}`;
+            if (editBtn) {
+                editBtn.style.display = canEdit ? 'inline-flex' : 'none';
+                if (editBtnText) editBtnText.textContent = 'Edit Catatan';
+                const icon = editBtn.querySelector('i');
+                if (icon) icon.className = 'fas fa-edit';
+            }
+        } else {
+            if (canEdit) {
+                noteEl.innerHTML = '<span style="color: #64748b; font-style: italic;">Belum ada catatan untuk shift ini. Klik "Tambah Catatan" untuk menambahkan catatan / kendala.</span>';
+                if (editBtn) {
+                    editBtn.style.display = 'inline-flex';
+                    if (editBtnText) editBtnText.textContent = 'Tambah Catatan';
+                    const icon = editBtn.querySelector('i');
+                    if (icon) icon.className = 'fas fa-plus';
+                }
+            } else {
+                noteEl.innerHTML = '<span style="color: #64748b; font-style: italic;">Belum ada catatan untuk shift ini.</span>';
+                if (editBtn) editBtn.style.display = 'none';
+            }
+        }
+
+        container.style.display = 'block';
     }
 
     function escapeHtml(str) {
@@ -2096,16 +2188,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 exportBtn.onclick = () => exportQuantityHourlyExcel();
             }
 
-            if (noteEl && options.lineName) {
-                const noteText = getCachedMachineNote({ dateStr: date, shift, machineName, lineName: options.lineName });
-                const trimmed = (noteText == null) ? '' : String(noteText).replace(/\s+/g, ' ').trim();
-                if (trimmed !== '') {
-                    noteEl.innerHTML = `<strong>Catatan:</strong> ${escapeHtml(trimmed)}`;
-                    noteEl.style.display = 'block';
-                } else {
-                    noteEl.style.display = 'none';
-                    noteEl.textContent = '';
-                }
+            if (options.period === 'daily') {
+                await ensureMachineNotesLoaded({ dateStr: date, shift, lineName: options.lineName });
+                renderQuantityHourlyNoteSection({
+                    date,
+                    shift,
+                    machineName,
+                    lineName: options.lineName,
+                    period: 'daily'
+                });
             }
         } catch (err) {
             console.error('Fetch quantity five-minute:', err);
@@ -2114,6 +2205,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const p = emptyEl.querySelector('p');
             if (p) p.textContent = 'Gagal memuat data per 5 menit. Coba lagi.';
             if (exportBtn) exportBtn.style.display = 'none';
+            const container = document.getElementById('quantityHourlyNoteContainer');
+            if (container) container.style.display = 'none';
         }
     }
 
@@ -2191,9 +2284,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Notes ditampilkan di bawah chart (bukan tooltip Production Quantity).
-            // Preload (non-blocking) agar biasanya sudah ada di cache saat render.
-            if (period === 'daily' && lineName) {
-                ensureMachineNotesLoaded({ dateStr: date, shift, lineName }).catch(() => {});
+            if (period === 'daily') {
+                await ensureMachineNotesLoaded({ dateStr: date, shift, lineName });
             }
 
             const params = new URLSearchParams({ period, shift, machine_address: machineAddress });
@@ -2385,38 +2477,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Render note AFTER chart is shown (so it won't be clipped like tooltip).
-            if (noteEl && period === 'daily') {
-                const noteText = getCachedMachineNote({ dateStr: date, shift, machineName, lineName });
-                const trimmed = (noteText == null) ? '' : String(noteText).replace(/\s+/g, ' ').trim();
-                if (trimmed !== '') {
-                    noteEl.innerHTML = `<strong>Catatan:</strong> ${escapeHtml(trimmed)}`;
-                    noteEl.style.display = 'block';
-                } else {
-                    noteEl.style.display = 'none';
-                    noteEl.textContent = '';
-                }
-            }
+            renderQuantityHourlyNoteSection({
+                date,
+                shift,
+                machineName,
+                lineName,
+                period
+            });
         } catch (err) {
             console.error('Fetch quantity drilldown:', err);
             loadingEl.style.display = 'none';
             emptyEl.style.display = 'flex';
             emptyEl.querySelector('p').textContent = 'Gagal memuat data. Coba lagi.';
-            if (noteEl) {
-                noteEl.style.display = 'none';
-                noteEl.textContent = '';
-            }
+            const container = document.getElementById('quantityHourlyNoteContainer');
+            if (container) container.style.display = 'none';
         }
     }
 
     function closeQuantityHourlyModal() {
         const modal = document.getElementById('quantityHourlyModal');
+        const container = document.getElementById('quantityHourlyNoteContainer');
         const noteEl = document.getElementById('quantityHourlyNote');
+        const formEl = document.getElementById('quantityHourlyNoteForm');
+        const inputEl = document.getElementById('quantityHourlyNoteInput');
         const granWrap = document.getElementById('quantityHourlyGranularityWrap');
         if (granWrap) granWrap.style.display = 'none';
         if (quantityHourlyChartInstance) {
             quantityHourlyChartInstance.destroy();
             quantityHourlyChartInstance = null;
         }
+        if (formEl) formEl.style.display = 'none';
+        if (inputEl) inputEl.value = '';
+        if (container) container.style.display = 'none';
         if (noteEl) {
             noteEl.style.display = 'none';
             noteEl.textContent = '';
@@ -2433,6 +2525,100 @@ document.addEventListener('DOMContentLoaded', () => {
         if (closeBtn) closeBtn.addEventListener('click', closeQuantityHourlyModal);
         if (modal) {
             modal.addEventListener('click', (e) => { if (e.target === modal) closeQuantityHourlyModal(); });
+        }
+    })();
+
+    (function initQuantityHourlyNoteEvents() {
+        const editBtn = document.getElementById('quantityHourlyNoteEditBtn');
+        const cancelBtn = document.getElementById('quantityHourlyNoteCancelBtn');
+        const saveBtn = document.getElementById('quantityHourlyNoteSaveBtn');
+        const formEl = document.getElementById('quantityHourlyNoteForm');
+        const noteEl = document.getElementById('quantityHourlyNote');
+        const inputEl = document.getElementById('quantityHourlyNoteInput');
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                if (!lastQuantityModalContext) return;
+                const { machineName, options } = lastQuantityModalContext;
+                const { date, shift, lineName } = options || {};
+                const currentNote = getCachedMachineNote({ dateStr: date, shift, machineName, lineName }) || '';
+                if (inputEl) {
+                    inputEl.value = currentNote;
+                }
+                if (formEl) formEl.style.display = 'block';
+                if (noteEl) noteEl.style.display = 'none';
+                editBtn.style.display = 'none';
+                if (inputEl) inputEl.focus();
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                if (formEl) formEl.style.display = 'none';
+                if (noteEl) noteEl.style.display = 'block';
+                if (editBtn) editBtn.style.display = 'inline-flex';
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                if (!lastQuantityModalContext) return;
+                const { machineName, options } = lastQuantityModalContext;
+                const { date, shift, lineName } = options || {};
+                const newNote = inputEl ? inputEl.value : '';
+
+                const origHtml = saveBtn.innerHTML;
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+                try {
+                    const headers = Object.assign({}, getAuthHeaders(), {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    });
+
+                    const res = await fetch('/api/machine-notes/by-shift', {
+                        method: 'PUT',
+                        headers,
+                        body: JSON.stringify({
+                            machine_name: machineName,
+                            line_name: lineName || null,
+                            date,
+                            shift,
+                            note: newNote
+                        })
+                    });
+
+                    const json = await res.json();
+                    if (!res.ok || !json.success) {
+                        throw new Error(json.message || 'Gagal menyimpan catatan');
+                    }
+
+                    // Update local cache
+                    setCachedMachineNote({
+                        dateStr: date,
+                        shift,
+                        machineName,
+                        lineName,
+                        noteText: newNote
+                    });
+
+                    // Re-render note section in modal
+                    renderQuantityHourlyNoteSection({
+                        date,
+                        shift,
+                        machineName,
+                        lineName,
+                        period: options.period || 'daily'
+                    });
+                } catch (err) {
+                    console.error('Error saving machine note:', err);
+                    alert('Gagal menyimpan catatan: ' + (err.message || 'Terjadi kesalahan sistem'));
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = origHtml;
+                }
+            });
         }
     })();
 
