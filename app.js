@@ -432,6 +432,19 @@ app.get('/monitoring/production', (req, res) => {
   });
 });
 
+// Special machine monitoring page (no login required, public TV monitor display)
+app.get(['/monitoring/special', '/monitoring/machine-detail'], (req, res) => {
+  const machinesParam = req.query.machines || req.query.machine || req.query.names || '';
+  const machinesList = machinesParam
+    ? String(machinesParam).split(',').map(m => m.trim()).filter(Boolean)
+    : [];
+  res.render('dashboard/special-monitoring', {
+    title: 'Machine Monitoring',
+    selectedMachines: machinesList,
+    initialMachinesStr: machinesParam
+  });
+});
+
 
 // Auth Routes - Login Page
 app.get('/login', (req, res) => {
@@ -2013,14 +2026,90 @@ app.get('/api/inspection-tables/metrics', requireAuthAPI, async (req, res) => {
 });
 
 // Public inspection tables metrics (read-only, tanpa auth user)
+let inspectionMetricsCache = { data: null, fetchedAt: 0 };
+async function getInspectionMetricsCached() {
+  const now = Date.now();
+  if (inspectionMetricsCache.data && (now - inspectionMetricsCache.fetchedAt) < 60000) {
+    return inspectionMetricsCache.data;
+  }
+  try {
+    const res = await axios.get(`${LARAVEL_API_BASE}/inspection-tables/metrics`, {
+      headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}` }
+    });
+    const arr = Array.isArray(res.data?.data) ? res.data.data : [];
+    inspectionMetricsCache = { data: arr, fetchedAt: now };
+    return arr;
+  } catch (e) {
+    return inspectionMetricsCache.data || [];
+  }
+}
+
+async function resolveMachineAddress(input) {
+  if (!input) return input;
+  const metrics = await getInspectionMetricsCached();
+  const clean = s => String(s || '').replace(/[\s\-_]/g, '').toLowerCase();
+  const target = clean(input);
+  const found = metrics.find(m => clean(m.address) === target || clean(m.name) === target || clean(m.machine_id) === target);
+  return found ? (found.address || input) : input;
+}
+
 app.get('/api/public/inspection-tables/metrics', async (req, res) => {
   try {
     const response = await axios.get(`${LARAVEL_API_BASE}/inspection-tables/metrics`, {
       headers: { 'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}` }
     });
+    if (response.data && Array.isArray(response.data.data)) {
+      inspectionMetricsCache = { data: response.data.data, fetchedAt: Date.now() };
+    }
     res.json(response.data);
   } catch (error) {
     res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: 'Server error' });
+  }
+});
+
+// Public analytics OEE hourly for special machine monitoring
+app.get('/api/public/analytics/oee-hourly', async (req, res) => {
+  try {
+    let { date, shift, machine_address } = req.query;
+    if (!machine_address) {
+      return res.status(400).json({ success: false, message: 'machine_address is required' });
+    }
+    // Resolusi nama mesin ke address PLC asli jika client mengirimkan nama mesin
+    const resolvedAddress = await resolveMachineAddress(machine_address);
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/oee-hourly`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json'
+      },
+      params: { date, shift, machine_address: resolvedAddress }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error in public oee-hourly proxy:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: error.message });
+  }
+});
+
+// Public analytics quantity drilldown for special machine monitoring
+app.get('/api/public/analytics/quantity-drilldown', async (req, res) => {
+  try {
+    let { period, date, month, year, shift, machine_address } = req.query;
+    if (!machine_address) {
+      return res.status(400).json({ success: false, message: 'machine_address is required' });
+    }
+    // Resolusi nama mesin ke address PLC asli jika client mengirimkan nama mesin
+    const resolvedAddress = await resolveMachineAddress(machine_address);
+    const response = await axios.get(`${LARAVEL_API_BASE}/dashboard/analytics/quantity-drilldown`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LARAVEL_API_TOKEN || ''}`,
+        'Accept': 'application/json'
+      },
+      params: { period: period || 'daily', date, month, year, shift, machine_address: resolvedAddress }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error in public quantity-drilldown proxy:', error.message);
+    res.status(error.response?.status || 500).json(error.response?.data || { success: false, message: error.message });
   }
 });
 
@@ -2417,13 +2506,9 @@ async function fetchAndEmitDashboardData(socket = null) {
                 // Format timestamp dengan timezone Asia/Jakarta yang konsisten
                 let formattedTimestamp;
                 if (problem.timestamp) {
-                    // Jika timestamp sudah dalam format yang benar, gunakan langsung
-                    if (typeof problem.timestamp === 'string' && problem.timestamp.includes(' ')) {
-                        formattedTimestamp = moment.tz(problem.timestamp, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
-                    } else {
-                        // Jika timestamp dalam format ISO, konversi ke Asia/Jakarta
-                        formattedTimestamp = moment.tz(problem.timestamp, 'Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
-                    }
+                    // Format timestamp dengan timezone Asia/Jakarta yang konsisten (support ISO, DD/MM/YYYY, dsb tanpa deprecation warning)
+                    const parsedMoment = moment.tz(problem.timestamp, ['YYYY-MM-DD HH:mm:ss', 'DD/MM/YYYY HH:mm:ss', moment.ISO_8601], 'Asia/Jakarta');
+                    formattedTimestamp = parsedMoment.isValid() ? parsedMoment.format('YYYY-MM-DD HH:mm:ss') : moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
                 } else {
                     // Jika tidak ada timestamp, gunakan waktu sekarang
                     formattedTimestamp = moment.tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');

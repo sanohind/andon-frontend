@@ -1,0 +1,595 @@
+/* public/css/special-monitoring.css */
+/* Tema Biru Tua Kontras Tinggi - Selaras Penuh dengan Production Monitoring ANDON */
+
+:root {
+  /* Palet Biru Tua (Deep Navy Blue) */
+  --spm-bg-body: #060d19;
+  --spm-bg-card: #0d1b2e;
+  --spm-bg-panel: #11223a;
+  --spm-bg-header: #152945;
+  --spm-bg-table-lbl: #193153;
+  --spm-bg-table-val: #0f1e33;
+
+  --spm-border: #1e3a8a;
+  --spm-border-glow: rgba(37, 99, 235, 0.45);
+  --spm-border-subtle: rgba(59, 130, 246, 0.2);
+
+  /* Warna Nilai Kontras Tinggi Khas ANDON Production Monitoring */
+  --spm-green: #00ff00;
+  --spm-cyan: #00bcd4;
+  --spm-yellow: #ffff00;
+  --spm-red: #ff0000;
+  --spm-orange: #ff9800;
+  --spm-blue: #00d2ff;
+  --spm-purple: #e879f9;
+
+  --spm-text-main: #f8fafc;
+  --spm-text-sub: #cbd5e1;
+  --spm-text-muted: #94a3b8;
+}
+
+body.spm-body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--spm-bg-body) !important;
+  color: var(--spm-text-main) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  min-height: 100vh;
+  width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Header Navbar */
+.spm-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: #091322;
+  border-bottom: 2px solid var(--spm-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+  padding: 0.6rem 1.5rem;
+}
+
+.spm-header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.spm-logo-group {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+/* Logo Asli Sanoh (Warna asli dengan elemen merah/hitam bawaan asset) */
+.spm-logo-img {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+}
+
+.spm-titles h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+.spm-titles p.spm-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 0.95rem;
+  color: var(--spm-cyan);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.spm-status-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.spm-connection {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--spm-green);
+}
+
+.spm-connection i {
+  font-size: 1.05rem;
+}
+
+.spm-connection.disconnected {
+  color: var(--spm-red);
+}
+
+.spm-clock {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  background: #0d1b2e;
+  padding: 0.3rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--spm-border);
+  letter-spacing: 1px;
+}
+
+/* Area Konten Utama */
+.spm-main-content {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  min-height: calc(100vh - 75px);
+  box-sizing: border-box;
+}
+
+/* Grid Layout Multi-Mesin */
+.spm-grid {
+  display: grid;
+  width: 100% !important;
+  gap: 1rem;
+  box-sizing: border-box;
+}
+
+/* Mode Dynamic: 1 Mesin (Memenuhi Layar Penuh) */
+.spm-grid.cols-1 {
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+.spm-grid.cols-1 .spm-card-body {
+  gap: 1.25rem;
+}
+
+.spm-grid.cols-1 .spm-gauge-svg-wrap {
+  max-width: 145px;
+}
+
+.spm-grid.cols-1 .spm-gauge-val {
+  font-size: 1.55rem;
+}
+
+.spm-grid.cols-1 .spm-gauge-title {
+  font-size: 0.92rem;
+}
+
+.spm-grid.cols-1 .spm-chart-canvas-wrap {
+  min-height: 230px;
+}
+
+.spm-grid.cols-1 .spm-matrix-table tr {
+  height: 35px;
+}
+
+.spm-grid.cols-1 .spm-matrix-table td.col-val {
+  font-size: 1.55rem !important;
+}
+
+/* Mode 2 Mesin (50% : 50% Layar) */
+.spm-grid.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.spm-grid.cols-2 .spm-chart-canvas-wrap {
+  min-height: 180px;
+}
+
+/* Mode 3 Mesin (33.3% : 33.3% : 33.3% Layar) */
+.spm-grid.cols-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.spm-grid.cols-3 .spm-chart-canvas-wrap {
+  min-height: 155px;
+}
+
+@media (max-width: 1366px) {
+  .spm-grid.cols-3 {
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .spm-grid.cols-2,
+  .spm-grid.cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Kartu Mesin */
+.spm-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  background: var(--spm-bg-card) !important;
+  border: 1.5px solid var(--spm-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.7), 0 0 15px var(--spm-border-glow) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+/* Header Kartu Mesin */
+.spm-card-header {
+  background: var(--spm-bg-header);
+  border-bottom: 1.5px solid var(--spm-border);
+  padding: 0.65rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.spm-machine-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.spm-status-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--spm-green);
+  box-shadow: 0 0 12px var(--spm-green);
+  display: inline-block;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.spm-status-dot.problem {
+  background-color: var(--spm-red);
+  box-shadow: 0 0 14px var(--spm-red);
+  animation: spm-pulse-red 1.2s infinite;
+}
+
+.spm-status-dot.idle {
+  background-color: var(--spm-yellow);
+  box-shadow: 0 0 10px var(--spm-yellow);
+}
+
+.spm-status-dot.standby {
+  background-color: var(--spm-text-muted);
+  box-shadow: none;
+}
+
+@keyframes spm-pulse-red {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.spm-machine-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.spm-header-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spm-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--spm-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.spm-badge.status-running {
+  background: rgba(0, 255, 0, 0.15);
+  color: var(--spm-green);
+  border-color: rgba(0, 255, 0, 0.4);
+}
+
+.spm-badge.status-problem {
+  background: rgba(255, 0, 0, 0.15);
+  color: var(--spm-red);
+  border-color: rgba(255, 0, 0, 0.4);
+}
+
+.spm-badge.status-idle {
+  background: rgba(255, 255, 0, 0.15);
+  color: var(--spm-yellow);
+  border-color: rgba(255, 255, 0, 0.4);
+}
+
+.spm-badge.line-tag {
+  background: #091322;
+  color: var(--spm-cyan);
+  border-color: var(--spm-border);
+}
+
+/* Body Kartu Mesin: Kolom Kiri Lebih Lebar (1.35fr) untuk Gauges & Charts, Kolom Kanan Lebih Ramping (1fr) untuk Tabel */
+.spm-card-body {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  flex: 1;
+  width: 100%;
+}
+
+@media (max-width: 650px) {
+  .spm-card-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.spm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* SISI KIRI: Jajaran 4 Gauges (Diperbesar & Warna Berbeda Tiap Tipe) */
+.spm-gauges-panel {
+  background: var(--spm-bg-panel);
+  border: 1px solid var(--spm-border);
+  border-radius: 6px;
+  padding: 0.75rem 0.5rem;
+  width: 100%;
+}
+
+.spm-gauges-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.spm-gauge-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.spm-gauge-svg-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 125px; /* Diperbesar */
+  aspect-ratio: 1.35 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spm-gauge-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.spm-arc-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.spm-arc-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s ease, stroke 0.4s ease;
+}
+
+.spm-gauge-center {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.spm-gauge-val {
+  font-size: 1.25rem; /* Diperbesar agar jelas dari kejauhan */
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.spm-gauge-val small {
+  font-size: 0.75rem;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+.spm-gauge-title {
+  margin-top: 0.35rem;
+  font-size: 0.82rem; /* Diperbesar */
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* Warna Khas Tiap Tipe Gauge */
+/* 1. OEE: Golden Yellow */
+.spm-gauge-box.gauge-type-oee .spm-gauge-val { color: var(--spm-yellow); }
+.spm-gauge-box.gauge-type-oee .spm-gauge-title { color: var(--spm-yellow); }
+
+/* 2. Availability: Emerald Green */
+.spm-gauge-box.gauge-type-avail .spm-gauge-val { color: var(--spm-green); }
+.spm-gauge-box.gauge-type-avail .spm-gauge-title { color: var(--spm-green); }
+
+/* 3. Performance: Electric Blue */
+.spm-gauge-box.gauge-type-perf .spm-gauge-val { color: var(--spm-blue); }
+.spm-gauge-box.gauge-type-perf .spm-gauge-title { color: var(--spm-blue); }
+
+/* 4. Quality: Vibrant Purple/Magenta */
+.spm-gauge-box.gauge-type-qual .spm-gauge-val { color: var(--spm-purple); }
+.spm-gauge-box.gauge-type-qual .spm-gauge-title { color: var(--spm-purple); }
+
+/* SISI KIRI & KANAN: Chart Box */
+.spm-chart-box {
+  background: var(--spm-bg-panel);
+  border: 1px solid var(--spm-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+.spm-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.spm-chart-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--spm-text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.spm-chart-title i {
+  color: var(--spm-cyan);
+}
+
+.spm-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 155px;
+}
+
+/* SISI KANAN: Tabel Data Real-time (Lebar Ramping, Font Nilai Jauh Lebih Besar) */
+.spm-table-panel {
+  background: var(--spm-bg-panel);
+  border: 1px solid var(--spm-border);
+  border-radius: 6px;
+  padding: 0.45rem;
+  width: 100%;
+}
+
+.spm-matrix-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+
+.spm-matrix-table tr {
+  height: 29px;
+}
+
+.spm-matrix-table td {
+  padding: 0.2rem 0.55rem;
+  vertical-align: middle;
+  border-radius: 3px;
+}
+
+.spm-matrix-table td.col-lbl {
+  width: 48%;
+  background: var(--spm-bg-table-lbl);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--spm-text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  text-align: left;
+  padding-left: 0.7rem;
+}
+
+/* Nilai Tabel: FONT DIPERBESAR & RATA TENGAH (CENTER) */
+.spm-matrix-table td.col-val {
+  background: var(--spm-bg-table-val);
+  font-size: 1.35rem !important; /* Diperbesar dari 1.05rem */
+  font-weight: 900 !important;
+  text-align: center !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Nilai warna kontras tinggi persis Production Monitoring ANDON */
+.col-val.val-ideal {
+  color: var(--spm-green) !important;
+}
+
+.col-val.val-total {
+  color: #ffffff !important;
+}
+
+.col-val.val-total.is-problem {
+  color: var(--spm-red) !important;
+}
+
+.col-val.val-ng {
+  color: var(--spm-red) !important;
+}
+
+.col-val.val-time {
+  color: var(--spm-cyan) !important;
+}
+
+.col-val.val-target {
+  color: var(--spm-yellow) !important;
+}
+
+.col-val.val-target-ot {
+  color: var(--spm-orange) !important;
+}
+
+.col-val.val-part {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 1.05rem !important;
+}
+
+/* Spinner & Empty State pada Chart */
+.spm-chart-spinner,
+.spm-chart-nodata {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 27, 46, 0.85);
+  color: var(--spm-text-muted);
+  font-size: 0.78rem;
+  gap: 0.35rem;
+  z-index: 2;
+  border-radius: 4px;
+}
+
+.spm-chart-spinner i {
+  font-size: 1.25rem;
+  color: var(--spm-cyan);
+}

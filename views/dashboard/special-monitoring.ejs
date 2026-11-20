@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Machine Monitoring</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/special-monitoring.css">
+</head>
+<body class="spm-body" data-machines='<%- JSON.stringify(selectedMachines || []) %>'>
+    <!-- Header Navbar: Logo Asli, Jam, Koneksi (Tanpa tombol & tanpa list mesin) -->
+    <header class="spm-header">
+        <div class="spm-header-container">
+            <div class="spm-logo-group">
+                <img src="/image/Logo sanoh 2 2 1.png" alt="Sanoh Logo" class="spm-logo-img">
+                <div class="spm-titles">
+                    <h1>Andon Dashboard</h1>
+                    <p class="spm-subtitle">Machine Monitoring</p>
+                </div>
+            </div>
+
+            <div class="spm-status-right">
+                <!-- Status Koneksi -->
+                <div class="spm-connection" id="connectionStatus">
+                    <i class="fas fa-wifi"></i>
+                    <span>Connected</span>
+                </div>
+
+                <!-- Jam Real-time -->
+                <div class="spm-clock" id="currentTime">--:--:--</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container Grid Mesin (Full Dynamic Monitor) -->
+    <main class="spm-main-content">
+        <div class="spm-grid" id="spmGrid">
+            <!-- Kartu mesin langsung di-generate otomatis oleh JS -->
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/moment/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment-timezone/builds/moment-timezone-with-data.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/special-monitoring.js"></script>
+</body>
+</html>
